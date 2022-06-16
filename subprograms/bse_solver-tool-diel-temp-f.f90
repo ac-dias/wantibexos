@@ -270,7 +270,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	
 		tcor = gapcortemp(st,phavg,temp)
 	
-	case("DE")
+	case("BE")
 	
 		tcor = gapcortemp2(st,phavg,temp)
 	
