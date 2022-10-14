@@ -39,7 +39,7 @@ function matrizelbsekq(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,est1
 	double precision :: vcoulk,vcoulq
 
 	double precision :: v2dk,vcoul,v3diel,v2dt,v0dt,v2dt2
-	double precision :: v2dohono,v2drk
+	double precision :: v2dohono,v2drk,v1dt
 
 	double precision :: r0
 
@@ -90,6 +90,11 @@ function matrizelbsekq(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,est1
 
 		vcoulk= v2drk(kpt1,kpt2,ngrid,rlat,ediel,lc,ez,w,r0,tolr)
 		vcoulq= v2drk(vq,v0,ngrid,rlat,ediel,lc,ez,w,r0,tolr)
+		
+	case("V1DT")
+	
+		vcoulk=	v1dt(kpt1,kpt2,ngrid,rlat,tolr,lc)	
+		vcoulq= v1dt(vq,v0,ngrid,rlat,tolr,lc)		
 
 	case("V0DT")
 

@@ -41,7 +41,7 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 	double precision :: vcoul1
 
 	double precision :: vcoul,v2dk,v3diel,v2dt,v0dt,v2dt2
-	double precision :: v2dohono,v2drk
+	double precision :: v2dohono,v2drk,v1dt
 	
 	double precision :: r0
 
@@ -75,6 +75,11 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 	case("V2DRK")
 
 		vcoul1= v2drk(kpt1,kpt2,ngrid,rlat,ediel,lc,ez,w,r0,tolr)
+		
+	case("V1DT")
+	
+		vcoul1=	v1dt(kpt1,kpt2,ngrid,rlat,tolr,lc)	
+				
 
 	case("V0DT")
 
