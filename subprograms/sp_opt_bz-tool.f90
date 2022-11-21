@@ -227,14 +227,17 @@ end do
 		     ffactor,w90basis,nvec,rlat,rvec,hopmatrices,&
 		     ihopmatrices,hxsp,hysp,hzsp)
 
-
-		auxx = auxx+real(hxsp*conjg(hxsp))/(eigv(j,stto(j,i,3))-eigv(j,stto(j,i,2)))	
-		auxy = auxy+real(hysp*conjg(hysp))/(eigv(j,stto(j,i,3))-eigv(j,stto(j,i,2)))
-		auxz = auxz+real(hzsp*conjg(hzsp))/(eigv(j,stto(j,i,3))-eigv(j,stto(j,i,2)))
+		hxsp= hxsp/(cmplx(eigv(j,stto(j,i,3))-eigv(j,stto(j,i,2)),sme))
+		hysp= hysp/(cmplx(eigv(j,stto(j,i,3))-eigv(j,stto(j,i,2)),sme))
+		hzsp= hzsp/(cmplx(eigv(j,stto(j,i,3))-eigv(j,stto(j,i,2)),sme))
+		
+		auxx = auxx+real(hxsp*conjg(hxsp))	
+		auxy = auxy+real(hysp*conjg(hysp))
+		auxz = auxz+real(hzsp*conjg(hzsp))
 		auxsp = auxsp&
-		+real(norm*(hxsp+cmplx(0.,1.)*hysp)*conjg(norm*(hxsp+cmplx(0.,1.)*hysp)))/(eigv(j,stto(j,i,3))-eigv(j,stto(j,i,2)))
+		+real(norm*(hxsp+cmplx(0.,1.)*hysp)*conjg(norm*(hxsp+cmplx(0.,1.)*hysp)))
 	auxsm = auxsm&
-	+real(norm*(hxsp-cmplx(0.,1.)*hysp)*conjg(norm*(hxsp-cmplx(0.,1.)*hysp)))/(eigv(j,stto(j,i,3))-eigv(j,stto(j,i,2)))		
+	+real(norm*(hxsp-cmplx(0.,1.)*hysp)*conjg(norm*(hxsp-cmplx(0.,1.)*hysp)))		
 
 
 
