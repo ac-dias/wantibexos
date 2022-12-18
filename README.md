@@ -11,7 +11,7 @@ Citing
    If you would like to cite the WanTiBEXOS package in a paper or presentation, the
    following references can be used:
 
-- General article::
+- BibTeX::
         
      @article{DIAS_CPC_2022,
        title = {WanTiBEXOS: a Wannier based Tight Binding code for electronic band structure, excitonic and optoelectronic properties of solids},
