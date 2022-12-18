@@ -20,3 +20,14 @@ url = {https://www.sciencedirect.com/science/article/pii/S0010465522003551},
 author = {Alexandre C. Dias and Julian F.R.V. Silveira and Fanyao Qu},                                                                                                   
 keywords = {Tight-Binding, Wannier functions, Excitons, Electronic and optical properties}}
 $$
+
+- BibTeX::
+
+         @article{Cimrman_Lukes_Rohan_2019,
+           title =        {Multiscale finite element calculations in Python using SfePy},
+           author =       {Cimrman, Robert and LukeÅ¡, VladimÃ­r and Rohan, Eduard},
+           issn =         {1572-9044},
+           doi =          {10.1007/s10444-019-09666-0},
+           journal =      {Advances in Computational Mathematics},
+           year =         2019,
+         }
