@@ -5,8 +5,13 @@ This code in actual version, can only be compiled with intel fortran compiler - 
 
 For ifort older versions, please change the flag -qmkl in makefile for -mkl, to compile the code
 
-If you use our code, please cite the following reference:  
-WanTiBEXOS: a Wannier based Tight Binding code for electronic band structure, excitonic and optoelectronic properties of solids
+Citing
+   ------
+
+   If you would like to cite the WanTiBEXOS package in a paper or presentation, the
+   following references can be used:
+
+- General article:
 
 - BibTex ::
         
