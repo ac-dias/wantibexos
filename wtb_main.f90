@@ -221,7 +221,7 @@ program main
 	if (sppolbz) then
 
 	 call spoptpolbz(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
-		     ebse0,ebsef,numbse,sme,ktol,params,kpaths,kpathsbse,orbw,ediel, &
+		     ebse0,ebsef,numbse,cshift,ktol,params,kpaths,kpathsbse,orbw,ediel, &
 		     exc,mshift,coultype,rk,meshtype)
 
 	 write(2077,*) "Single particle optical activity in BZ finished"
