@@ -3,6 +3,8 @@
 nthreads=10
 wtbexec="wantibexos_folder/bin/wtb.x"
 
+mkdir ./out
+
 cat > input_mos2_opt.dat << EOF
 NTHREADS= $nthreads
 SYSDIM= "2D"
