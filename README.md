@@ -1,12 +1,12 @@
 # WanTiBEXOS
 WanTiBEXOS code repository
 
-This code in actual version, can only be compiled with intel fortran compiler - ifort
+This code, in the actual version, can only be compiled with intel fortran compiler - ifort
 
-For ifort older versions, please change the flag -qmkl in makefile for -mkl, to compile the code
+For ifort older versions, please change the flag -qmkl in makefile for -mkl, to compile the code.
 
-The on-line documentation is available in:
-https://wantibexos.readthedocs.io/en/latest/
+The online documentation is available in:
+[https://wantibexos.readthedocs.io/en/latest/](https://wantibexos.readthedocs.io/)
 
 Citing
    ------
