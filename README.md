@@ -8,6 +8,11 @@ For ifort older versions, please change the flag -qmkl in makefile for -mkl, to 
 The online documentation is available in:
 [https://wantibexos.readthedocs.io/en/latest/](https://wantibexos.readthedocs.io/)
 
+For memory problems during parallel run, please export the following environment variable:
+
+export KMP_STACKSIZE=XXXmb, 
+being XXX the amount of virtual RAM per thread, I suggest something around 300mb, but for some situations, more could be necessary.
+
 Citing
    ------
 
