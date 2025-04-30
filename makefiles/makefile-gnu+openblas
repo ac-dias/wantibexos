@@ -1,0 +1,13 @@
+FOR=gfortran
+OMP=-fopenmp -mcmodel=large
+LIBS=-I/opt/OpenBLAS/include  -L/opt/OpenBLAS/lib    -lopenblas
+EXTRA=-Wno-argument-mismatch -Wargument-mismatch  -Wunderflow -Werror=line-truncation -DOPENBLAS
+DIR="./bin/"
+COND=-cpp -O2
+
+
+
+
+
+
+ 

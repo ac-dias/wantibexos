@@ -1,0 +1,13 @@
+FOR=gfortran
+OMP=-fopenmp -mcmodel=large
+LIBS=-I/home/adias/aocl/4.2.0/aocc/include -L/home/adias/aocl/4.2.0/aocc/lib -L/home/adias/work/aocc-compiler-5.0.0/lib -lm -lblis-mt -lflame -laoclutils 
+EXTRA=-Wno-argument-mismatch -Wargument-mismatch -Wunderflow -Werror=line-truncation -Werror=unused-function -DAOCL
+DIR="./bin/"
+COND=-cpp -O2
+
+
+
+
+
+
+ 

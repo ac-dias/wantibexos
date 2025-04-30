@@ -1,0 +1,13 @@
+FOR=gfortran
+OMP=-fopenmp -mcmodel=large
+LIBS=-L${MKLROOT}/lib/intel64 -Wl,--no-as-needed -lmkl_gf_lp64 -lmkl_gnu_thread -lmkl_core  -lgomp -lpthread -lm -ldl
+EXTRA=-Wno-argument-mismatch -Wunderflow -Werror=line-truncation -DMKL
+DIR="./bin/"
+COND=-cpp -O2
+
+
+
+
+
+
+ 

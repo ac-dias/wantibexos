@@ -1,0 +1,13 @@
+FOR=flang
+OMP=-fopenmp -mcmodel=large
+LIBS=-L/home/adias/aocl/4.2.0/aocc/lib /home/adias/aocl/4.2.0/aocc/lib/libflame.so -lm -lblis-mt  
+EXTRA=-Walign-mismatch -Wunderflow -Werror=line-truncation -Werror=unused-function -DAOCL
+DIR="./bin/"
+COND=-cpp -O2
+
+
+
+
+
+
+ 
