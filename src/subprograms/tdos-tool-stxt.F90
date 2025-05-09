@@ -205,7 +205,7 @@ subroutine dostool(nthreads,outputfolder,ngrid,numdos, &
 	edos0= 0.0
 	edosf= 0.0
 
-	!$omp parallel do default(shared) private(j,i,kx,ky,kz,eigv,autovetores,ovptb,spinx,spiny,spinz,cup,cdown,tdos)
+	!$omp parallel do default(shared) private(j,i,kx,ky,kz,nocp,eigv,autovetores,ovptb,spinx,spiny,spinz,cup,cdown,tdos)
 	do j=1,ngkpt
 
 		kx= kpts(j,1)
@@ -227,6 +227,7 @@ subroutine dostool(nthreads,outputfolder,ngrid,numdos, &
 
 		call eigsys(nthreads,dft,systype,scs,exc,nocp,ffactor,kx,ky,kz,w90basis,nvec,rlat,rvec,hopmatrices,&
 		    ihopmatrices,ovp,efermi,eigv,autovetores,nocpf,fermishift,mag)
+
 #ifdef MKL
 		call MKL_SET_NUM_THREADS(nthreads)
 #endif		
@@ -238,7 +239,7 @@ subroutine dostool(nthreads,outputfolder,ngrid,numdos, &
 #ifdef OPENBLAS
 		call OPENBLAS_SET_NUM_THREADS(nthreads)
 		
-#endif	        
+#endif	  	      
 		       		    
 		nocpj(j) = nocp    
 
@@ -307,6 +308,8 @@ subroutine dostool(nthreads,outputfolder,ngrid,numdos, &
 
 
 		end do
+		
+
 
 
 	end do
