@@ -179,7 +179,7 @@ subroutine bandstool(nthreads,outputfolder,params,kpaths,orbw, &
 		!write(*,*) "before main loop"
 	
 	
-	!$omp parallel do default(shared) private(j,i,kp,kx,ky,kz,eigv,autovetores,ovptb,spx,spy,spz)	
+	!$omp parallel do default(shared) private(j,i,kp,kx,ky,kz,eigv,autovetores,ovptb,spx,spy,spz,nocp)	
 	do j=1,(nks/2)*nkpts
 
 	        kp= kpts(j,1)
