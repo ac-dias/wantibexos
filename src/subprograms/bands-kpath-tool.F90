@@ -179,7 +179,7 @@ subroutine bandstool(nthreads,outputfolder,params,kpaths,orbw, &
 		!write(*,*) "before main loop"
 	
 	
-	!$omp parallel do default(shared) private(j,i,kp,kx,ky,kz,eigv,autovetores,ovptb,spx,spy,spz,nocp)	
+	!$omp parallel do default(shared) private(j,i,kp,kx,ky,kz,eigv,autovetores,ovptb,spx,spy,spz)	
 	do j=1,(nks/2)*nkpts
 
 	        kp= kpts(j,1)
@@ -203,7 +203,7 @@ subroutine bandstool(nthreads,outputfolder,params,kpaths,orbw, &
 #endif	
 
 		
-		call eigsys(nthreads,dft,systype,scs,exc,nocp,ffactor,kx,ky,kz,w90basis,nvec,rlat,rvec,hopmatrices,&
+		call eigsys(nthreads,dft,systype,scs,exc,nocpj(j),ffactor,kx,ky,kz,w90basis,nvec,rlat,rvec,hopmatrices,&
 		    ihopmatrices,ovp,efermi,eigv,autovetores,nocpf,fermishift,mag)
 		    
 		!call eigsysl(nthreads,dft,systype,scs,exc,nocp,ffactor,kx,ky,kz,w90basis,nvec,rlat,rvec,hopmatrices,&
@@ -226,7 +226,7 @@ subroutine bandstool(nthreads,outputfolder,params,kpaths,orbw, &
 		    
 
 		!write(500,*) nocp,kx,ky,kz 
-		nocpj(j) = nocp
+		
 		
 		if (dft .eq. "S") then
 		 call overlap(w90basis,nvec,rvec,ovp,kx,ky,kz,ovptb)

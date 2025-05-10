@@ -166,7 +166,7 @@ subroutine boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc
 		
 #endif		
    		
-		call eigsys(nthreads,dft,systype,scs,exc,nocp,ffactor,kpts(j,1),kpts(j,2),kpts(j,3),w90basis,nvec,rlat,rvec,hopmatrices,&
+		call eigsys(nthreads,dft,systype,scs,exc,nocpj(j),ffactor,kpts(j,1),kpts(j,2),kpts(j,3),w90basis,nvec,rlat,rvec,hopmatrices,&
 		    ihopmatrices,ovp,efermi,eaux,vaux,nocpf,fermishift,mag)
 		    
 #ifdef MKL
@@ -182,7 +182,7 @@ subroutine boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc
 		
 #endif
 		
-		nocpj(j) = nocp
+		
 		
 		do i=1,w90basis
 		
