@@ -141,7 +141,7 @@ subroutine spdielraw(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebse0,e
 	write(304,*) "#","  ","energy","  ","real","  ","imag"
 	write(305,*) "#","  ","energy","  ","real","  ","imag"
 
-	!$omp do 
+	! $omp do 
 	!ordered
 	do j=1,int(numbse)
 
@@ -193,7 +193,7 @@ subroutine spdielraw(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebse0,e
 
 
 	end do
-	!$omp end  do
+	! $omp end  do
 	
 	if (renorm) then
 	

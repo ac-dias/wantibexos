@@ -148,7 +148,7 @@ subroutine bsedielrawpol(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebs
 	write(304,*) "#","  ","energy","  ","real","  ","imag"
 
 
-	!$omp do 
+	! $omp do 
 	!ordered
 	do j=1,int(numbse)
 
@@ -197,7 +197,7 @@ subroutine bsedielrawpol(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebs
 
 
 	end do
-	!$omp end  do
+	! $omp end  do
 	
 	if (renorm) then
 	

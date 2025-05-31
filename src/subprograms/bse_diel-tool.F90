@@ -147,7 +147,7 @@ subroutine bsedielraw(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebse0,
 	write(304,*) "#","  ","energy","  ","real","  ","imag"
 	write(305,*) "#","  ","energy","  ","real","  ","imag"
 
-	!$omp parallel do default(shared) private(j,elux)
+	! $omp parallel do default(shared) private(j,elux)
 	!ordered
 	do j=1,int(numbse)
 
@@ -201,7 +201,7 @@ subroutine bsedielraw(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebse0,
 
 
 	end do
-	!$omp end parallel do
+	! $omp end parallel do
 	
 	if (renorm) then
 	call imagrenorm(dimbse,int(numbse),ebse,dielfxx)

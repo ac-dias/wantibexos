@@ -140,7 +140,7 @@ subroutine spdielrawpol(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebse
 	write(304,*) "#","  ","energy","  ","real","  ","imag"
 
 
-	!$omp do 
+	! $omp do 
 	!ordered
 	do j=1,int(numbse)
 
@@ -188,7 +188,7 @@ subroutine spdielrawpol(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebse
 
 
 	end do
-	!$omp end  do
+	! $omp end  do
 	
 	if (renorm) then
 	
