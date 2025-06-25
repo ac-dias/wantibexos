@@ -980,7 +980,7 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	write(unitout,"(A8,L1)") "TMCOEF= ",tmcoef
 	write(unitout,"(A8,L1)") "DTDIAG= ",dtfull
 	write(unitout,"(A6,L1)") "CPOL= ",cpol
-	write(unitout,"(A5,L1)") "PCE= ",pce
+	!write(unitout,"(A5,L1)") "PCE= ",pce
 	write(unitout,"(A11,L1)") "EM_TENSOR= ",emt
 	write(unitout,"(A10,L1)") "SPIN_TXT= ",spintxt
 	write(unitout,"(A7,L1)") "BOLTZ= ",boltz					
