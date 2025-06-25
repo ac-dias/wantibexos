@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import sisl
 import numpy as np
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import os
 import sys
 
@@ -31,11 +31,12 @@ def ncases(var):
 #inputfdf=  './teste-honpas/mos2.fdf'
 
 inputfdf=  sys.argv[1]  
-fermi= sys.argv[2]
+#fermi= sys.argv[2]
+fermi= 0.00
 
 #os.system("cp ./teste-honpas/mos2.out ./teste-honpas/run.out")
-
-tshs = sisl.get_sile(inputfdf).read_hamiltonian() #pegar hamiltoniano do siesta
+geom = sisl.get_sile(inputfdf).read_geometry()
+tshs = sisl.get_sile(inputfdf).read_hamiltonian(geometry=geom) #pegar hamiltoniano do siesta
 
 #fermi = sisl.get_sile(folder).read_fermi_level()
 
@@ -45,7 +46,7 @@ nbasis= tshs.no
 ncell=  tshs.nsc[0]*tshs.nsc[1]*tshs.nsc[2]
 sptype=str(tshs.spin)
 
-sptype2=sptype[5:-9]
+sptype2=sptype[5:-1]
 
 if sptype2 == 'unpolarized' :
 

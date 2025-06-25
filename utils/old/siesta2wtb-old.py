@@ -34,8 +34,8 @@ inputfdf=  sys.argv[1]
 fermi= sys.argv[2]
 
 #os.system("cp ./teste-honpas/mos2.out ./teste-honpas/run.out")
-geom = sisl.get_sile(inputfdf).read_geometry()
-tshs = sisl.get_sile(inputfdf).read_hamiltonian(geometry=geom) #pegar hamiltoniano do siesta
+
+tshs = sisl.get_sile(inputfdf).read_hamiltonian() #pegar hamiltoniano do siesta
 
 #fermi = sisl.get_sile(folder).read_fermi_level()
 

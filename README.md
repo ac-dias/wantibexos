@@ -7,7 +7,7 @@ The online documentation is available in:
 For memory problems during parallel run, please export the following environment variable:
 export KMP_STACKSIZE=XXXmb, being XXX the amount of virtual RAM per thread, I suggest something around 300mb, but for some situations, more could be necessary.
 
-The Siesta/Honpas Hamiltonian extract script (siesta2wtb.py) was tested in SISL version 0.14.3, could not be work in other versions.
+The Siesta/Honpas Hamiltonian extract script (siesta2wtb.py) was tested in SISL version 0.16.2, could not be work in other versions.
 
 Citing
    ------
