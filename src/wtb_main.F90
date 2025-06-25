@@ -344,19 +344,19 @@ program main
 	end if
 
 
-	if (pce) then
+	!if (pce) then
 	
-	 call pcecalc(outputfolder,numbse,"IPA",ctemp,ses,tmax,eg,egd)
+	 !call pcecalc(outputfolder,numbse,"IPA",ctemp,ses,tmax,eg,egd)
 	
-		 write(2077,*) "PCE with single particle absortion spectrum"
-         call flush(2077)
+	!	 write(2077,*) "PCE with single particle absortion spectrum"
+        ! call flush(2077)
 		 
-	call pcecalc(outputfolder,numbse,"BSE",ctemp,ses,tmax,egs,ebgs)	
+	!call pcecalc(outputfolder,numbse,"BSE",ctemp,ses,tmax,egs,ebgs)	
 		 
-		 write(2077,*) "PCE with excitonic effects (BSE)"
-         call flush(2077)
+	!	 write(2077,*) "PCE with excitonic effects (BSE)"
+        ! call flush(2077)
 	
-	end if
+	!end if
 
 
 	call cpu_time(tf)

@@ -58,13 +58,17 @@ program main
 
 
 	if (tipo .eq. 2) then
-
+ 
+	call system("cp *.up_hr.dat wannier90.up_hr.dat" ) 
+	call system("cp *.dn_hr.dat wannier90.dn_hr.dat" ) 	
+	call system("cp *.up.win wannier90.up.win")
 	call SYSTEM(" awk '/''begin unit_cell_cart''/{f=1;next} /''end unit_cell_cart''/{f=0} f' wannier90.up.win >> tb_hr.dat ")
 	call system(" cat wannier90.up_hr.dat >> tb_hr.dat ")
 	call system(" cat wannier90.dn_hr.dat >> tb_hr.dat ")
 
 	else
-
+	call system("cp *.win wannier90.win")
+	call system("cp *_hr.dat wannier90_hr.dat" )
 	call SYSTEM(" awk '/''begin unit_cell_cart''/{f=1;next} /''end unit_cell_cart''/{f=0} f' wannier90.win >> tb_hr.dat ")
 	call system(" cat wannier90_hr.dat >> tb_hr.dat ")
 

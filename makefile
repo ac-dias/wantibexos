@@ -16,6 +16,7 @@ pp :
 	$(FOR) ./utils/param_gen.F90  -o $(DIR)param_gen.x
 	$(FOR) ./utils/param_gen_vasp.F90  -o $(DIR)param_gen_vasp.x
 	$(FOR) ./utils/absorbance.F90  -o $(DIR)absorbance.x	
+	$(FOR) ./utils/slme/pce-code.f90 ./utils/slme/pce-subs.f90  -o $(DIR)pce.x
 	cp ./utils/*.py  $(DIR)
 
 
@@ -41,7 +42,6 @@ subprograms: lib
 	$(FOR) -c ./src/subprograms/diel-pp-pol.F90 $(OMP) $(LIBS) $(COND) $(EXTRA) -L./build/libwtb.a
 	$(FOR) -c ./src/subprograms/efmass.F90 $(OMP) $(LIBS) $(COND) $(EXTRA) -L./build/libwtb.a
 	$(FOR) -c ./src/subprograms/exciton_lifetime.F90 $(OMP) $(LIBS) $(COND) $(EXTRA) -L./build/libwtb.a
-	$(FOR) -c ./src/subprograms/pce-code.F90 $(OMP) $(LIBS) $(COND) $(EXTRA) -L./build/libwtb.a
 	$(FOR) -c ./src/subprograms/sp_diel-tool.F90 $(OMP) $(LIBS) $(COND) $(EXTRA) -L./build/libwtb.a
 	$(FOR) -c ./src/subprograms/sp_diel-tool-pol.F90 $(OMP) $(LIBS) $(COND) $(EXTRA) -L./build/libwtb.a
 	$(FOR) -c ./src/subprograms/sp_opt_bz-tool.F90 $(OMP) $(LIBS) $(COND) $(EXTRA) -L./build/libwtb.a
@@ -68,9 +68,7 @@ subroutines :
 	$(FOR) -c ./src/subroutines/hamiltonian_tb.F90 $(LIBS) $(OMP)
 	$(FOR) -c ./src/subroutines/mhkpack_subs.F90 
 	$(FOR) -c ./src/subroutines/module_input_read.F90 
-	$(FOR) -c ./src/subroutines/module_pce.F90 
-	$(FOR) -c ./src/subroutines/optics.F90 
-	$(FOR) -c ./src/subroutines/pce-subs.F90 
+	$(FOR) -c ./src/subroutines/optics.F90  
 	$(FOR) -c ./src/subroutines/spin_txt_subs.F90 
 	mv *.o ./build/subroutines
 
