@@ -163,7 +163,7 @@ program main
 		
 	if (emt) then
 
-	 call efmass(nthreads,dft,outputfolder,params,emfile,dk,nocpf,fermishift,exc,mag)
+	 !call efmass(nthreads,dft,outputfolder,params,emfile,dk,nocpf,fermishift,exc,mag,sysdim)
 	 
 	 call efmass_num(nthreads,dft,outputfolder,params,emfile,dk,nocpf,fermishift,exc,mag,sysdim)
 
