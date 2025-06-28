@@ -343,6 +343,14 @@ if sptype2 == 'non-colinear' :
 
 if sptype2 == 'spin-orbit' :
 
+ f = open("system-info-soc.txt", "a")
+ print(tshs, file=f)
+ f.close()
+ 
+  nbasis= tshs.no
+  ncell=  tshs.nsc[0]*tshs.nsc[1]*tshs.nsc[2]
+  sptype=str(tshs.spin)
+
  f = open("basis_set-soc", "a")
 
  print('#bindex aspecie ax ay az l m spin',file=f)
