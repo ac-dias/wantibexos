@@ -347,9 +347,9 @@ if sptype2 == 'spin-orbit' :
  print(tshs, file=f)
  f.close()
  
-  nbasis= tshs.no
-  ncell=  tshs.nsc[0]*tshs.nsc[1]*tshs.nsc[2]
-  sptype=str(tshs.spin)
+ nbasis= tshs.no
+ ncell=  tshs.nsc[0]*tshs.nsc[1]*tshs.nsc[2]
+ sptype=str(tshs.spin)
 
  f = open("basis_set-soc", "a")
 
