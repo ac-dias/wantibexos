@@ -282,7 +282,7 @@ end do
 	!allocate(output(nk,7))
 
 	! $omp do ordered
-	!$omp parallel do reduction(+:auxx, auxy, auxz, auxsp, auxsm) private(i, j)
+
 	do j=1,ngkpt
 
 	auxx = 0.0
@@ -291,7 +291,7 @@ end do
 	auxsp = 0.0
 	auxsm = 0.0
 
-	
+	!$omp parallel do reduction(+:auxx, auxy, auxz, auxsp, auxsm) private(i)
 	do i=1,dimrpa
 
 		call optspbz(vector(j,stto(j,i,2),:),vector(j,stto(j,i,3),:),&
@@ -316,7 +316,7 @@ end do
 
 
 	end do
-	
+	!$omp end parallel do
 		!output(j,1) = kpt(j,1)
 		!output(j,2) = kpt(j,2)
 		!output(j,3) = auxx
@@ -333,16 +333,16 @@ end do
 		write(306,*) real(kpt(j,1)),real(kpt(j,2)),real(kpt(j,3)),(auxsp-auxsm)/(auxsp+auxsm)
 		write(307,*) real(kpt(j,1)),real(kpt(j,2)),real(kpt(j,3)),(auxx-auxy)/(auxx+auxy)
 		
-		call flush(301)
-		call flush(302)
-		call flush(303)
-		call flush(304)
-		call flush(305)
-		call flush(306)
-		call flush(307)		
+		!call flush(301)
+		!call flush(302)
+		!call flush(303)
+		!call flush(304)
+		!call flush(305)
+		!call flush(306)
+		!call flush(307)		
 		! $omp end ordered
 	end do
-	!$omp end parallel do
+	
 
 
 	!do j=1,nk
