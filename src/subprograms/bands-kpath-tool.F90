@@ -271,8 +271,8 @@ subroutine bandstool(nthreads,outputfolder,params,kpaths,orbw, &
 	
 	call gapfinder(w90basis,((nks/2)*nkpts),nocpj,ebands(:,:,2),nkc,nkv,nkgap,gap,cbm,vbm)
 
-	write(500,"(3E15.8,I7,1F15.8)") kpts(nkv,2),kpts(nkv,3),kpts(nkv,4),nocpj(nkv),vbm
-	write(500,"(3E15.8,I7,1F15.8)") kpts(nkc,2),kpts(nkc,3),kpts(nkc,4),nocpj(nkc)+1,cbm
+	write(500,"(3E18.8,I7,1F18.8)") kpts(nkv,2),kpts(nkv,3),kpts(nkv,4),nocpj(nkv),vbm
+	write(500,"(3E18.8,I7,1F18.8)") kpts(nkc,2),kpts(nkc,3),kpts(nkc,4),nocpj(nkc)+1,cbm
 	
 	
 	write(501,*) "fundamental band gap (eV):",cbm-vbm
@@ -280,13 +280,13 @@ subroutine bandstool(nthreads,outputfolder,params,kpaths,orbw, &
 	write(501,*)
 	write(501,*)
 	write(501,*)"kpoint cbm"
-	write(501,"(3E15.8)")kpts(nkc,2),kpts(nkc,3),kpts(nkc,4)
+	write(501,"(3E18.8)")kpts(nkc,2),kpts(nkc,3),kpts(nkc,4)
 	write(501,*)	
 	write(501,*)"kpoint vbm"
-	write(501,"(3E15.8)")kpts(nkv,2),kpts(nkv,3),kpts(nkv,4)
+	write(501,"(3E18.8)")kpts(nkv,2),kpts(nkv,3),kpts(nkv,4)
 	write(501,*)		 
 	write(501,*)"kpoint direct band gap"
-	write(501,"(3E15.8)")kpts(nkgap,2),kpts(nkgap,3),kpts(nkgap,4)
+	write(501,"(3E18.8)")kpts(nkgap,2),kpts(nkgap,3),kpts(nkgap,4)
 
 
 	write(300,*) "#k-path energy <sx> <sy> <sz> orbital"	
@@ -300,7 +300,7 @@ subroutine bandstool(nthreads,outputfolder,params,kpaths,orbw, &
 		
 		do j=1,(nks/2)*nkpts
 
-	               write(300,"(1E15.8,1F15.8,4F15.6)") ebands(i,j,1),ebands(i,j,2),ebands(i,j,3),&
+	               write(300,"(1E20.8,1F20.8,4F20.6)") ebands(i,j,1),ebands(i,j,2),ebands(i,j,3),&
 	                            ebands(i,j,4),ebands(i,j,5),ebands(i,j,6)
 	                            
 	               write(301,"(4E20.8,1F20.8)") ebands(i,j,7),ebands(i,j,8),ebands(i,j,9),&

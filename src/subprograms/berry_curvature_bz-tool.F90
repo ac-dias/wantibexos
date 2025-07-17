@@ -39,6 +39,8 @@ subroutine berrycurvbz(nthreads,dft,outputfolder,params,sme,ngrid,mshift,nocpf,f
 	real,allocatable,dimension(:,:) :: ks
 
 	integer,allocatable,dimension(:) :: nocpk 
+	
+	real,allocatable,dimension(:,:) :: output
 
 	!modificacoes versao 2.1
 
@@ -197,12 +199,11 @@ subroutine berrycurvbz(nthreads,dft,outputfolder,params,sme,ngrid,mshift,nocpf,f
 
 	!termino definicao kpath
 
-	!allocate(output(ngkpt,9))
+	allocate(output(ngkpt,9))
 	
-	write(300,*) "kx ky kz yz xz xy"	
+		
 
-	!$omp parallel default(shared) private(j,bxx,bxy,bxz,byy,byz,bzz)    
-	!$omp do
+	!$omp parallel do default(shared) private(j,bxx,bxy,bxz,byy,byz,bzz)    
 	do j=1,ngkpt
 
 
@@ -213,24 +214,29 @@ subroutine berrycurvbz(nthreads,dft,outputfolder,params,sme,ngrid,mshift,nocpf,f
 		! $omp ordered
 			 !write(300,*) kpts(j,1),kpts(j,2),aimag(berry)
 		! $omp end ordered
-			!output(j,1) = kpts(j,1)
-			!output(j,2) = kpts(j,2)
-			!output(j,3) = kpts(j,3)
-			!output(j,4) = aimag(bxx)
-			!output(j,5) = aimag(bxy)
-			!output(j,6) = aimag(bxz)
-			!output(j,7) = aimag(byy)
-			!output(j,8) = aimag(byz)
-			!output(j,9) = aimag(bzz)
+			output(j,1) = kpts(j,1)
+			output(j,2) = kpts(j,2)
+			output(j,3) = kpts(j,3)
+			output(j,4) = aimag(bxx)
+			output(j,5) = aimag(bxy)
+			output(j,6) = aimag(bxz)
+			output(j,7) = aimag(byy)
+			output(j,8) = aimag(byz)
+			output(j,9) = aimag(bzz)
 			
-			write(300,"(6F15.4)") kpts(j,1),kpts(j,2),kpts(j,3),aimag(byz),aimag(bxz),aimag(bxy)
-			call flush(300)
+			!write(300,"(6F15.4)") kpts(j,1),kpts(j,2),kpts(j,3),aimag(byz),aimag(bxz),aimag(bxy)
+			!call flush(300)
 
 	end do
-	!$omp end do
-	!$omp end parallel
+	!$omp end parallel do
 
 
+	write(300,*) "#kx ky kz yz xz xy"
+
+	do i=1,ngkpt
+		write(300,"(6F15.4)") output(j,1),output(j,2),output(j,3),output(j,8),output(j,6),output(j,5)
+	
+	end do
 
 
 
@@ -240,7 +246,7 @@ subroutine berrycurvbz(nthreads,dft,outputfolder,params,sme,ngrid,mshift,nocpf,f
 	deallocate(kpts)
 	deallocate(autovetores)
 	deallocate(eigvf,vector)
-	!deallocate(output)
+	deallocate(output)
 
 
 	close(200)

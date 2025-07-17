@@ -463,7 +463,7 @@ subroutine input_read
 	ebgs = 0.00
 	
 	emt = .false.
-	dk = 0.001
+	dk = 0.14
 	
 	spintxt = .false.
 	
