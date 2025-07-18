@@ -279,19 +279,20 @@ end do
 
 	!allocate(hoptxf(nk,dimrpa),hoptyf(nk,dimrpa),hoptspf(nk,dimrpa),hoptsmf(nk,dimrpa))
 
-	!allocate(output(nk,7))
+	allocate(output(ngkpt,7))
+	
+	output = 0.0
 
-	! $omp do ordered
-
+	!$omp parallel do default(shared) private(j,hxsp,hysp,hzsp)
 	do j=1,ngkpt
 
-	auxx = 0.0
-	auxy = 0.0
-	auxz = 0.0
-	auxsp = 0.0
-	auxsm = 0.0
+	!auxx = 0.0
+	!auxy = 0.0
+	!auxz = 0.0
+	!auxsp = 0.0
+	!auxsm = 0.0
 
-	!$omp parallel do reduction(+:auxx, auxy, auxz, auxsp, auxsm) private(i)
+	! $omp parallel do reduction(+:auxx, auxy, auxz, auxsp, auxsm) private(i)
 	do i=1,dimrpa
 
 		call optspbz(vector(j,stto(j,i,2),:),vector(j,stto(j,i,3),:),&
@@ -305,33 +306,35 @@ end do
 		hysp= hysp/(cmplx(eigv(j,stto(j,i,3))-eigv(j,stto(j,i,2)),sme))
 		hzsp= hzsp/(cmplx(eigv(j,stto(j,i,3))-eigv(j,stto(j,i,2)),sme))
 		
-		auxx = auxx+real(hxsp*conjg(hxsp))	
-		auxy = auxy+real(hysp*conjg(hysp))
-		auxz = auxz+real(hzsp*conjg(hzsp))
-		auxsp = auxsp&
-		+real(norm*(hxsp+cmplx(0.,1.)*hysp)*conjg(norm*(hxsp+cmplx(0.,1.)*hysp)))
-	auxsm = auxsm&
-	+real(norm*(hxsp-cmplx(0.,1.)*hysp)*conjg(norm*(hxsp-cmplx(0.,1.)*hysp)))		
+		output(j,1) = output(j,1)+real(hxsp*conjg(hxsp))	
+		output(j,2) = output(j,2)+real(hysp*conjg(hysp))
+		output(j,3) = output(j,3)+real(hzsp*conjg(hzsp))
+		output(j,4) = output(j,4)&
+		        +real(norm*(hxsp+cmplx(0.,1.)*hysp)*conjg(norm*(hxsp+cmplx(0.,1.)*hysp)))
+	        output(j,5) = output(j,5)&
+	               +real(norm*(hxsp-cmplx(0.,1.)*hysp)*conjg(norm*(hxsp-cmplx(0.,1.)*hysp)))		
 
 
 
 	end do
-	!$omp end parallel do
-		!output(j,1) = kpt(j,1)
-		!output(j,2) = kpt(j,2)
-		!output(j,3) = auxx
-		!output(j,4) = auxy
-		!output(j,5) = auxsp
-		!output(j,6) = auxsm
-		!output(j,7) = (auxsp-auxsm)/(auxsp+auxsm)
+	! $omp end parallel do
+
+		!output(j,1) = auxx
+		!output(j,2) = auxy
+		!output(j,3) = auxz
+		!output(j,4) = auxsp
+		!output(j,5) = auxsm
+		output(j,6) = (output(j,4)-output(j,5))/(output(j,4)+output(j,5))
+		output(j,7) = (output(j,1)-output(j,2))/(output(j,1)+output(j,2))
 		! $omp ordered
-		write(301,*) real(kpt(j,1)),real(kpt(j,2)),real(kpt(j,3)),auxx
-		write(302,*) real(kpt(j,1)),real(kpt(j,2)),real(kpt(j,3)),auxy
-		write(303,*) real(kpt(j,1)),real(kpt(j,2)),real(kpt(j,3)),auxz
-		write(304,*) real(kpt(j,1)),real(kpt(j,2)),real(kpt(j,3)),auxsp
-		write(305,*) real(kpt(j,1)),real(kpt(j,2)),real(kpt(j,3)),auxsm
-		write(306,*) real(kpt(j,1)),real(kpt(j,2)),real(kpt(j,3)),(auxsp-auxsm)/(auxsp+auxsm)
-		write(307,*) real(kpt(j,1)),real(kpt(j,2)),real(kpt(j,3)),(auxx-auxy)/(auxx+auxy)
+		
+		!write(301,*) real(kpt(j,1)),real(kpt(j,2)),real(kpt(j,3)),auxx
+		!write(302,*) real(kpt(j,1)),real(kpt(j,2)),real(kpt(j,3)),auxy
+		!write(303,*) real(kpt(j,1)),real(kpt(j,2)),real(kpt(j,3)),auxz
+		!write(304,*) real(kpt(j,1)),real(kpt(j,2)),real(kpt(j,3)),auxsp
+		!write(305,*) real(kpt(j,1)),real(kpt(j,2)),real(kpt(j,3)),auxsm
+		!write(306,*) real(kpt(j,1)),real(kpt(j,2)),real(kpt(j,3)),(auxsp-auxsm)/(auxsp+auxsm)
+		!write(307,*) real(kpt(j,1)),real(kpt(j,2)),real(kpt(j,3)),(auxx-auxy)/(auxx+auxy)
 		
 		!call flush(301)
 		!call flush(302)
@@ -342,17 +345,27 @@ end do
 		!call flush(307)		
 		! $omp end ordered
 	end do
+	!$omp end parallel do
 	
+	write(301,*) "#kx ky kz optx"
+	write(302,*) "#kx ky kz opty"
+	write(303,*) "#kx ky kz optz"
+	write(304,*) "#kx ky kz optsp"
+	write(305,*) "#kx ky kz optsm"
+	write(306,*) "#kx ky kz circ dichroism-xy"
+	write(307,*) "#kx ky kz linear dichroism-xy"
 
 
-	!do j=1,nk
-	!	write(301,*) output(j,1),output(j,2),output(j,3)
-	!	write(302,*) output(j,1),output(j,2),output(j,4)
-	!	write(303,*) output(j,1),output(j,2),output(j,5)
-	!	write(304,*) output(j,1),output(j,2),output(j,6)
-	!	write(305,*) output(j,1),output(j,2),output(j,7)
+	do j=1,ngkpt
+		write(301,"(3E20.8,1E20.6)") kpt(j,1),kpt(j,2),kpt(j,3),output(j,1)
+		write(302,"(3E20.8,1E20.6)") kpt(j,1),kpt(j,2),kpt(j,3),output(j,2)
+		write(303,"(3E20.8,1E20.6)") kpt(j,1),kpt(j,2),kpt(j,3),output(j,3)
+		write(304,"(3E20.8,1E20.6)") kpt(j,1),kpt(j,2),kpt(j,3),output(j,4)
+		write(305,"(3E20.8,1E20.6)") kpt(j,1),kpt(j,2),kpt(j,3),output(j,5)
+		write(306,"(3E20.8,1E20.6)") kpt(j,1),kpt(j,2),kpt(j,3),output(j,6)
+		write(307,"(3E20.8,1E20.6)") kpt(j,1),kpt(j,2),kpt(j,3),output(j,7)
 
-	!end do
+	end do
 
 
 
@@ -362,7 +375,7 @@ end do
 	!deallocate(hoptxf,hoptyf,hoptspf,hoptsmf)
 	deallocate(stto)
 	deallocate(kpt)
-	!deallocate(output)
+	deallocate(output)
 
 
 
