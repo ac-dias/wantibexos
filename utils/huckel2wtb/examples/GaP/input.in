@@ -1,0 +1,32 @@
+  Galium_Phosphide              !  CTIT           -> Tile of the calculation
+  2                             ! NUMTP           -> number of atom types of the system
+  31  15                        !   ZAT           -> Atomic numbers of the species
+  Ga   P                        ! ZSIMB           -> Atomic symbols of the species
+  3  3                          ! NORBV           -> Number of Valence orbitals
+  4  4  3                       !  NVAL           -> N Quantum Number of the valence orbitals
+  3  3  3
+  0  1  2                       !  LVAL           -> L Quantum Number of the valence orbitals
+  0  1  2
+  2  1  0                       ! NEAO            -> Number of Electrons of the Atomic Orbitals
+  2  3  0
+  7.5                           ! RCUT            -> Cuttof for atom-atom interaction
+  2.3    2.3                    ! KEHT            -> Parameter for the Huckel Hamiltonian for each specie
+  2.0822   0.7602
+ 21.0000   0.3493
+  1.6871   0.6245
+  5.6025   0.4915
+  2.0963   0.3080
+ 21.0000   0.9334
+  2.0851   0.7067
+ 21.0000   0.4092
+  1.6471   0.8220
+  5.6058   0.2635
+  0.8121   0.4320
+ 21.0000   0.8991
+ -18.6321   -8.4499   -2.7035
+ -19.4050  -14.6917   -7.7738
+ 12.0                     ! ESHIFT         -> Shift to the hamiltonian values
+
+
+
+

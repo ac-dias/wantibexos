@@ -17,7 +17,9 @@ pp :
 	$(FOR) ./utils/param_gen_vasp.F90  -o $(DIR)param_gen_vasp.x
 	$(FOR) ./utils/absorbance.F90  -o $(DIR)absorbance.x	
 	$(FOR) ./utils/slme/pce-code.f90 ./utils/slme/pce-subs.f90  -o $(DIR)pce.x
+	$(FOR) ./utils/huckel2wtb/src/overlaps_jc.f90 ./utils/huckel2wtb/src/diagonalize.f90 ./utils/huckel2wtb/src/Huckel_TB.f90 -o $(DIR)huckel2wtb.x $(LIBS)
 	cp ./utils/*.py  $(DIR)
+	rm ./*.mod
 
 
 main :  subprograms

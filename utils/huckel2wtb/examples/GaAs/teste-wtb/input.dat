@@ -1,0 +1,13 @@
+NTHREADS= 1
+SYSDIM= "3D"
+DFT= "S"
+
+OUTPUT= "./out/"
+CALC_DATA= "./out/"
+PARAMS_FILE= "Hamil.dat"
+KPATH_FILE= "kpoints.dat"
+
+                                                             
+BANDS= T                                                  
+
+	

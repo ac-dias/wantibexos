@@ -1,0 +1,32 @@
+  Galium_Arsenide           !  CTIT           -> Tile of the calculation
+  2                         ! NUMTP           -> number of atom types of the system
+  31  33                    !   ZAT           -> Atomic numbers of the species
+  Ga  As                    ! ZSIMB           -> Atomic symbols of the species
+  3  3                      ! NORBV           -> Number of Valence orbitals
+  4  4  3                   !  NVAL           -> N Quantum Number of the valence orbitals
+  4  4  3
+  0  1  2                   !  LVAL           -> L Quantum Number of the valence orbitals
+  0  1  2
+  2  1  0                   ! NEAO            -> Number of Electrons of the Atomic Orbitals
+  2  3  0
+  12.0                      ! RCUT            -> Cuttof for atom-atom interaction
+  2.3      2.3              ! KEHT            -> Parameter for the Huckel Hamiltonian for each specie
+  1.9156   0.7480
+ 22.0000   0.6606
+  1.4531   0.7310
+  6.2575   0.6070
+  2.5055   0.1823
+ 22.0000   0.9777
+  2.8424   0.7486
+ 22.1113   0.3403
+  2.4306   0.9769
+  8.3603   0.0387
+  0.9404   0.6960
+  3.8879   0.5331
+-16.3786   -9.9995   -2.8133   ! Esit, Ga  
+-21.1792  -12.7431   -6.2957   ! Esit, As
+  12.8211                      ! ESHIFT         -> Shift to the hamiltonian values
+
+
+
+

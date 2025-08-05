@@ -1,0 +1,20 @@
+  Si                        !  CTIT           -> Tile of the calculation
+  1                         ! NUMTP           -> number of atom types of the system1
+  14                        !   ZAT           -> Atomic numbers of the species
+  Si                        ! ZSIMB           -> Atomic symbols of the species
+  3                         ! NORBV           -> Number of Valence orbitals
+  3  3  3                   !  NVAL           -> N Quantum Number of the valence orbitals
+  0  1  2                   !  LVAL           -> L Quantum Number of the valence orbitals
+  2  2  0                   ! NEAO            -> Number of Electrons of the Atomic Orbitals
+  9.0                       ! RCUT            -> Cuttof for atom-atom interaction
+  2.3                       ! KEHT            -> Parameter for the Huckel Hamiltonian for each specie
+  1.8282   0.7129
+ 22.0000   0.4158
+  1.6600   0.9027
+  6.0474   0.1593
+  0.9528   0.6384
+ 22.0000   0.7629
+-17.7573  -11.5240  -5.9080 ! ESIT(NUMTP,3)  -> On-site energies of the valence orbitals
+ 12.3                       ! ESHIFT         -> Shift to the hamiltonian values
+
+
