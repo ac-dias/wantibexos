@@ -424,7 +424,7 @@ vuc(3) = pv3(1)*(pv1(2)*pv2(3) - pv1(3)*pv2(2)) + pv3(2)*(pv1(3)*pv2(1) - pv1(1)
    write(71,'(3f14.8)') (pv3(j), j = 1, 3)
    write(71,*) tnao
    write(71,*) nctot
-   write(71,'(a)') '#rcell x   rcell y   rcell z   i   j   ReH   ImH   S'
+   write(71,'(a)') '     rcell x    rcell y    rcell z     i     j   H   S'
 
         do i = 1, nctot
           do j = 1, tnao

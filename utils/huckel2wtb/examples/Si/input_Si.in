@@ -1,0 +1,51 @@
+ # Variaveis Globais 
+
+ &globalvars
+  cltit = 'Crystalline Silicon'
+   nauc = 2 
+  numtp = 1 
+  nsybz = 5 
+   ndiv = 10
+ eshift = 12.8493
+ /
+
+ # Parametros relativos a celula unitaria:
+
+ &unitcell
+ ncell = 2, 2, 2
+  lpar = 5.431, 5.431, 5.431
+   pv1 = 0.5, 0.5, 0.0        
+   pv2 = 0.5, 0.0, 0.5         
+   pv3 = 0.0, 0.5, 0.5         
+  itype = 1, 1 
+    rx = 0.00000, 1.3577 
+    ry = 0.00000, 1.3577
+    rz = 0.00000, 1.3577
+ /
+
+ # Identificação dos orbitais e parâmetros de Huckel:
+
+ &orbitals
+    zat = 14    
+  zsimb = 'Si'
+  norbv = 3
+  nval = 3, 3, 3
+  lval = 0, 1, 2
+  neao = 2, 2, 0
+  rcut = 9.0
+  keht = 2.3
+  zeta(1,:,:) = 1.8282, 1.6600, 0.9528, 22.0000, 6.0474, 22.0000
+    cf(1,:,:) = 0.7129, 0.9027, 0.6384, 0.4158, 0.1593, 0.7629
+  esit(1,:) = -17.7573, -11.5240, -5.9080
+  /
+
+ # K-Path Para o calculo de Bandas:
+
+  &kpath
+        hspbz = 'L', 'Gamma', 'X', 'W', 'Gamma'
+  kcoord(1,:) = 0.50, 0.50, 0.50
+  kcoord(2,:) = 0.00, 0.00, 0.00
+  kcoord(3,:) = 0.00, 0.50, 0.50
+  kcoord(4,:) = 0.25, 0.75, 0.50
+  kcoord(5,:) = 0.00, 0.00, 0.00
+  /
