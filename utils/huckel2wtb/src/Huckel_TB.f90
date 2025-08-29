@@ -9,9 +9,12 @@
 ! 
 ! (2) The overlaps among the orbitals are calculated numerically
 !
-! (3) SOC was not included in this version
+! (3) All the input data is readen from a just single file
 !
-! Date: 05/07/2025
+! (4) SOC was not included in this version
+!
+! -----------------------------------------------------------------------------
+!  Date: 24/08/2025
 ! -----------------------------------------------------------------------------
 
     program huckel_tb
@@ -19,111 +22,119 @@
 
     implicit none
 
-!----------------------- Variables and Arrays ---------------------------------
-! (i) Parameters:
+  !----------------------- Variables and Arrays ---------------------------------
+  ! (i) Parameters:
 
-  integer, parameter       :: nmax = 7, lmax = 2
-  real*8, parameter        :: pi = 4.d0*atan(1.0d0) 
+   integer, parameter       :: nmax = 7, lmax = 2
+   real*8, parameter        :: pi = 4.d0*atan(1.0d0) 
 
-! (ii) From the input files:
+  ! (ii) From the input files:
 
-  integer                  :: nat, nauc, numtp, ncell(3)
-  real*8                   :: lpar(3), rcut
-  integer, allocatable     :: zat(:), itp(:)
-  integer, allocatable     :: norbv(:), nval(:,:), lval(:,:), nzt(:,:), neao(:,:)
-  real*8 , allocatable     :: zeta(:,:,:), cf(:,:,:), esit(:,:), keht(:,:)
-  real*8 , allocatable     :: kcoord(:,:)
-  character*5, allocatable :: zsimb(:), hspbz(:)
-  character*40             :: cltit
+   integer                  :: nat, nauc, numtp, ncell(3)
+   real*8                   :: lpar(3), rcut
+   integer, allocatable     :: zat(:), itp(:)
+   integer, allocatable     :: norbv(:), nval(:,:), lval(:,:), nzt(:,:), neao(:,:)
+   real*8 , allocatable     :: zeta(:,:,:), cf(:,:,:), esit(:,:), keht(:,:)
+   real*8 , allocatable     :: kcoord(:,:)
+   character*5, allocatable :: zsimb(:), hspbz(:)
+   character*40             :: cltit
+ 
+  ! (iii) Internals
 
-! (iii) Internals
+   real*8,  allocatable     :: rx(:), ry(:), rz(:), oe(:,:), hr(:,:), sr(:,:), W(:)
+   real*8                   :: eshift, vuc,  version
+   real*8                   :: pv1(3), pv2(3), pv3(3)
+   real*8                   :: ui(3), uj(3), rij(3), rdij
+   integer, allocatable     :: itype(:), nngh(:), lisngh(:,:), dbov(:)
+   integer, allocatable     :: ldm(:), sip(:), lptb(:,:), nspc(:), nbnn(:)
+   integer, allocatable     :: numnn(:), lisnn(:,:), iref(:)
+   real*8, allocatable      :: posnn(:,:,:)
+   integer                  :: ni, nj, li, lj, llp, i, j, k, m, n, id, jd, ik, kk, today(3)
+   integer                  :: ix, iy, iz, ib, iatom, noso, maxnn, icount, icnn
+   integer                  :: nnn, tnao, nctot, ErrorFlag, nelect, imin(1), imax(1)
 
-  real*8,  allocatable     :: rx(:), ry(:), rz(:), oe(:,:), hr(:,:), sr(:,:), W(:)
-  real*8                   :: rpos(2,3), cl, cm, cn, cl2, cm2, cn2, rsq, ebin, version
-  real*8                   :: ovlp(0:lmax), ovin(3), ovout(25), eshift, vuc
-  real*8                   :: xij, yij, zij, sdx, sdy, sdz, pv1(3), pv2(3), pv3(3)
-  real*8                   :: sig1(3), sig2(3), sig3(3), ui(3), uj(3), rij(3), rdij
-  integer, allocatable     :: itype(:), nngh(:), lisngh(:,:), dbov(:), ldm(:), sip(:)
-  integer, allocatable     :: lptb(:,:), nspc(:), nbnn(:)
-  integer, allocatable     :: numnn(:), lisnn(:,:), iref(:)
-  real*8, allocatable      :: posnn(:,:,:)
-  integer                  :: ni, nj, li, lj, llp, i, j, k, m, n, id, jd, ik, kk, today(3)
-  integer                  :: ix, iy, iz, ib, iatom, noso, maxnn, icount, icnn
-  integer                  :: nnn, tnao, nctot, ErrorFlag, nelect, imin(1), imax(1)
+  ! (iv) Internals - Reciprocal space
 
-! (iv) Internals - Reciprocal space
+   integer                  :: nsybz, ndiv, nlines, nkpt, idv, ikcount, flp
+   real*8                   :: emin, emax, egap 
+   real*8                   :: up, ur, us, b1(3), b2(3), b3(3)
+   real*8, allocatable      :: eband(:,:)
+   real*8, allocatable      :: kp(:,:), kpmod(:), kpmodacc(:), kpoint(:,:), kpcoord(:)
+   complex*16, allocatable  :: hamk(:,:,:), ovlk(:,:,:)
 
-  integer                  :: nsybz, ndiv, nlines, nkpt, idv, ikcount, flp
-  real*8                   :: emin, emax, egap 
-  real*8                   :: up, ur, us, b1(3), b2(3), b3(3)
-  real*8, allocatable      :: eband(:,:)
-  real*8, allocatable      :: kp(:,:), kpmod(:), kpmodacc(:), kpoint(:,:), kpcoord(:)
-  complex*16, allocatable  :: hamk(:,:,:), ovlk(:,:,:)
-! -----------------------------------------------------------------------------
+  ! (v) NAMELISTS:
 
-version = 1.0
-!call idate(today)
-!call date_and_time()
+   namelist /globalvars/ nauc, numtp, nsybz, ndiv, cltit, eshift
+   namelist /unitcell/ ncell, lpar, pv1, pv2, pv3, itype, rx, ry, rz
+   namelist /orbitals/ zat, zsimb, norbv, nval, lval, neao, rcut, keht, zeta, cf, esit
+   namelist /kpath/ kcoord, hspbz
 
-print*
-print*, "--------------------- PROGRAM HUCKEL2WTB -----------------------------"
-write(*,'(a,f3.1)') '     VERSION: ', version
-!write(*,'(a,i2,a,i2,a,i4)') 'CURRENT DATE: ', today(1),'/',today(2),'/',today(3)
-print*, "----------------------------------------------------------------------"
-print*
-print*, "Calculates the electronic structure of a crystalline material in the  "
-print*, "Tight-Binding aproximation. The radial part of the atomic orbitals are" 
-print*, "Described  as linear combination  of Slater-Type Functions (STO).  The"
-print*, "Elements of the Hamiltonian matrix follows the Huckel prescription: the" 
-print*, "Overlaps among the orbitals are explicitely computed."
-print* 
-print*, "Unit System:"
-print*
-print*, "DISTANCES: Angstrons (A)"
-print*, " ENERGIES: electron volts (eV)"
-print*, "   FORCES: eV/Angs"
-print*
-print*, "In the current version  of the program, the maximum allowed values for"
-print*, "The L quantum numbers is LMAX = 2 (s, p and d)"
+  ! -----------------------------------------------------------------------------
 
-  ! Files managed by the main program:
+    version = 1.0
 
-    open(4, file ='input.in', status='unknown')
-    open(8, file ='unitcell.in', status='unknown')
+  print*
+  print*, "--------------------- PROGRAM HUCKEL2WTB -----------------------------"
+  write(*,'(a,f3.1)') '     VERSION: ', version
+  print*, "----------------------------------------------------------------------"
+  print*
+  print*, "Calculates the electronic structure of a crystalline material in the  "
+  print*, "Tight-Binding aproximation. The radial part of the atomic orbitals are" 
+  print*, "Described  as linear combination  of Slater-Type Functions (STO).  The"
+  print*, "Elements of the Hamiltonian matrix follows the Huckel prescription: the" 
+  print*, "Overlaps among the orbitals are explicitely computed."
+  print* 
+  print*, "Unit System:"
+  print*
+  print*, "DISTANCES: Angstrons (A)"
+  print*, " ENERGIES: electron volts (eV)"
+  print*, "   FORCES: eV/Angs"
+  print*
+  print*, "In the current version  of the program, the maximum allowed values for"
+  print*, "The L quantum numbers is LMAX = 2 (s, p and d)"
 
-  ! ---------------------- Reading the input file -----------------------------
+  ! -----------------------------------------------------------------------------
+  !                (I) READING THE DATA FROM THE INPUT FILE                                      
+  ! -----------------------------------------------------------------------------
+  ! All data is stored in just one input file, grouped in different namelists
+  ! -----------------------------------------------------------------------------
 
-    read(4,*) cltit                           ! Title of the Calculation
-    read(4,*) numtp                           ! Number of atom types of the system
+   ! (a) Global Variables:
 
-    allocate(zat(numtp), zsimb(numtp), norbv(numtp))
+     read(*,NML=globalvars)
+     nat = nauc
 
-    read(4,*) (  zat(i), i = 1, numtp)        ! Atomic numbers of the species
-    read(4,*) (zsimb(i), i = 1, numtp)        ! Atomic symbols of the species
-    read(4,*) (norbv(i), i = 1, numtp)        ! Number of Valence orbitals
+   ! (b) Unit Cell Related variables:
 
-    allocate(nval(numtp,3), lval(numtp,3),neao(numtp,3))
+     allocate(itype(nat), rx(nat), ry(nat), rz(nat))
+     read(*,NML=unitcell) 
 
-    do i = 1, numtp
-    read(4,*) (nval(i,j), j = 1, norbv(i))    ! N Quantum Numbers of the valence orbitals
-    enddo
+   ! Scaling the lattice Primitive Vectors:
 
-    do i = 1, numtp
-    read(4,*) (lval(i,j), j = 1, norbv(i))    ! L Quantum Numbers of the valence orbitals
-    enddo
+     pv1(:) = pv1(:)*lpar(1)
+     pv2(:) = pv2(:)*lpar(2)
+     pv3(:) = pv3(:)*lpar(3)
 
-    do i = 1, numtp
-    read(4,*) (neao(i,j), j = 1, norbv(i))    ! Number of Electrons of the J atomic Orbital
-    enddo
+   ! Volum of the primitive cell
 
-    read(4,*) rcut
+     vuc = pv1(1)*(pv2(2)*pv3(3) - pv2(3)*pv3(2)) + pv1(2)*(pv2(3)*pv3(1) - pv2(1)*pv3(3)) + &
+           pv1(3)*(pv2(1)*pv3(2) - pv2(2)*pv3(1))
 
-  ! Allocating KEHT:
+     vuc = dabs(vuc)   ! For non-orthogonal primitive vectors
 
-    allocate(keht(numtp,numtp))
-    read(4,*) (keht(i,i), i = 1, numtp)
+   ! (c) Orbital's and Huckel's parameters:
 
-  ! Building the cross terms of KEHT (geometric average):
+     allocate(zat(numtp), zsimb(numtp), norbv(numtp))
+     allocate(nval(numtp,3), lval(numtp,3),neao(numtp,3))
+     allocate(keht(numtp,numtp))
+     allocate(nzt(numtp,3))        ! 1 = s, 2 = p and 3 = d
+     allocate(zeta(numtp,3,2), cf(numtp,3,2))
+     allocate(esit(numtp,3))
+     nzt(:,:) = 2                  ! Double Zeta basis
+
+     read(*,NML=orbitals)  
+
+  ! Off Diagonal values of KEHT:
 
     do i = 1, numtp - 1
       do j = i + 1, numtp
@@ -132,147 +143,60 @@ print*, "The L quantum numbers is LMAX = 2 (s, p and d)"
       enddo
     enddo
 
-  ! Defining the basis dimension: NZT is set to 2 for all orbitals (double zeta)
+    allocate(kcoord(nsybz,3), kp(nsybz,3), kpmod(nsybz), kpmodacc(nsybz))
+    allocate(hspbz(nsybz))
 
-    allocate(nzt(numtp,3))    ! 1 = s, 2 = p and 3 = d
-    nzt(:,:) = 2              ! Double Zeta basis
+   ! (d) Kpath:
 
-  ! Reading the ZETA(NUMTP,3,2) and the COEFFICIENTS CF(NUMTP,3,2) for the STO's
-  ! (3 refers to the maximal number of valence orbitals and 2 the maximal number
-  ! Of ZETAS.):
-
-    allocate(zeta(numtp,3,2), cf(numtp,3,2))
-
-    zeta(:,:,:) = 0.0d0
-      cf(:,:,:) = 0.0d0
-
-    do i = 1, numtp
-      do j = 1, norbv(i)
-         do k = 1, nzt(i,j)
-           read(4,*) zeta(i,j,k), cf(i,j,k)
-         enddo
-      enddo
-    enddo
-
-  ! Reading the on-site energies, ESIT(NUMTP,3), of the valence orbitals:
-
-    allocate(esit(numtp,3))
-    esit(:,:) = 0.0d0
-
-    do i = 1, numtp
-    read(4,*) (esit(i,j), j = 1, norbv(i))
-    enddo
-
-  ! Reading the shift tho the hamiltonian values (to set up the fermi energy):
-
-    read(4,*) eshift
+    read(*,NML=kpath)  
 
   ! ----------------------------------------------------------------------------
-  !                (i) SETTING THE INITIAL VARIABLES                           
+  !                (II) SETTING THE INITIAL VARIABLES                           
   ! ----------------------------------------------------------------------------
   ! Defining the vectors related to the basis orbitals: LDM(0:lmax) gives the
   ! Number of orbitals for each L value and DBOV(NUMTP) gives the total number of
   ! Orbitals for each specie of the system:
   ! ----------------------------------------------------------------------------
 
-    allocate(ldm(0:lmax), dbov(numtp))
+     allocate(ldm(0:lmax), dbov(numtp))
 
-    ldm(0) = 1
-    ldm(1) = 3
-    ldm(2) = 5
+     ldm(0) = 1
+     ldm(1) = 3
+     ldm(2) = 5
 
   ! Assigning the total number of valence orbitals according to the basis dimension:
 
-    do i = 1, numtp
-     do j = 1, norbv(i)
-      dbov(i) = dbov(i) + ldm(lval(i,j))
+     dbov = 0
+     do i = 1, numtp
+      do j = 1, norbv(i)
+       dbov(i) = dbov(i) + ldm(lval(i,j))
+      enddo
      enddo
-    enddo
 
   ! Pointer for each L value inside the basis: for each specie, this pointer
   ! Gives the initial position in the basis for the orbital of L quantum number.
 
-    allocate(lptb(numtp,0:lmax))
+     allocate(lptb(numtp,0:lmax))
 
-    do i = 1, numtp
+     do i = 1, numtp
 
-    llp = norbv(i)
-    select case (llp)
-    case(1) ! Basis with only S orbital
-    lptb(i,0) = 1
-    case(2) ! Basis with S and P orbitals
-    lptb(i,0) = 1
-    lptb(i,1) = 2
-    case(3) ! Basis with S, P and D orbitals
-    lptb(i,0) = 1
-    lptb(i,1) = 2
-    lptb(i,2) = 5
-    end select
+     llp = norbv(i)
+     select case (llp)
+     case(1) ! Basis with only S orbital
+     lptb(i,0) = 1
+     case(2) ! Basis with S and P orbitals
+     lptb(i,0) = 1
+     lptb(i,1) = 2
+     case(3) ! Basis with S, P and D orbitals
+     lptb(i,0) = 1
+     lptb(i,1) = 2
+     lptb(i,2) = 5
+     end select
 
-    enddo
-
-! ------------------------------------------------------------------------------
-!                 (ii) GENERATION OF THE ATOMIC POSITIONS                      
-! ------------------------------------------------------------------------------
-
-  pv1(:) = 0.0d0
-  pv2(:) = 0.0d0
-  pv3(:) = 0.0d0
-
-            ! ---------------------------------------------------
-            !         (ii.a) Reading the UNITCELL file:
-            ! ---------------------------------------------------
-
-   read(8,*) nauc
-   read(8,*) ncell(1), ncell(2), ncell(3)
-   read(8,*) lpar(1), lpar(2), lpar(3)
-   read(8,*) pv1(1), pv1(2), pv1(3)
-   read(8,*) pv2(1), pv2(2), pv2(3)
-   read(8,*) pv3(1), pv3(2), pv3(3)
-
-  ! Scaling the lattice Primitive Vectors:
-
-   pv1(:) = pv1(:)*lpar(1)
-   pv2(:) = pv2(:)*lpar(2)
-   pv3(:) = pv3(:)*lpar(3)
-
-            ! *****************************************
-            !   Reading the primitive's cell positions
-            ! *****************************************
-   
-   nat = nauc
-   allocate(rx(nat), ry(nat), rz(nat), itype(nat))
-
-   do i = 1, nat 
-    read(8,*) itype(i), rx(i), ry(i), rz(i)
-   enddo
-
- close(8)
-
-! Volum of the primitive cell
-
-    vuc = pv1(1)*(pv2(2)*pv3(3) - pv2(3)*pv3(2)) + pv1(2)*(pv2(3)*pv3(1) - pv2(1)*pv3(3)) + &
-          pv1(3)*(pv2(1)*pv3(2) - pv2(2)*pv3(1))
-
-vuc = dabs(vuc)   ! For non-orthogonal primitive vectors
-
-                     ! *****************************************
-                     !    Periodic Boundary's Related Arrays    
-                     ! *****************************************
-   
-    sig1 = (/pv2(2)*pv3(3) - pv2(3)*pv3(2), pv2(3)*pv3(1) - pv2(1)*pv3(3), pv2(1)*pv3(2) - pv2(2)*pv3(1)/)
-    sig2 = (/pv3(2)*pv1(3) - pv3(3)*pv1(2), pv3(3)*pv1(1) - pv3(1)*pv1(3), pv3(1)*pv1(2) - pv3(2)*pv1(1)/)
-    sig3 = (/pv1(2)*pv2(3) - pv1(3)*pv2(2), pv1(3)*pv2(1) - pv1(1)*pv2(3), pv1(1)*pv2(2) - pv1(2)*pv2(1)/)
-
-  ! Calculating the supercell volume and rescaling the SIGs:
-
-!     vol = abs(dot_product(sv1,sig1))
-    sig1 = sig1/vuc
-    sig2 = sig2/vuc
-    sig3 = sig3/vuc
+     enddo
 
   ! ------------------------------------------------------------------------------
-  !                 (iii) GENERATION OF NEIGHBOHR's RELATED ARRAYS                
+  !                 (III) GENERATION OF NEIGHBOHR's RELATED ARRAYS                
   ! ------------------------------------------------------------------------------
   ! These arrays are needed for a efficient construction of the matrix elements
   ! Of the hamiltonian.
@@ -479,22 +403,7 @@ print*
 !                             K-POINT GENERATION                               
 ! -----------------------------------------------------------------------------
 
-    !**********************************************************************
-    ! Generating the K-Points according with the Bravais Lattice:
-    !**********************************************************************
-
-    open(41,file='bands_lines.in', status='unknown')
-
-    read(41,*) nsybz, ndiv
-
-    allocate(kcoord(nsybz,3), kp(nsybz,3), kpmod(nsybz), kpmodacc(nsybz))
-    allocate(hspbz(nsybz))
-
-     do i = 1, nsybz
-      read(41,*) kcoord(i,1), kcoord(i,2), kcoord(i,3), hspbz(i)
-     enddo
-
-  nlines = nsybz - 1
+    nlines = nsybz - 1
 
   ! Mapping the KCOORD vectors, in reduced units, in the KP arrays, in units
   ! Of Angs^(-1):

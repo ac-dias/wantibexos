@@ -1034,16 +1034,16 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	write(unitout,"(A7,F8.4)") "PHAVG= ",phavg
 	write(unitout,"(A6,F8.4)") "TEMP= ",temp
 	write(unitout,*)	
-	!write(unitout,*) "PARAMETERS FOR PCE"
-	!write(unitout,*)
-	!write(unitout,"(A5,A6)") "SES= ",ses
-	!write(unitout,"(A7,F8.4)") "CTEMP= ",ctemp
-	!write(unitout,"(A7,E15.4)") "THMAX= ",tmax				
-	!write(unitout,"(A4,F8.4)") "EG= ",eg
-	!write(unitout,"(A5,F8.4)") "EGD= ",egd
-	!write(unitout,"(A5,F8.4)") "EGS= ",egs
-	!write(unitout,"(A6,F8.4)") "EBGS= ",ebgs
-	!write(unitout,*)
+	write(unitout,*) "PARAMETERS FOR PCE"
+	write(unitout,*)
+	write(unitout,"(A5,A6)") "SES= ",ses
+	write(unitout,"(A7,F8.4)") "CTEMP= ",ctemp
+	write(unitout,"(A7,E15.4)") "THMAX= ",tmax				
+	write(unitout,"(A4,F8.4)") "EG= ",eg
+	write(unitout,"(A5,F8.4)") "EGD= ",egd
+	write(unitout,"(A5,F8.4)") "EGS= ",egs
+	write(unitout,"(A6,F8.4)") "EBGS= ",ebgs
+	write(unitout,*)
 	write(unitout,*) "Effective Mass"
 	write(unitout,*)
 	write(unitout,"(A4,F8.4)") "dK= ",dk					

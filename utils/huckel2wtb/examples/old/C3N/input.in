@@ -1,0 +1,30 @@
+C3N_MONOLAYER                 !  CTIT           -> Tile of the calculation
+2                             ! NUMTP           -> number of atom types of the system
+6    7                        !   ZAT           -> Atomic numbers of the species
+C    N                        ! ZSIMB           -> Atomic symbols of the species
+3    3                        ! NORBV           -> Number of Valence orbitals
+2    2    3                   !  NVAL           -> N Quantum Number of the valence orbitals
+2    2    3
+0    1    2                   !  LVAL           -> L Quantum Number of the valence orbitals
+0    1    2
+2    2    0                   ! NEAO            -> Number of Electrons of the Atomic Orbitals
+2    3    0
+8.5                           ! RCUT            -> Cuttof for atom-atom interaction
+2.8    2.8                    ! KEHT            -> Parameter for the Huckel Hamiltonian
+ 2.1579   0.9090
+22.0000   0.3654
+ 3.0772   0.0048
+ 1.9777   0.9958
+ 0.7467   0.5008
+22.0000   0.8652
+ 3.3373   0.9797
+22.0000   0.1052
+ 2.3462   0.9178
+22.0000   0.3367
+ 1.3428   0.5169
+22.0000   0.8536
+-22.6762  -14.0348  -3.3742  ! ESIT(NUMTP,3)  -> On-site energies of the valence orbitals
+-27.3490  -17.3761  -3.1929         
+ 12.3d0                      ! ESHIFT      
+
+

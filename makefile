@@ -49,6 +49,7 @@ subprograms: lib
 	$(FOR) -c ./src/subprograms/sp_opt_bz-tool.F90 $(OMP) $(LIBS) $(COND) $(EXTRA) -L./build/libwtb.a
 	$(FOR) -c ./src/subprograms/sp_solver-tool-diel.F90 $(OMP) $(LIBS) $(COND) $(EXTRA) -L./build/libwtb.a
 	$(FOR) -c ./src/subprograms/boltzmann_transport.F90 $(OMP) $(LIBS) $(COND) $(EXTRA) -L./build/libwtb.a
+	$(FOR) -c ./src/subprograms/emission_PL.F90 $(OMP) $(LIBS) $(COND) $(EXTRA) -L./build/libwtb.a	
 	mv *.o ./build/subprograms
 
 lib: subroutines
@@ -61,6 +62,8 @@ subroutines :
 	$(FOR) -c ./src/subroutines/bse_subs.F90 
 	$(FOR) -c ./src/subroutines/bse_subs_kpath.F90 
 	$(FOR) -c ./src/subroutines/bse_subs_temp.F90 
+	$(FOR) -c ./src/subroutines/special_funct.F90
+	$(FOR) -c ./src/subroutines/ei_spec_funct.F90
 	$(FOR) -c ./src/subroutines/coulomb_pot.F90 
 	$(FOR) -c ./src/subroutines/diel-pp-subs.F90 
 	$(FOR) -c ./src/subroutines/dos_subs.F90 
@@ -72,6 +75,7 @@ subroutines :
 	$(FOR) -c ./src/subroutines/module_input_read.F90 
 	$(FOR) -c ./src/subroutines/optics.F90  
 	$(FOR) -c ./src/subroutines/spin_txt_subs.F90 
+	$(FOR) -c ./src/subroutines/emission_subs.F90	
 	mv *.o ./build/subroutines
 
 clean:

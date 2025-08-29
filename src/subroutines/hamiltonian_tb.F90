@@ -80,7 +80,7 @@ subroutine eigsys(nthread,dft,systype,scs,exc,nocp,ffactor,kx,ky,kz,w90basis,nve
 		
 		
 
-		call fermilvl(w90basis,efermi+fermishift,fermimt)
+		!call fermilvl(w90basis,efermi+fermishift,fermimt)
 
 		
 		
@@ -101,7 +101,7 @@ subroutine eigsys(nthread,dft,systype,scs,exc,nocp,ffactor,kx,ky,kz,w90basis,nve
 		
 	       
 
-		htb = htb+hexc+fermimt
+		htb = htb+hexc!+fermimt
 
 		
   
@@ -172,7 +172,8 @@ subroutine eigsys(nthread,dft,systype,scs,exc,nocp,ffactor,kx,ky,kz,w90basis,nve
 		 !call normalizewf(w90basis,autovetores(i,:))
 		
 		!end do
-		
+
+		energias = energias - (efermi+fermishift)		
 		
 		if (nocpf .gt. 0) then
 		
@@ -206,6 +207,7 @@ subroutine eigsys(nthread,dft,systype,scs,exc,nocp,ffactor,kx,ky,kz,w90basis,nve
 		end do
 		! $omp end single
 	
+
 
 end subroutine eigsys
 

@@ -855,9 +855,9 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 
 
-	!$omp do ordered
+	! $omp do ordered
 	do i=1,dimbse
-		!$omp ordered
+		! $omp ordered
 		write(301,"(7F15.6)") W(i),actxx(i),actyy(i),actzz(i),actxy(i),actxz(i),actyz(i)
 		call flush(301)
 		
@@ -866,9 +866,9 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		call flush(302)		
 		end if
 
-		!$omp end ordered
+		! $omp end ordered
 	end do
-	!$omp end do
+	! $omp end do
 	
 	deallocate(hrx,hry,hrz,hrsp,hrsm)
 	deallocate(actxx,actxy,actxz,actyy,actyz,actzz)

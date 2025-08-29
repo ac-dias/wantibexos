@@ -292,6 +292,8 @@ program main
 		
 	call lifetime(sysdim,numbse,ngrid,rlat,nc,nv,outputfolder)
 	
+	call emissionopt(nthreads,"BSE",outputfolder,numbse,ngrid,nc,nv,ctemp,cshift,egs)
+	
 	 write(2077,*) "BSE dielectric properties calculated"
 	 call flush(2077)
 	 
@@ -301,9 +303,11 @@ program main
 	 call bseoptproppol(numbse,outputfolder) !calculate abs coeficient and other properties with BSE
 	
 	 call lifetimepol(sysdim,numbse,ngrid,rlat,nc,nv,outputfolder)
+	 
+	 call emissionopt(nthreads,"BSP",outputfolder,numbse,ngrid,nc,nv,ctemp,cshift,egs)
 	
 
-	  write(2077,*) "BSE absorption spectrum with light polarization calculated"
+	  write(2077,*) "BSE absorption/PL spectrum with light polarization calculated"
          call flush(2077)
 	
 
@@ -314,9 +318,6 @@ program main
 
 
 
-
-
-
 	
 
 	if ((spec) .and. ((spdiel) .or. (bse) )) then
@@ -324,24 +325,29 @@ program main
 	call spdielraw(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebse0,ebsef,numbse,cshift) !calculate dielectric constants
 
 	call spoptprop(numbse,outputfolder) !calculate abs coeficient and other properties
+	
+	call emissionopt(nthreads,"IPA",outputfolder,numbse,ngrid,nc,nv,ctemp,cshift,eg)
 
 	 write(2077,*) "Single particle dielectric properties calculated"
-     call flush(2077)
+         call flush(2077)
+     
+     		if (cpol) then
+     		
+     			call spdielrawpol(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebse0,ebsef,numbse,cshift) !calculate dielectric constants different 												       light polarizations
+			call spoptproppol(numbse,outputfolder) !calculate abs coeficient and other properties
+
+			call emissionopt(nthreads,"IPP",outputfolder,numbse,ngrid,nc,nv,ctemp,cshift,eg)
+
+	 		write(2077,*) "Single particle absorption/PL spectrum with light polarization calculated"
+     			call flush(2077)
+     		
+     		end if
 
 	end if
 	
 	
 
-	if ((spec) .and. ((cpol) .or. (bse) )) then
-	
-	!call spdielrawpol(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebse0,ebsef,numbse,cshift) !calculate dielectric constants different 												       light polarizations
-	!call spoptproppol(numbse,outputfolder) !calculate abs coeficient and other properties
 
-
-	 write(2077,*) "Single particle absorption spectrum with light polarization calculated"
-     call flush(2077)
-
-	end if
 
 
 	!if (pce) then

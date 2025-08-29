@@ -1,0 +1,121 @@
+NTHREADS= 1
+SYSDIM= 3D
+DFT= S
+ 
+ INPUT/OUTPUT FILES
+ 
+OUTPUT= ./out/                                                                
+CALC_DATA= ./out/                                                                
+PARAMS_FILE= Hamil.dat                                                             
+KPATH_FILE= kpoints.dat                                                           
+KPATH_BSE= unknown                                                               
+ORB_W= unknown                                                               
+EM_FILE= unknown                                                               
+ 
+ CONTROL
+ 
+BANDS= T
+DOS= F
+BSE= F
+BSE_BND= F
+IPA= F
+OPT_BZ= F
+SPEC= F
+BERRY_BZ= F
+BERRY= F
+PP_ONLY= F
+BSE_WF= F
+TMCOEF= F
+DTDIAG= F
+CPOL= F
+EM_TENSOR= F
+SPIN_TXT= F
+BOLTZ= F
+ 
+ K-MESH
+ 
+KMESH_GEN= MKH            
+NGX= 1
+NGY= 1
+NGZ= 1
+SHIFT_1=   0.0000
+SHIFT_2=   0.0000
+SHIFT_3=   0.0000
+ 
+ DOS
+ 
+NEDOS= 6001
+SIGMA=   0.0800
+ 
+ BSE/OPTICAL PROPERTIES
+ 
+BSE_ALGO= cheev       
+NBANDSC= 1
+NBANDSV= 1
+ENSPECI=   0.0000
+ENSPECF=   3.0000
+NESPEC= 6001
+KTOL=   0.0010
+EXC_WF_I= 1
+EXC_WF_F= 2
+COULOMB_POT= V3D  
+CSHIFT=   0.0100
+RNMD= T
+ 
+ PARAMETERS FOR COULOMB POTENTIALS
+ 
+EDIEL_Z=   1.0000
+W_COUL=   0.0000
+LC=   1.0000
+R_0=   1.0000
+EDIEL_T=   1.0000
+EDIEL_B=   1.0000
+EDIEL=   1.0000
+ 
+ PARAMETERS FOR BSE with Temperature Effects
+ 
+TA= FA
+ST=   0.0000
+PHAVG=   0.0000
+TEMP=   0.0000
+ 
+ Effective Mass
+ 
+dK=   0.0010
+ 
+ OTHERS
+ 
+FERMI_SHIFT=   0.0000
+NOCPF= 0
+ 
+ PARAMETERS FOR BOLTZMANN TRANSPORT
+ 
+BTEMP= 300.0000
+NEBOLTZ= 6001
+NEMU= 601
+MU_I=  -2.0000
+MU_F=   2.0000
+KappaL=   0.0000
+ELFT_X=      0.1000E+01
+ELFT_Y=      0.1000E+01
+ELFT_Z=      0.1000E+01
+HLFT_X=      0.1000E+01
+HLFT_Y=      0.1000E+01
+HLFT_Z=      0.1000E+01
+SIGMA_BOLTZ=      0.1000E-01
+ 
+ EXTERNAL HAMILTONIANS
+ 
+SPIN_EXC=   0.0000
+MAG_X=   0.0000
+MAG_Y=   0.0000
+MAG_Z=   1.0000
+ 
+ 
+ 
+ Begin  day           5           16 hours          59 min           8 seg
+ 
+ Band Structure finished
+ 
+ End   day           5           16 hours          59 min           8 seg
+ 

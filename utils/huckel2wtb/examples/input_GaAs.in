@@ -1,0 +1,54 @@
+ # Variaveis Globais 
+
+ &globalvars
+  cltit = 'Galium Arsenide'
+   nauc = 2 
+  numtp = 2 
+  nsybz = 4 
+   ndiv = 10
+ eshift = 12.8211
+ /
+
+ # Parametros relativos a celula unitaria:
+
+ &unitcell
+ ncell = 2, 2, 2
+  lpar = 5.65, 5.65, 5.65
+   pv1 = 0.5, 0.5, 0.0        
+   pv2 = 0.5, 0.0, 0.5         
+   pv3 = 0.0, 0.5, 0.5         
+  itype = 1, 2 
+    rx = 0.00000, 1.4125 
+    ry = 0.00000, 1.4125
+    rz = 0.00000, 1.4125
+ /
+
+ # Identificação dos orbitais e parâmetros de Huckel:
+
+ &orbitals
+    zat = 31, 33
+  zsimb = 'Ga', 'As'
+  norbv = 3, 3
+  nval = 4, 4, 4, 4, 3, 3
+  lval = 0, 0, 1, 1, 2, 2
+  neao = 2, 2, 1, 3, 0, 0
+  rcut = 9.0
+  keht = 2.3, 2.3, 2.3, 2.3
+  zeta(1,:,:) = 1.9156, 1.4531, 2.5055, 22.0000, 6.2575, 22.0000
+  zeta(2,:,:) = 2.8424, 2.4306, 0.9404, 22.0000, 8.3603,  3.8879
+    cf(1,:,:) = 0.7480, 0.7310, 0.1823, 0.6606, 0.6070, 0.9777
+    cf(2,:,:) = 0.7486, 0.9769, 0.6960, 0.3403, 0.0387, 0.5331
+  esit(1,:) = -16.3786, -9.9995, -2.8133
+  esit(2,:) = -21.1792,-12.7431, -6.2957 
+  /
+
+ # K-Path Para o calculo de Bandas:
+
+  &kpath
+        hspbz = 'Gamma', 'L', 'X', 'Gamma'
+  kcoord(1,:) = 0.0, 0.0, 0.0
+  kcoord(2,:) = 0.5, 0.5, 0.5
+  kcoord(3,:) = 0.0, 0.5, 0.5
+  kcoord(4,:) = 0.0, 0.0, 0.0
+  /
+

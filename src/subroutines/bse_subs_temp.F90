@@ -47,7 +47,8 @@ function matrizelbsetemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1
 	real :: vcoul1
 
 	real :: vcoul,v2dk,v3diel,v2dt,v0dt,v2dt2
-	real :: v2dohono,v2drk,v1dt
+	real :: v2dohono,v2drk,v1dt,v2d,v2diel
+	real :: v1d,v1diel
 	
 	real :: r0
 	
@@ -67,6 +68,14 @@ function matrizelbsetemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1
 	case("V3DL")
 
 		vcoul1= v3diel(kpt1,kpt2,ediel,rlat,ngrid,tolr)
+		
+	case("V2D")
+
+		vcoul1= v2d(kpt1,kpt2,rlat,ngrid,tolr)
+
+	case("V2DL")
+
+		vcoul1= v2diel(kpt1,kpt2,ediel,rlat,ngrid,tolr)		
 
 	case("V2DT")
 
@@ -84,9 +93,17 @@ function matrizelbsetemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1
 
 		vcoul1= v2drk(kpt1,kpt2,ngrid,rlat,ediel,lc,ez,w,r0,tolr)
 		
+	case("V1D")
+
+		vcoul1= v1d(kpt1,kpt2,ngrid,rlat,lc,tolr)
+
+	case("V1DL")
+
+		vcoul1= v1diel(kpt1,kpt2,ngrid,rlat,lc,ediel,tolr)		
+		
 	case("V1DT")
 	
-		vcoul1=	v1dt(kpt1,kpt2,ngrid,rlat,tolr,lc)	
+		vcoul1= v1dt(kpt1,kpt2,ngrid,rlat,tolr,lc)	
 		
 		
 	case("V0DT")
@@ -191,7 +208,8 @@ function matrizelbsekqtemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,
 	real :: vcoulk,vcoulq
 
 	real :: v2dk,vcoul,v3diel,v2dt,v0dt,v2dt2
-	real :: v2dohono,v2drk,v1dt
+	real :: v2dohono,v2drk,v1dt,v2d,v2diel
+	real :: v1d,v1diel
 
 	real :: r0
 	
@@ -224,6 +242,16 @@ function matrizelbsekqtemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,
 
 		vcoulk= v3diel(kpt1,kpt2,ediel,rlat,ngrid,tolr)
 		vcoulq= v3diel(vq,v0,ediel,rlat,ngrid,tolr)
+		
+	case("V2D")
+
+		vcoulk= v2d(kpt1,kpt2,rlat,ngrid,tolr)
+		vcoulq= v2d(vq,v0,rlat,ngrid,tolr)		
+
+	case("V2DL")
+
+		vcoulk= v2diel(kpt1,kpt2,ediel,rlat,ngrid,tolr)
+		vcoulq= v2diel(vq,v0,ediel,rlat,ngrid,tolr)			
 
 	case("V2DT")
 
@@ -244,6 +272,16 @@ function matrizelbsekqtemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,
 
 		vcoulk= v2drk(kpt1,kpt2,ngrid,rlat,ediel,lc,ez,w,r0,tolr)
 		vcoulq= v2drk(vq,v0,ngrid,rlat,ediel,lc,ez,w,r0,tolr)
+		
+	case("V1D")
+
+		vcoulk= v1d(kpt1,kpt2,ngrid,rlat,lc,tolr)
+		vcoulq= v1d(vq,v0,ngrid,rlat,lc,tolr)
+
+	case("V1DL")
+
+		vcoulk= v1diel(kpt1,kpt2,ngrid,rlat,lc,ediel,tolr)
+		vcoulq= v1diel(vq,v0,ngrid,rlat,lc,ediel,tolr)		
 		
 	case("V1DT")
 	
