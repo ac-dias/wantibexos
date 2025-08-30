@@ -442,7 +442,7 @@ function v2drkgw(kpt1,kpt2,ngrid,rlat,ediel,lc,ez,w,r0,tolr)
 	
 	if (modk .lt. tolr) then
 
-		v2drk = 0.0
+		v2drkgw = 0.0
 	else 
 	
 		aux1 = (1.0-(pb*pt*exp(-2.0*modk*eta*lc)))*kappa
@@ -451,7 +451,7 @@ function v2drkgw(kpt1,kpt2,ngrid,rlat,ediel,lc,ez,w,r0,tolr)
 	
 		ew = (aux1/aux2)+aux3
 		
-		v2drk = (vbz*cic)*exp(-modk*w)*(1.0/ew)*(1.0/modk)
+		v2drkgw = (vbz*cic)*exp(-modk*w)*(1.0/ew)*(1.0/modk)
 	
 	end if
 	

@@ -76,6 +76,8 @@ subroutines :
 	$(FOR) -c ./src/subroutines/optics.F90  
 	$(FOR) -c ./src/subroutines/spin_txt_subs.F90 
 	$(FOR) -c ./src/subroutines/emission_subs.F90	
+	$(FOR) -c ./src/subroutines/coulomb_pot_gw.F90	
+	$(FOR) -c ./src/subroutines/gw_subs.F90
 	mv *.o ./build/subroutines
 
 clean:

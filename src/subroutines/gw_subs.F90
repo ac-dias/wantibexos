@@ -51,13 +51,13 @@ subroutine ovpsqr(dft,w90basis,wf1,sk1,wf2,sk2,ovpmn)
 
 end subroutine ovpsqr
 
-subroutine polarization(fermishift,sysdim,ngrid,rlat,w,nomega,w90basis,systype,eta,ek,ekq,ovpmnkkq,pol) !given polarization for a given q for all w-freq
+subroutine polarization(fermishift,sysdim,ngrid,nk,rlat,w,nomega,w90basis,systype,eta,ek,ekq,ovpmnkkq,pol) !given polarization for a given q for all w-freq
 
 	implicit none
 	real :: fermishift
 	character(len=5) :: sysdim
 	integer,dimension(3) :: ngrid
-	integer :: nk = ngrid(1)*ngrid(2)*ngrid(3)
+	integer :: nk 
 	real,parameter:: pi=acos(-1.)
 	real,dimension(3,3) :: rlat	
 	
@@ -69,6 +69,8 @@ subroutine polarization(fermishift,sysdim,ngrid,rlat,w,nomega,w90basis,systype,e
 	real :: eta
 	real,dimension(w90basis,nk) :: ek,ekq
 	real,dimension(w90basis,w90basis,nk) :: ovpmnkkq
+	
+
 	
 	complex,dimension(nomega) :: pol
 	
@@ -138,39 +140,39 @@ subroutine w0coul(qpt,nomega,rlat,ngrid,nk,coultype,ediel,lc,ez,w,r0,tolr,w0)  !
 
 	case("V2DK")
 
-		vq= v2dk(qpt,v0,ediel,rlat,ngrid,lc,tolr)
+		vq= v2dkgw(qpt,v0,ediel,rlat,ngrid,lc,tolr)
 
 	case("V3D")
 
-		vq= vcoul(qpt,v0,rlat,ngrid,tolr)
+		vq= vcoulgw(qpt,v0,rlat,ngrid,tolr)
 
 	case("V3DL")
 
-		vq= v3diel(qpt,v0,ediel,rlat,ngrid,tolr)
+		vq= v3dielgw(qpt,v0,ediel,rlat,ngrid,tolr)
 		
 	case("V2D")
 
-		vq= v2d(qpt,v0,rlat,ngrid,tolr)
+		vq= v2dgw(qpt,v0,rlat,ngrid,tolr)
 
 	case("V2DL")
 
-		vq= v2diel(qpt,v0,ediel,rlat,ngrid,tolr)		
+		vq= v2dielgw(qpt,v0,ediel,rlat,ngrid,tolr)		
 
 	case("V2DT")
 
-		vq= v2dt(qpt,v0,ngrid,rlat,tolr)
+		vq= v2dtgw(qpt,v0,ngrid,rlat,tolr)
 
 	case("V2DT2")
 
-		vq= v2dt2(qpt,v0,ngrid,rlat,lc,tolr)
+		vq= v2dt2gw(qpt,v0,ngrid,rlat,lc,tolr)
 		
 	case("V2DOH")
 
-		vq= v2dohono(qpt,v0,ngrid,rlat,ediel,w,ez,tolr)
+		vq= v2dohonogw(qpt,v0,ngrid,rlat,ediel,w,ez,tolr)
 		
 	case("V2DRK")
 
-		vq= v2drk(qpt,v0,ngrid,rlat,ediel,lc,ez,w,r0,tolr)
+		vq= v2drkgw(qpt,v0,ngrid,rlat,ediel,lc,ez,w,r0,tolr)
 		
 	case("V1D")
 	
@@ -184,12 +186,12 @@ subroutine w0coul(qpt,nomega,rlat,ngrid,nk,coultype,ediel,lc,ez,w,r0,tolr,w0)  !
 		
 	case("V1DT")
 	
-		vq= v1dt(qpt,v0,ngrid,rlat,tolr,lc)	
+		vq= v1dtgw(qpt,v0,ngrid,rlat,tolr,lc)	
 				
 
 	case("V0DT")
 
-		vq= v0dt(qpt,v0,ngrid,rlat,tolr)
+		vq= v0dtgw(qpt,v0,ngrid,rlat,tolr)
 
 	case default
 
@@ -205,20 +207,24 @@ subroutine w0coul(qpt,nomega,rlat,ngrid,nk,coultype,ediel,lc,ez,w,r0,tolr,w0)  !
 	end do
 
 
-end subroutine w0
+end subroutine w0coul
 
-subroutine self_en_x(sysdim,rlat,n,kpt,ngrid,qpt,nocpq,coultype,ediel,lc,ez,w,r0,tolr,sxnk)
+subroutine self_en_x(w90basis,sysdim,rlat,n,kpt,ngrid,nq,qpt,nocpq,coultype,ediel,lc,ez,w,r0,tolr,ovpmnkq,sxnk)
 
 	implicit none
+	
+	integer :: i,j
+	
+	integer :: w90basis
 	character(len=5) :: sysdim
 	real,dimension(3,3) :: rlat
 	integer :: n
 	real,dimension(3) :: kpt
 	integer,dimension(3) :: ngrid
 	
-	integer :: nq=ngrid(1)*ngrid(2)*ngrid(3)
-	real,dimension(nk,3) :: qpt
-	integer,dimension(nk) :: nocpq
+	integer :: nq!=ngrid(1)*ngrid(2)*ngrid(3)
+	real,dimension(nq,3) :: qpt
+	integer,dimension(nq) :: nocpq
 	
 	character(len=5) :: coultype
 	real,dimension(3) :: ediel
@@ -229,7 +235,7 @@ subroutine self_en_x(sysdim,rlat,n,kpt,ngrid,qpt,nocpq,coultype,ediel,lc,ez,w,r0
 	real :: vq
 	
 	real,dimension(w90basis,w90basis,nq) :: ovpmnkq
-	real :: waux,sxnk
+	real :: wk,waux,sxnk
 	
 	sxnk = 0.0
 	
@@ -241,39 +247,39 @@ subroutine self_en_x(sysdim,rlat,n,kpt,ngrid,qpt,nocpq,coultype,ediel,lc,ez,w,r0
 
 	case("V2DK")
 
-		vq= v2dk(kpt,qpt(i,:),ediel,rlat,ngrid,lc,tolr)
+		vq= v2dkgw(kpt,qpt(i,:),ediel,rlat,ngrid,lc,tolr)
 
 	case("V3D")
 
-		vq= vcoul(kpt,qpt(i,:),rlat,ngrid,tolr)
+		vq= vcoulgw(kpt,qpt(i,:),rlat,ngrid,tolr)
 
 	case("V3DL")
 
-		vq= v3diel(kpt,qpt(i,:),ediel,rlat,ngrid,tolr)
+		vq= v3dielgw(kpt,qpt(i,:),ediel,rlat,ngrid,tolr)
 		
 	case("V2D")
 
-		vq= v2d(kpt,qpt(i,:),rlat,ngrid,tolr)
+		vq= v2dgw(kpt,qpt(i,:),rlat,ngrid,tolr)
 
 	case("V2DL")
 
-		vq= v2diel(kpt,qpt(i,:),ediel,rlat,ngrid,tolr)		
+		vq= v2dielgw(kpt,qpt(i,:),ediel,rlat,ngrid,tolr)		
 
 	case("V2DT")
 
-		vq= v2dt(kpt,qpt(i,:),ngrid,rlat,tolr)
+		vq= v2dtgw(kpt,qpt(i,:),ngrid,rlat,tolr)
 
 	case("V2DT2")
 
-		vq= v2dt2(kpt,qpt(i,:),ngrid,rlat,lc,tolr)
+		vq= v2dt2gw(kpt,qpt(i,:),ngrid,rlat,lc,tolr)
 		
 	case("V2DOH")
 
-		vq= v2dohono(kpt,qpt(i,:),ngrid,rlat,ediel,w,ez,tolr)
+		vq= v2dohonogw(kpt,qpt(i,:),ngrid,rlat,ediel,w,ez,tolr)
 		
 	case("V2DRK")
 
-		vq= v2drk(kpt,qpt(i,:),ngrid,rlat,ediel,lc,ez,w,r0,tolr)
+		vq= v2drkgw(kpt,qpt(i,:),ngrid,rlat,ediel,lc,ez,w,r0,tolr)
 		
 	case("V1D")
 	
@@ -286,12 +292,12 @@ subroutine self_en_x(sysdim,rlat,n,kpt,ngrid,qpt,nocpq,coultype,ediel,lc,ez,w,r0
 		
 	case("V1DT")
 	
-		vq= v1dt(kpt,qpt(i,:),ngrid,rlat,tolr,lc)	
+		vq= v1dtgw(kpt,qpt(i,:),ngrid,rlat,tolr,lc)	
 				
 
 	case("V0DT")
 
-		vq= v0dt(kpt,qpt(i,:),ngrid,rlat,tolr)
+		vq= v0dtgw(kpt,qpt(i,:),ngrid,rlat,tolr)
 
 	case default
 
@@ -370,6 +376,85 @@ function auxself2(fermishift,en,em,omega,eta)
 	auxself2 = (aux3/aux1) + (aux4/aux2)	
 
 end function
+
+subroutine self_c_znk(w90basis,sysdim,rlat,ngrid,nq,fermishift,n,enk,emkmq,kpt,omega,nomega,w0,ovpmnkkmq,eta,scnk,znk)
+
+	implicit none
+	
+	integer :: i,j,k
+	real,parameter :: pi=acos(-1.)
+
+	real :: fermishift
+	integer :: w90basis
+	character(len=5) :: sysdim
+	real,dimension(3,3) :: rlat
+	real,dimension(3) :: kpt
+
+	integer,dimension(3) :: ngrid
+	integer :: nq!=ngrid(1)*ngrid(2)*ngrid(3)
+	!real,dimension(nq,3) :: qpt
+	
+	integer :: n
+	real :: enk
+	integer :: nomega
+	real,dimension(nomega) :: omega
+	real :: domega
+	
+	complex,dimension(nq,nomega) :: w0
+	real,dimension(w90basis,w90basis,nq) :: ovpmnkkmq
+	real,dimension(nq,w90basis) :: emkmq
+	
+	real :: wk,waux
+	
+	real :: eta
+	complex :: scnk
+	real :: dscnk, znk
+	
+	real :: auxself2
+	complex :: auxself1
+	
+	real :: integral2,aux3,aux4
+	complex :: integral1,aux1,aux2
+	
+	waux = wk(sysdim,ngrid,rlat)
+	
+	scnk = 0.0
+	dscnk = 0.0
+	
+	domega = (omega(2)-omega(1))/pi
+	
+	do i=1,nq
+	  do j=1,w90basis
+	
+	
+	    integral1 = 0.0
+	    integral2 = 0.0
+	    !1/2 simpson integral
+	    do k=1,nomega-1
+	      
+	      aux1 = aimag(w0(i,k))*auxself1(fermishift,enk,emkmq(i,j),omega(k),eta) 
+	      aux2 = aimag(w0(i,k+1))*auxself1(fermishift,enk,emkmq(i,j),omega(k+1),eta)
+	      
+	      integral1 = integral1 + ((aux1+aux2)/2.0)*domega
+	      
+	      aux3 = aimag(w0(i,k))*auxself2(fermishift,enk,emkmq(i,j),omega(k),eta)
+	      aux4 = aimag(w0(i,k+1))*auxself2(fermishift,enk,emkmq(i,j),omega(k+1),eta)
+	      
+	      integral2 = integral2 + ((aux3+aux4)/2.0)*domega
+	
+	    end do
+	    
+	      scnk = scnk + (integral1*ovpmnkkmq(n,j,i)*waux)
+	      
+	      dscnk = dscnk + (integral2*ovpmnkkmq(n,j,i)*waux)
+	    
+	  end do
+	end do
+	
+	znk = 1.0/(1.0 - dscnk)
+
+
+end subroutine self_c_znk
 
 
 
