@@ -28,11 +28,15 @@ subroutine efmass_num(nthreads,dft,outputfolder,params,emfile,h,nocpf,fermishift
 	integer :: nocpf
 	real :: fermishift
 	
+	character(len=200) outputfile
+	
+	write (outputfile,"(a9,F7.3,a7)") "em_tensor_",h,"_dK.dat"
+	
 	OPEN(UNIT=202, FILE= emfile,STATUS='old', IOSTAT=erro)
     	if (erro/=0) stop "Error opening effective mass input file"
     	
 	!OUTPUT : criando arquivos de saida
-	OPEN(UNIT=300, FILE=trim(outputfolder)//"em_tensor_num.dat",STATUS='unknown', IOSTAT=erro)
+	OPEN(UNIT=300, FILE=trim(outputfolder)//trim(outputfile),STATUS='unknown', IOSTAT=erro)
     	if (erro/=0) stop "Error opening effective mass tensor output file"    	
 	
 	call OMP_SET_NUM_THREADS(nthreads)

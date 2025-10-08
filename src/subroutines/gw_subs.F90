@@ -83,16 +83,16 @@ subroutine polarization(fermishift,sysdim,ngrid,nk,rlat,w,nomega,w90basis,systyp
 	
 	waux = wk(sysdim,ngrid,rlat)
 	
-	select case (systype)
+	!select case (systype)
 	
-	case("NP")
+	!case("NP")
 	
-		gs = 2.0
+	!	gs = 2.0
 	
-	case default
+	!case default
 	
 		gs = 1.0	
-	end select
+	!end select
 	
 	pol = 0.0
 	
@@ -455,6 +455,7 @@ subroutine self_c_znk(w90basis,sysdim,rlat,ngrid,nq,fermishift,n,enk,emkmq,kpt,o
 
 
 end subroutine self_c_znk
+
 
 
 

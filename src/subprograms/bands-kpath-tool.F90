@@ -179,7 +179,7 @@ subroutine bandstool(nthreads,outputfolder,params,kpaths,orbw, &
 		!write(*,*) "before main loop"
 	
 	
-	!$omp parallel do default(shared) private(j,i,kp,kx,ky,kz,eigv,autovetores,ovptb,spx,spy,spz)	
+	!$omp parallel do default(shared) private(j,i,kp,kx,ky,kz,eigv,autovetores,ovptb,spx,spy,spz,lco)	
 	do j=1,(nks/2)*nkpts
 
 	        kp= kpts(j,1)
@@ -207,27 +207,9 @@ subroutine bandstool(nthreads,outputfolder,params,kpaths,orbw, &
 		    ihopmatrices,ovp,efermi,eigv,autovetores,nocpf,fermishift,mag)
 		    
 		!call eigsysl(nthreads,dft,systype,scs,exc,nocp,ffactor,kx,ky,kz,w90basis,nvec,rlat,rvec,hopmatrices,&
-		 !   ihopmatrices,ovp,efermi,eigv,autovetores,nocpf,fermishift,mag,lowdin,power,ovptb,smh)	    
-		
-#ifdef MKL
-		call MKL_SET_NUM_THREADS(nthreads)
-#endif		
-
-#ifdef AOCL		
-		call bli_thread_set_num_threads(nthreads)
-#endif	
-
-#ifdef OPENBLAS
-		call OPENBLAS_SET_NUM_THREADS(nthreads)
-		
-#endif	
-    
-		   
-		    
-
-		!write(500,*) nocp,kx,ky,kz 
-		
-		
+		 !   ihopmatrices,ovp,efermi,eigv,autovetores,nocpf,fermishift,mag,lowdin,power,ovptb,smh)	
+		 
+		 
 		if (dft .eq. "S") then
 		 call overlap(w90basis,nvec,rvec,ovp,kx,ky,kz,ovptb)
 		else
@@ -252,7 +234,29 @@ subroutine bandstool(nthreads,outputfolder,params,kpaths,orbw, &
 			ebands(i,j,9) = kz									
 
 
-		end do
+		end do		 
+		     
+		
+#ifdef MKL
+		call MKL_SET_NUM_THREADS(nthreads)
+#endif		
+
+#ifdef AOCL		
+		call bli_thread_set_num_threads(nthreads)
+#endif	
+
+#ifdef OPENBLAS
+		call OPENBLAS_SET_NUM_THREADS(nthreads)
+		
+#endif	
+    
+		   
+		    
+
+		!write(500,*) nocp,kx,ky,kz 
+		
+		
+
 		
 
 

@@ -1,4 +1,4 @@
-subroutine berryct2(nocp,kx,ky,ffactor,w90basis,nvec,rlat,rvec,hopmatrices,&
+subroutine berryct2(nocp,kx,ky,kz,ffactor,w90basis,nvec,rlat,rvec,hopmatrices,&
 		  ihopmatrices,efermi,energias,autovetores,nthread,gammas,bxx,bxy,bxz,byy,byz,bzz)
 		   
 

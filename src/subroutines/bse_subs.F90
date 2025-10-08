@@ -340,7 +340,7 @@ subroutine dielbsep(nthread,dimse,excitonvec,hopt1,hopt2,activity)
 
 
 	! $OMP DO PRIVATE(actaux)
-	!$OMP PARALLEL DO PRIVATE(actaux,actaux2)
+	! $OMP PARALLEL DO PRIVATE(actaux,actaux2)
 	do i=1,dimse
 
 
@@ -367,7 +367,7 @@ subroutine dielbsep(nthread,dimse,excitonvec,hopt1,hopt2,activity)
 
 
 	end do
-	!$OMP END PARALLEL DO
+	! $OMP END PARALLEL DO
 
 
 
@@ -393,7 +393,7 @@ subroutine dielbsev(nthread,dimse,excitonvec,hopt,activity)
 	activity=0.0
 	actaux=0.0
 
-	!$OMP PARALLEL DO PRIVATE(actaux)
+	! $OMP PARALLEL DO PRIVATE(actaux)
 	do i=1,dimse
 
 		actaux=0.0
@@ -414,7 +414,7 @@ subroutine dielbsev(nthread,dimse,excitonvec,hopt,activity)
 
 
 	end do
-	!$OMP END PARALLEL DO
+	! $OMP END PARALLEL DO
 
 
 end subroutine dielbsev

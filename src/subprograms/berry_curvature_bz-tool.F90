@@ -201,7 +201,7 @@ subroutine berrycurvbz(nthreads,dft,outputfolder,params,sme,ngrid,mshift,nocpf,f
 
 	allocate(output(ngkpt,9))
 	
-		
+	output= 0.0	
 
 	!$omp parallel do default(shared) private(j,bxx,bxy,bxz,byy,byz,bzz)    
 	do j=1,ngkpt
@@ -209,8 +209,9 @@ subroutine berrycurvbz(nthreads,dft,outputfolder,params,sme,ngrid,mshift,nocpf,f
 
 
 
-		call berryct2(nocpk(j),kpts(j,1),kpts(j,2),ffactor,w90basis,nvec,rlat,rvec,hopmatrices,&
+		call berryct2(nocpk(j),kpts(j,1),kpts(j,2),kpts(j,3),ffactor,w90basis,nvec,rlat,rvec,hopmatrices,&
 		  	ihopmatrices,efermi,eigvf(j,:),vector(j,:,:),nthreads,gammas,bxx,bxy,bxz,byy,byz,bzz)
+		  	
 		! $omp ordered
 			 !write(300,*) kpts(j,1),kpts(j,2),aimag(berry)
 		! $omp end ordered
@@ -233,8 +234,9 @@ subroutine berrycurvbz(nthreads,dft,outputfolder,params,sme,ngrid,mshift,nocpf,f
 
 	write(300,*) "#kx ky kz yz xz xy"
 
-	do i=1,ngkpt
+	do j=1,ngkpt
 		write(300,"(6F15.4)") output(j,1),output(j,2),output(j,3),output(j,8),output(j,6),output(j,5)
+		!write(300,*) output(j,1),output(j,2),output(j,3),output(j,8),output(j,6),output(j,5)
 	
 	end do
 
