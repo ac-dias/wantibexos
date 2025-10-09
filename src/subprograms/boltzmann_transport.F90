@@ -43,7 +43,7 @@ subroutine boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc
 	real,allocatable,dimension(:,:) :: tdfres
 	real,allocatable,dimension(:,:) :: dfermi
 	
-	real,allocatable,dimension(:,:) :: kij,seij,sij,ztij,pfij,sigsij
+	real,allocatable,dimension(:,:) :: kij,seij,sij,ztij,pfij,sigsij,sijaux
 	real :: auxkij,auxsij,auxseij,auxpfij
 	real :: dfermidist
 	
@@ -270,7 +270,7 @@ subroutine boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc
    	deallocate(ovp)
    	
    	allocate(mu(nmu))
-   	allocate(sij(nmu,3))
+   	allocate(sij(nmu,3),sijaux(nmu,3))
    	allocate(seij(nmu,3))
    	allocate(kij(nmu,3))
    	allocate(sigsij(nmu,3))
@@ -306,33 +306,39 @@ subroutine boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc
 		call sigmas(nsteps,enint,tdfres,mu(i),btemp,sigsij(i,:))   		
    		call electermcond(nsteps,enint,tdfres,mu(i),btemp,kij(i,:))
    		
+
+   		
+   		
    		if ( mu(i) .gt. 0.0) then
    		
-   			sij(i,1) = sij(i,1)*elft(1)
-   			sij(i,2) = sij(i,2)*elft(2)
-   			sij(i,3) = sij(i,3)*elft(3)   
+   			sijaux(i,1) = sij(i,1)*elft(1)
+   			sijaux(i,2) = sij(i,2)*elft(2)
+   			sijaux(i,3) = sij(i,3)*elft(3)
    			
+   			   			
    			kij(i,1) = kij(i,1)*elft(1)
    			kij(i,2) = kij(i,2)*elft(2)
    			kij(i,3) = kij(i,3)*elft(3)
    			
-   			seij(i,1) = (sigsij(i,1)*elft(1))/sij(i,1)
-   			seij(i,2) = (sigsij(i,2)*elft(2))/sij(i,2)
-   			seij(i,3) = (sigsij(i,3)*elft(3))/sij(i,3)   			   						   						   			
+   			seij(i,1) = (sigsij(i,1)*elft(1))/(sijaux(i,1)+1.0E-37)
+   			seij(i,2) = (sigsij(i,2)*elft(2))/(sijaux(i,2)+1.0E-37)
+   			seij(i,3) = (sigsij(i,3)*elft(3))/(sijaux(i,3)+1.0E-37)  			   						   						   			
    		
    		else
    		
-   			sij(i,1) = sij(i,1)*hlft(1)
-   			sij(i,2) = sij(i,2)*hlft(2)
-   			sij(i,3) = sij(i,3)*hlft(3)
+   			sijaux(i,1) = sij(i,1)*hlft(1)
+   			sijaux(i,2) = sij(i,2)*hlft(2)
+   			sijaux(i,3) = sij(i,3)*hlft(3)
+   			
+ 			
    			
    			kij(i,1) = kij(i,1)*hlft(1)
    			kij(i,2) = kij(i,2)*hlft(2)
    			kij(i,3) = kij(i,3)*hlft(3) 
    			
-   			seij(i,1) = (sigsij(i,1)*hlft(1))/sij(i,1)
-   			seij(i,2) = (sigsij(i,2)*hlft(2))/sij(i,2)
-   			seij(i,3) = (sigsij(i,3)*hlft(3))/sij(i,3)    			   		
+   			seij(i,1) = (sigsij(i,1)*hlft(1))/(sijaux(i,1)+1.0E-37)
+   			seij(i,2) = (sigsij(i,2)*hlft(2))/(sijaux(i,2)+1.0E-37)
+   			seij(i,3) = (sigsij(i,3)*hlft(3))/(sijaux(i,3)+1.0E-37)    			   		
    		
    		end if
    		
@@ -352,21 +358,21 @@ subroutine boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc
    	auxpfij = echarge/a2m
    	
    	kij  = kij*auxkij
-   	sij  = sij*auxsij
+   	sijaux  = sijaux*auxsij
    	seij = seij*auxseij
    	!pfij = pfij*auxpfij
    	
-   	!$omp parallel do default(shared) private(i) 
+   	! $omp parallel do default(shared) private(i) 
  	do i=1,nmu
  	 do j=1,3
  	 
- 	 	pfij(i,j) = sij(i,j)*((seij(i,j))**2)
+ 	 	pfij(i,j) = sijaux(i,j)*((seij(i,j))**2)
  	 	
  	 	ztij(i,j) = (pfij(i,j)*btemp)/(kij(i,j)+klat)
  	 
  	 end do
  	end do  	
-   	!$omp end parallel do
+   	! $omp end parallel do
    	
    	
 
@@ -380,7 +386,7 @@ subroutine boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc
    	!"(7F15.8)"
    	do i=1,nmu
    	
-   		write(300,"(1F18.6,3E18.8)") mu(i),sij(i,1),sij(i,2),sij(i,3)
+   		write(300,"(1F18.6,3E18.8)") mu(i),sijaux(i,1),sijaux(i,2),sijaux(i,3)
      		write(301,"(1F18.6,3E18.8)") mu(i),seij(i,1),seij(i,2),seij(i,3)
      		write(302,"(1F18.6,3E18.8)") mu(i),kij(i,1),kij(i,2),kij(i,3)		
    		write(303,"(1F18.6,3E18.8)") mu(i),pfij(i,1),pfij(i,2),pfij(i,3)
@@ -401,6 +407,7 @@ subroutine boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc
 
    	deallocate(mu)
    	deallocate(sij)
+   	deallocate(sijaux)
    	deallocate(seij)
    	deallocate(kij)		
    	deallocate(pfij)
