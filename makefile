@@ -81,12 +81,12 @@ subroutines :
 	mv *.o ./build/subroutines
 
 clean:
+	rm  ./bin/*.py
+	rm  ./bin/*.x
 	rm -r ./build/subroutines
 	rm -r ./build/subprograms
 	rm -r ./build/wtb.x
 	rm -r ./build/libwtb.a
-	rm ./*.mod
-	rm ./bin/*.py
-	rm ./bin/*.x
+
 
 .PHONY : all clean 
