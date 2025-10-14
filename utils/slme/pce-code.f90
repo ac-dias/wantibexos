@@ -13,6 +13,9 @@ program main
 	character(len=70) :: add
 	integer :: erro	
 	
+	
+
+	
 	!default values
 	
 	outputfolder = "./"
@@ -22,7 +25,8 @@ program main
 	eg = 0.00
 	egd = 0.00
 	egs = 0.00
-	ebgs = 0.00	
+	ebgs = 0.00
+	numbse = 6001	
 	
 	do 
 
@@ -74,10 +78,26 @@ program main
 
 
 	end do	
+	
+	OPEN(UNIT=350, FILE=trim(outputfolder)//"log_pce.dat",STATUS='unknown', IOSTAT=erro)
+    	if (erro/=0) stop "Error opening log_pce output file"	
+	
+	write(350,"(A8,A70)") "OUTPUT= ", outputfolder
+	write(350,"(A8,I0)") "NESPEC= ", int(numbse)
+	write(350,"(A5,A6)") "SES= ",ses
+	write(350,"(A7,F8.4)") "CTEMP= ",ctemp
+	write(350,"(A7,E15.4)") "THMAX= ",tmax				
+	write(350,"(A4,F8.4)") "EG= ",eg
+	write(350,"(A5,F8.4)") "EGD= ",egd
+	write(350,"(A5,F8.4)") "EGS= ",egs
+	write(350,"(A6,F8.4)") "EBGS= ",ebgs	
+	
 
 	call pcecalc(outputfolder,numbse,"IPA",ctemp,ses,tmax,eg,egd)
 	
-	call pcecalc(outputfolder,numbse,"BSE",ctemp,ses,tmax,egs,ebgs)	
+	call pcecalc(outputfolder,numbse,"BSE",ctemp,ses,tmax,egs,ebgs)
+	
+	close(350)	
 
 end program main
 
