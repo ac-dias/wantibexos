@@ -30,7 +30,7 @@ subroutine efmass_num(nthreads,dft,outputfolder,params,emfile,h,nocpf,fermishift
 	
 	character(len=200) outputfile
 	
-	write (outputfile,"(a9,F7.3,a7)") "em_tensor_",h,"_dK.dat"
+	write (outputfile,"(a10,F6.4,a7)") "em_tensor_",h,"_dK.dat"
 	
 	OPEN(UNIT=202, FILE= emfile,STATUS='old', IOSTAT=erro)
     	if (erro/=0) stop "Error opening effective mass input file"

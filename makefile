@@ -25,6 +25,7 @@ pp :
 main :  subprograms
 	$(FOR) ./src/wtb_main.F90 $(SUB_OBJ) $(SUB_PROGRAM) -o ./build/wtb.x $(LIBS) $(OMP) $(COND) $(EXTRA) 
 	cp ./build/wtb.x $(DIR)wtb.x
+	rm ./*.mod	
 
 subprograms: lib
 	[ -d ./build/subprograms ] || mkdir ./build/subprograms
@@ -81,12 +82,12 @@ subroutines :
 	mv *.o ./build/subroutines
 
 clean:
-	rm  ./bin/*.py
-	rm  ./bin/*.x
 	rm -r ./build/subroutines
 	rm -r ./build/subprograms
 	rm -r ./build/wtb.x
 	rm -r ./build/libwtb.a
+	rm  ./bin/*.x	
+	rm  ./bin/*.py	
 
 
 .PHONY : all clean 
