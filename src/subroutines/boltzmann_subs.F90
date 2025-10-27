@@ -1,14 +1,3 @@
-module constantsboltz
-
-	implicit none
-	
-	real,parameter :: keV = 8.617330350E-5  !Boltzmann's constant eV/K
-	real,parameter :: a2m = 1.0E-10 !convert angstrom to meter
-	real,parameter :: echarge = 1.602176620898E-19 !electron charge in coulomb
-	real,parameter :: hbar = 6.582119569E-16 !hbar planck's constant
-
-end module constantsboltz
-
 function ehlft(n,nocpk,elft,hlft) !lifetime (s) in boltzmann equation
 
 	implicit none
@@ -31,13 +20,15 @@ end function ehlft
 
 function dfermidist(mu,temp,energy) !minus 1 multiplied for the Energy derivative of Fermi-Dirac distribution
 
-	use constantsboltz
+
 	implicit none
 	
+	real,parameter :: keV = 8.617330350E-5	
 	real :: dfermidist
 	real :: mu
 	real :: energy
 	real :: temp
+	real :: fdis
 	
 	real :: aux0,aux1,aux2
 	
@@ -45,20 +36,24 @@ function dfermidist(mu,temp,energy) !minus 1 multiplied for the Energy derivativ
 	aux1 = exp((energy-mu)/(keV*temp))
 	aux2 = (keV*temp)*(aux1+1.0)**2
 	
-	if ( aux2 .gt. 1.0E+35) then
+	!fdis = 1.0/(aux1+1.00)
+	
+	!dfermidist = (1.00/(keV*temp))*(fdis)*(1.00-fdis)
+	
+	if ( aux2 .gt. 1.0E+37) then
 	 dfermidist = 0.0 
 	else
 	 dfermidist = aux1/aux2
-	!dfermidist = aux2
 	end if
 
 end function dfermidist
 
 subroutine eleccond(nsteps,energies,tdfij,mu,temp,sij) !calculate the electrical conductivity in 1/ohm * angstrom
 
-	use constantsboltz
+
 	implicit none
-	
+	real,parameter :: keV = 8.617330350E-5  !Boltzmann's constant eV/K
+	real,parameter :: echarge = 1.602176620898E-19 !electron charge in coulomb	
 	integer :: i,j,nsteps
 	real,dimension(nsteps) :: energies
 	real :: dfermidist,mu,temp
@@ -113,8 +108,9 @@ end subroutine eleccond
 
 subroutine electermcond(nsteps,energies,tdfij,mu,temp,kij) !calculate electron termal conductivity in watt/kelvin * angstrom
 
-	use constantsboltz
+
 	implicit none
+	real,parameter :: keV = 8.617330350E-5  !Boltzmann's constant eV/K
 	integer :: i,j,nsteps
 	real,dimension(nsteps) :: energies
 	real :: dfermidist,mu,temp
@@ -146,8 +142,10 @@ end subroutine electermcond
 
 subroutine seebeck(nsteps,energies,tdfij,mu,temp,sij,seij) !calculate seebeck coefficient in volt/kelvin
 
-	use constantsboltz
+
 	implicit none
+	real,parameter :: keV = 8.617330350E-5  !Boltzmann's constant eV/K
+	real,parameter :: echarge = 1.602176620898E-19 !electron charge in coulomb
 	integer :: i,j,nsteps
 	real,dimension(nsteps) :: energies
 	real :: dfermidist,mu,temp
@@ -215,8 +213,10 @@ end subroutine seebeck
 
 subroutine sigmas(nsteps,energies,tdfij,mu,temp,sigsij) !calculate sigma*seebecj coefficient in volt/kelvin
 
-	use constantsboltz
+	
 	implicit none
+	real,parameter :: keV = 8.617330350E-5  !Boltzmann's constant eV/K
+	real,parameter :: echarge = 1.602176620898E-19 !electron charge in coulomb
 	integer :: i,j,nsteps
 	real,dimension(nsteps) :: energies
 	real :: dfermidist,mu,temp
@@ -284,7 +284,7 @@ end subroutine sigmas
 
 
 
-subroutine tdf(rlat,w90basis,nk,eigenvalues,nocpk,sme,energy,elft,hlft,vx,vy,vz,tij) !transport distribution function in 1/(angstrom * s * eV)
+subroutine tdf(systype,rlat,w90basis,nk,eigenvalues,nocpk,sme,energy,elft,hlft,vx,vy,vz,tij) !transport distribution function in 1/(angstrom * s * eV)
 
 	implicit none 
 	
@@ -301,10 +301,19 @@ subroutine tdf(rlat,w90basis,nk,eigenvalues,nocpk,sme,energy,elft,hlft,vx,vy,vz,
 	real :: gaussian
 	
 	real :: vcell,divfactor
+	character(len=4) :: systype
 	
 	call vcell3D(rlat,vcell)
 	
+	if (systype .eq. 'NP') then
+	
+	divfactor = 2.0/(vcell*real(nk))
+	
+	else
+	
 	divfactor = 1.0/(vcell*real(nk))
+	
+	end if
 	
 	tij(1) = 0.0
 	tij(2) = 0.0
@@ -360,9 +369,9 @@ end subroutine tdf
 subroutine bndvel(kx,ky,kz,ffactor,w90basis,nvec,rlat,rvec,hopmatrices,&
 		    ihopmatrices,wf,vx,vy,vz) !calculate band velocity (angstrom/s)
 
-	use constantsboltz
+
 	implicit none
-	
+	real,parameter :: hbar = 6.582119569E-16 !hbar planck's constant
 	integer :: i,j,k
 	integer :: w90basis,nvec
 	real :: kx,ky,kz
