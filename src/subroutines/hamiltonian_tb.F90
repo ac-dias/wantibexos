@@ -109,52 +109,60 @@ subroutine eigsys(nthread,dft,systype,scs,exc,nocp,ffactor,kx,ky,kz,w90basis,nve
   		
   		case ("S") 
   		
-  		 !LWORK = -1
-      		 !CALL CHEGV( 1,'Vectors', 'U', w90basis, htb, w90basis,ovptb,w90basis, energias, WORK, LWORK, RWORK, INFO )
-      		 !LWORK = MIN( LWMAX, INT( WORK( 1 ) ) )
-      		 !CALL CHEGV( 1,'Vectors', 'U', w90basis, htb, w90basis,ovptb,w90basis, energias, WORK, LWORK, RWORK, INFO )
-
-      		 !IF( INFO.GT. 0 ) THEN
-         	 ! WRITE(*,*)'The algorithm failed to compute eigenvalues.'
-         	 ! STOP
-      		 !END IF
-  		
   		 LWORK = -1
-      		 LIWORK = -1
-      		 LRWORK = -1
-  		 CALL CHEGVD(1,'V','U',w90basis,htb,w90basis,ovptb,w90basis,energias,WORK, LWORK,&
-		   		RWORK,LRWORK,IWORK,LIWORK,INFO)
-		 LWORK = MIN( 2*w90basis + w90basis**2, INT( WORK( 1 ) ) )
-      		 LRWORK = MIN( 1 + 5*w90basis + 2*w90basis**2, INT( RWORK( 1 ) ) )
-      		 LIWORK = MIN( 3 + 5*w90basis, IWORK( 1 ) )
-		 CALL CHEGVD(1,'V','U',w90basis,htb,w90basis,ovptb,w90basis,energias,WORK, LWORK,&
-		 		RWORK,LRWORK,IWORK,LIWORK,INFO) 
-				
-		 IF( INFO.GT. 0 ) THEN
+      		 CALL CHEGV( 1,'Vectors', 'U', w90basis, htb, w90basis,ovptb,w90basis, energias, WORK, LWORK, RWORK, INFO )
+      		 LWORK = MIN( LWMAX, INT( WORK( 1 ) ) )
+      		 CALL CHEGV( 1,'Vectors', 'U', w90basis, htb, w90basis,ovptb,w90basis, energias, WORK, LWORK, RWORK, INFO )
+
+      		 IF( INFO.GT. 0 ) THEN
          	  WRITE(*,*)'The algorithm failed to compute eigenvalues.'
          	  STOP
-      		 END IF		
+      		 END IF
+  		
+  		! LWORK = -1
+      		 !LIWORK = -1
+      		 !LRWORK = -1
+  		 !CALL CHEGVD(1,'V','U',w90basis,htb,w90basis,ovptb,w90basis,energias,WORK, LWORK,&
+		 !  		RWORK,LRWORK,IWORK,LIWORK,INFO)
+		 !LWORK = MIN( 2*w90basis + w90basis**2, INT( WORK( 1 ) ) )
+      		 !LRWORK = MIN( 1 + 5*w90basis + 2*w90basis**2, INT( RWORK( 1 ) ) )
+      		 !LIWORK = MIN( 3 + 5*w90basis, IWORK( 1 ) )
+		 !CALL CHEGVD(1,'V','U',w90basis,htb,w90basis,ovptb,w90basis,energias,WORK, LWORK,&
+		 !		RWORK,LRWORK,IWORK,LIWORK,INFO) 
+				
+		 !IF( INFO.GT. 0 ) THEN
+         	 ! WRITE(*,*)'The algorithm failed to compute eigenvalues.'
+         	 ! STOP
+      		 !END IF		
   		
   		case default  
   		
   		  		
       		
-      		 LWORK = -1
-      		 LIWORK = -1
-      		 LRWORK = -1
-		 CALL CHEEVD('V','U',w90basis,htb,w90basis,energias,WORK, LWORK,&
-				RWORK,LRWORK,IWORK,LIWORK,INFO)
-		 LWORK = MIN( 2*w90basis + w90basis**2, INT( WORK( 1 ) ) )
-      		 LRWORK = MIN( 1 + 5*w90basis + 2*w90basis**2, INT( RWORK( 1 ) ) )
-      		 LIWORK = MIN( 3 + 5*w90basis, IWORK( 1 ) )
-		 CALL CHEEVD('V','U',w90basis,htb,w90basis,energias,WORK, LWORK,&
-				RWORK,LRWORK,IWORK,LIWORK,INFO)      				
-      		 IF( INFO.GT. 0 ) THEN
-         	  WRITE(*,*)'The algorithm failed to compute eigenvalues.'
-         	  STOP
-      		 END IF
+      		 !LWORK = -1
+      		 !LIWORK = -1
+      		 !LRWORK = -1
+		 !CALL CHEEVD('V','U',w90basis,htb,w90basis,energias,WORK, LWORK,&
+		!		RWORK,LRWORK,IWORK,LIWORK,INFO)
+		 !LWORK = MIN( 2*w90basis + w90basis**2, INT( WORK( 1 ) ) )
+      		 !LRWORK = MIN( 1 + 5*w90basis + 2*w90basis**2, INT( RWORK( 1 ) ) )
+      		 !LIWORK = MIN( 3 + 5*w90basis, IWORK( 1 ) )
+		 !CALL CHEEVD('V','U',w90basis,htb,w90basis,energias,WORK, LWORK,&
+		!		RWORK,LRWORK,IWORK,LIWORK,INFO)      				
+      		 !IF( INFO.GT. 0 ) THEN
+         	  !WRITE(*,*)'The algorithm failed to compute eigenvalues.'
+         	  !STOP
+      		 !END IF
       		
-      		 
+      		 LWORK = -1
+      		CALL CHEEV( 'Vectors', 'U', w90basis, htb, w90basis, energias, WORK, LWORK, RWORK, INFO )
+      		LWORK = MIN( LWMAX, INT( WORK( 1 ) ) )
+      		!LWORK = MIN( 2*dimbse + dimbse**2, INT( WORK( 1 ) ) )
+      		CALL CHEEV( 'Vectors', 'U', w90basis, htb, w90basis, energias, WORK, LWORK, RWORK, INFO  )
+      		IF(INFO .GT. 0 ) THEN
+        	WRITE(*,*)'The algorithm failed to compute eigenvalues.'
+         	STOP
+      		END IF   
       		
       		end select
 

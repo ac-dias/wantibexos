@@ -25,8 +25,8 @@ subroutine berrycurvbz(nthreads,dft,outputfolder,params,sme,ngrid,mshift,nocpf,f
 
 	complex,allocatable,dimension(:,:,:) :: vector
 
-	complex :: bxx,bxy,bxz,byy,byz,bzz
-	real,parameter :: gammas= 0.001
+	complex ::bxy,bxz,byz
+	real,parameter :: gammas= 1.0E-37
 
 	!real,allocatable,dimension(:,:) :: output
 
@@ -199,18 +199,18 @@ subroutine berrycurvbz(nthreads,dft,outputfolder,params,sme,ngrid,mshift,nocpf,f
 
 	!termino definicao kpath
 
-	allocate(output(ngkpt,9))
+	allocate(output(ngkpt,6))
 	
 	output= 0.0	
 
-	!$omp parallel do default(shared) private(j,bxx,bxy,bxz,byy,byz,bzz)    
+	!$omp parallel do default(shared) private(j,bxy,bxz,byz)    
 	do j=1,ngkpt
 
 
 
 
 		call berryct2(nocpk(j),kpts(j,1),kpts(j,2),kpts(j,3),ffactor,w90basis,nvec,rlat,rvec,hopmatrices,&
-		  	ihopmatrices,efermi,eigvf(j,:),vector(j,:,:),nthreads,gammas,bxx,bxy,bxz,byy,byz,bzz)
+		  	ihopmatrices,efermi,eigvf(j,:),vector(j,:,:),nthreads,gammas,bxy,bxz,byz)
 		  	
 		! $omp ordered
 			 !write(300,*) kpts(j,1),kpts(j,2),aimag(berry)
@@ -218,12 +218,12 @@ subroutine berrycurvbz(nthreads,dft,outputfolder,params,sme,ngrid,mshift,nocpf,f
 			output(j,1) = kpts(j,1)
 			output(j,2) = kpts(j,2)
 			output(j,3) = kpts(j,3)
-			output(j,4) = aimag(bxx)
-			output(j,5) = aimag(bxy)
-			output(j,6) = aimag(bxz)
-			output(j,7) = aimag(byy)
-			output(j,8) = aimag(byz)
-			output(j,9) = aimag(bzz)
+			!output(j,4) = aimag(bxx)
+			output(j,4) = aimag(bxy)
+			output(j,5) = aimag(bxz)
+			!output(j,7) = aimag(byy)
+			output(j,6) = aimag(byz)
+			!output(j,9) = aimag(bzz)
 			
 			!write(300,"(6F15.4)") kpts(j,1),kpts(j,2),kpts(j,3),aimag(byz),aimag(bxz),aimag(bxy)
 			!call flush(300)
@@ -235,7 +235,7 @@ subroutine berrycurvbz(nthreads,dft,outputfolder,params,sme,ngrid,mshift,nocpf,f
 	write(300,*) "#kx ky kz yz xz xy"
 
 	do j=1,ngkpt
-		write(300,"(6F15.4)") output(j,1),output(j,2),output(j,3),output(j,8),output(j,6),output(j,5)
+		write(300,"(6F15.4)") output(j,1),output(j,2),output(j,3),2.00*output(j,6),2.00*output(j,5),2.00*output(j,4)
 		!write(300,*) output(j,1),output(j,2),output(j,3),output(j,8),output(j,6),output(j,5)
 	
 	end do

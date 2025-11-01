@@ -48,6 +48,28 @@ function dfermidist(mu,temp,energy) !minus 1 multiplied for the Energy derivativ
 
 end function dfermidist
 
+
+function df1(mu,temp,energy)
+
+	implicit none
+	
+	real,parameter :: keV = 8.617330350E-5	
+	real :: df1
+	real :: mu
+	real :: energy
+	real :: temp
+	real :: fdis
+	
+	real :: aux0,aux1,aux2
+	
+	aux0 = (energy-mu)/(keV*temp)
+	aux1 = exp((energy-mu)/(keV*temp))
+	aux2 = (keV*temp)*(aux1+1.0)**2
+	
+	df1 = (1.0/(4.0*keV*temp))*(1.0/cosh((energy-mu)/(2.0*keV*temp)))**2
+
+end function df1
+
 subroutine eleccond(nsteps,energies,tdfij,mu,temp,sij) !calculate the electrical conductivity in 1/ohm * angstrom
 
 
@@ -56,7 +78,7 @@ subroutine eleccond(nsteps,energies,tdfij,mu,temp,sij) !calculate the electrical
 	real,parameter :: echarge = 1.602176620898E-19 !electron charge in coulomb	
 	integer :: i,j,nsteps
 	real,dimension(nsteps) :: energies
-	real :: dfermidist,mu,temp
+	real :: dfermidist,mu,temp,df1
 	real,dimension(nsteps,3) :: tdfij
 	real,dimension(3) :: sij,aux0,aux1,aux2
 	

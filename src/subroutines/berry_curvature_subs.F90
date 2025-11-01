@@ -1,5 +1,5 @@
 subroutine berryct2(nocp,kx,ky,kz,ffactor,w90basis,nvec,rlat,rvec,hopmatrices,&
-		  ihopmatrices,efermi,energias,autovetores,nthread,gammas,bxx,bxy,bxz,byy,byz,bzz)
+		  ihopmatrices,efermi,energias,autovetores,nthread,gammas,bxy,bxz,byz)
 		   
 
 	implicit none
@@ -40,8 +40,8 @@ subroutine berryct2(nocp,kx,ky,kz,ffactor,w90basis,nvec,rlat,rvec,hopmatrices,&
 	complex, dimension(w90basis) :: vflagxa,vflagya
 	complex, dimension(w90basis) :: vna,vma
 
-	complex :: bxx,bxy,bxz,byy,byz,bzz
-	complex :: bfxx,bfxy,bfxz,bfyy,bfyz,bfzz
+	complex :: bxy,bxz,byz
+	complex :: bfxy,bfxz,bfyz
 
 	real:: gammas
 
@@ -53,12 +53,11 @@ subroutine berryct2(nocp,kx,ky,kz,ffactor,w90basis,nvec,rlat,rvec,hopmatrices,&
 		 ihopmatrices,hx,hy,hz)
 	
 
-	bxx=cmplx(0.0,0.0)
+
 	bxy=cmplx(0.0,0.0)
 	bxz=cmplx(0.0,0.0)
-	byy=cmplx(0.0,0.0)
 	byz=cmplx(0.0,0.0)
-	bzz=cmplx(0.0,0.0)		
+	
 
 	do n=1,nocp,1
 	
@@ -92,41 +91,37 @@ subroutine berryct2(nocp,kx,ky,kz,ffactor,w90basis,nvec,rlat,rvec,hopmatrices,&
 
 	if (i == n) then
 
-	bfxx=0.
-	bfxy=0.
-	bfxz=0.
-	bfyy=0.
-	bfyz=0.
-	bfzz=0.			
 
-	else if (abs(energias(i)-energias(n)) .lt. 0.0001 ) then
+	bfxy=0.0
+	bfxz=0.0
+	bfyz=0.0
+			
 
-	bfxx=0.
-	bfxy=0.
-	bfxz=0.
-	bfyy=0.
-	bfyz=0.
-	bfzz=0.	
+	else if (abs(energias(i)-energias(n)) .lt. 1.0E-37 ) then
+
+
+	bfxy=0.0
+	bfxz=0.0
+	bfyz=0.0	
 
 	else
 	
-	berryaux= (energias(n)-energias(i))**2+(gammas)**2
+	berryaux= (energias(n)-energias(i))**2+(gammas)
 	
-	bfxx=-2.*(((vx(i))*conjg(vx(i)))/(berryaux))
-	bfxy=-2.*(((vx(i))*conjg(vy(i)))/(berryaux))
-	bfxz=-2.*(((vx(i))*conjg(vz(i)))/(berryaux))
-	bfyy=-2.*(((vy(i))*conjg(vy(i)))/(berryaux))
-	bfyz=-2.*(((vy(i))*conjg(vz(i)))/(berryaux))
-	bfzz=-2.*(((vz(i))*conjg(vz(i)))/(berryaux))					
+
+	bfxy=(((vx(i))*conjg(vy(i)))/(berryaux))
+	bfxz=(((vx(i))*conjg(vz(i)))/(berryaux))
+	bfyz=(((vy(i))*conjg(vz(i)))/(berryaux))
+
+						
 
 	end if
 
-	bxx=bxx+bfxx
+
 	bxy=bxy+bfxy
 	bxz=bxz+bfxz
-	byy=byy+bfyy
 	byz=byz+bfyz
-	bzz=bzz+bfzz					
+					
 
 	end do
 

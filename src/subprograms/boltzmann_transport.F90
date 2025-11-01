@@ -46,7 +46,7 @@ subroutine boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc
 	real,allocatable,dimension(:,:) :: kij,seij,sij,ztij,pfij,sigsij
 	real,allocatable,dimension(:,:) :: sijaux,kijaux
 	real :: auxkij,auxsij,auxseij,auxpfij
-	real :: dfermidist
+	real :: dfermidist,df1
 	
 	real,parameter :: keV = 8.617330350E-5  !Boltzmann's constant eV/K
 	real,parameter :: a2m = 1.0E-10 !convert angstrom to meter
@@ -85,8 +85,8 @@ subroutine boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc
     	if (erro/=0) stop "Error opening ZT - figure of merit output file" 
 	OPEN(UNIT=305, FILE=trim(outputfolder)//trim(file6),STATUS='unknown', IOSTAT=erro)
     	if (erro/=0) stop "Error opening TDF - transport distribution function output file"  
-	!OPEN(UNIT=306, FILE=trim(outputfolder)//"DFERMI.dat",STATUS='unknown', IOSTAT=erro)
-    	!if (erro/=0) stop "Error opening derivative fermi distribution output file"     	  	   	  	
+	OPEN(UNIT=306, FILE=trim(outputfolder)//"DFERMI.dat",STATUS='unknown', IOSTAT=erro)
+    	if (erro/=0) stop "Error opening derivative fermi distribution output file"     	  	   	  	
     	
 	call cpu_time(t0)
 	call date_and_time(VALUES=values)
@@ -264,6 +264,9 @@ subroutine boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc
    	
    	do i=1,nsteps
    	   write(305,"(1F18.6,3E18.8)") enint(i),tdfres(i,1),tdfres(i,2),tdfres(i,3)
+   	   
+   	   !write(306,"(1F18.6,2E18.8)") enint(i),dfermidist(0.0,btemp,enint(i)),df1(0.0,btemp,enint(i))
+   	   
    	end do
    	
 	write(400,*) 'transport distribution function calculated'
@@ -283,22 +286,22 @@ subroutine boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc
    	
    	!allocate(dfermi(6,nsteps))
    	
-   	!write(306,*) "#","  ", "mu","  ","energy","  ","dfermi"
+   	write(306,*) "#","  ", "mu","  ","energy","  ","dfermi"
    	
-   	!do i=1,nmu
-   	!        mu(i) = mu0 + (muf-mu0)*((real(i)-1.0)/(real(nmu)-1.0))
-   	! do j=1,nsteps
+   	do i=1,nmu
+   	        mu(i) = mu0 + (muf-mu0)*((real(i)-1.0)/(real(nmu)-1.0))
+   	 do j=1,nsteps
    	 
-   	! 	dfermi(i,j) = dfermidist(mu(i),btemp,enint(j))
+   	 	!dfermi(i,j) = dfermidist(mu(i),btemp,enint(j))
    	 	
-   	! 	write(306,"(2F18.6,1E18.8)") mu(i),enint(j),dfermi(i,j)
+   	 	write(306,"(2F18.6,2E18.8)") mu(i),enint(j),dfermidist(mu(i),btemp,enint(j)),df1(mu(i),btemp,enint(j))
    	 	
-   	! end do
+   	 end do
    	 
-   	!end do
+   	end do
    	
-   	!write(400,*) 'Fermi Distribution derivative calculated'
-	!call flush(400) 
+   	write(400,*) 'Fermi Distribution derivative calculated'
+	call flush(400) 
   	 
         !write(*,*) mu0,muf  	   	
 
@@ -438,7 +441,7 @@ subroutine boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc
    	close(303)
    	close(304)
    	close(305)
-   	!close(306)   	
+   	close(306)   	
    	
    	
     		

@@ -25,8 +25,8 @@ subroutine berrycurv(nthreads,dft,outputfolder,params,kpaths,sme,nocpf,fermishif
 
 	complex,allocatable,dimension(:,:,:) :: vector
 
-	complex :: bxx,bxy,bxz,byy,byz,bzz
-	real,parameter :: gammas= 0.001
+	complex :: bxy,bxz,byz
+	real,parameter :: gammas= 1.0E-37
 
 	integer,allocatable,dimension(:) :: nocpk 
 
@@ -195,10 +195,10 @@ subroutine berrycurv(nthreads,dft,outputfolder,params,kpaths,sme,nocpf,fermishif
 
 
 		call berryct2(nocpk(j),kx,ky,kz,ffactor,w90basis,nvec,rlat,rvec,hopmatrices,&
-		  	ihopmatrices,efermi,eigvf(j,:),vector(j,:,:),nthreads,gammas,bxx,bxy,bxz,byy,byz,bzz)
+		  	ihopmatrices,efermi,eigvf(j,:),vector(j,:,:),nthreads,gammas,bxy,bxz,byz)
 
 		
-			 write(300,"(4F15.4)") kp,aimag(byz),aimag(bxz),aimag(bxy)
+			 write(300,"(4F15.4)") kp,2.00*aimag(byz),2.00*aimag(bxz),2.00*aimag(bxy)
 		
 
 
