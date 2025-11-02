@@ -1,15 +1,15 @@
 include makefile.inc
 
-SRC_DIR   := ./
+FC_FLAGS := $(OMP) $(COND) $(EXTRA)
+L_FLAGS  := $(OMP) $(LIBS) $(COND) $(EXTRA)
+
+SRC_DIR   := ./src
 BUILD_DIR := ./build
 BIN_DIR   := $(DIR)
 UTILS_DIR := ./utils
 
-FC_FLAGS := $(OMP) $(COND) $(EXTRA)
-L_FLAGS  := $(OMP) $(LIBS) $(COND) $(EXTRA)
-
 MAIN_SRC := $(SRC_DIR)/wtb_main.F90
-MAIN_EXEC := $(BIN_DIR)wtb.x
+MAIN_EXEC := $(BIN_DIR)/wtb.x
 
 ALL_MODULE_SOURCES := $(shell find $(SRC_DIR)/subroutines -name '*.F90') \
                       $(shell find $(SRC_DIR)/subprograms -name '*.F90')
@@ -33,33 +33,33 @@ $(MAIN_EXEC): $(MODULE_OBJECTS) $(MAIN_SRC)
 	$(FOR) $(MAIN_SRC) $(MODULE_OBJECTS) -o $@ $(L_FLAGS)
 	@cp $@ ./build/wtb.x
 
-UTILS_EXECS := $(BIN_DIR)nc_nv_finder.x \
-               $(BIN_DIR)param_gen.x \
-               $(BIN_DIR)param_gen_vasp.x \
-               $(BIN_DIR)absorbance.x \
-               $(BIN_DIR)pce.x \
-               $(BIN_DIR)huckel2wtb.x
+UTILS_EXECS := $(BIN_DIR)/nc_nv_finder.x \
+               $(BIN_DIR)/param_gen.x \
+               $(BIN_DIR)/param_gen_vasp.x \
+               $(BIN_DIR)/absorbance.x \
+               $(BIN_DIR)/pce.x \
+               $(BIN_DIR)/huckel2wtb.x
 
 pp: $(UTILS_EXECS)
 	@echo "--- Copying Python Scripts ---"
 	@cp $(UTILS_DIR)/*.py $(BIN_DIR)
 
-$(BIN_DIR)nc_nv_finder.x: $(UTILS_DIR)/nc_nv_finder.F90
+$(BIN_DIR)/nc_nv_finder.x: $(UTILS_DIR)/nc_nv_finder.F90
 	$(FOR) $< -o $@ $(L_FLAGS)
 
-$(BIN_DIR)param_gen.x: $(UTILS_DIR)/param_gen.F90
+$(BIN_DIR)/param_gen.x: $(UTILS_DIR)/param_gen.F90
 	$(FOR) $< -o $@ $(L_FLAGS)
 
-$(BIN_DIR)param_gen_vasp.x: $(UTILS_DIR)/param_gen_vasp.F90
+$(BIN_DIR)/param_gen_vasp.x: $(UTILS_DIR)/param_gen_vasp.F90
 	$(FOR) $< -o $@ $(L_FLAGS)
 
-$(BIN_DIR)absorbance.x: $(UTILS_DIR)/absorbance.F90
+$(BIN_DIR)/absorbance.x: $(UTILS_DIR)/absorbance.F90
 	$(FOR) $< -o $@ $(L_FLAGS)
 
-$(BIN_DIR)pce.x: $(UTILS_DIR)/slme/pce-code.f90 $(UTILS_DIR)/slme/pce-subs.f90
+$(BIN_DIR)/pce.x: $(UTILS_DIR)/slme/pce-code.f90 $(UTILS_DIR)/slme/pce-subs.f90
 	$(FOR) $^ -o $@ $(L_FLAGS)
 
-$(BIN_DIR)huckel2wtb.x: $(UTILS_DIR)/huckel2wtb/src/overlaps_jc.f90 $(UTILS_DIR)/huckel2wtb/src/diagonalize.f90 $(UTILS_DIR)/huckel2wtb/src/Huckel_TB.f90
+$(BIN_DIR)/huckel2wtb.x: $(UTILS_DIR)/huckel2wtb/src/overlaps_jc.f90 $(UTILS_DIR)/huckel2wtb/src/diagonalize.f90 $(UTILS_DIR)/huckel2wtb/src/Huckel_TB.f90
 	$(FOR) $^ -o $@ $(L_FLAGS)
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.F90
@@ -75,3 +75,4 @@ clean:
 	@mkdir -p $(BUILD_DIR) $(BIN_DIR)
 
 .PHONY: all pp clean
+
