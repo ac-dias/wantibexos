@@ -1,12 +1,20 @@
 include makefile.inc
 
-FC_FLAGS := $(OMP) $(COND) $(EXTRA)
-L_FLAGS  := $(OMP) $(LIBS) $(COND) $(EXTRA)
+IS_IFX := $(findstring ifx, $(FOR))
 
 SRC_DIR   := ./src
 BUILD_DIR := ./build
 BIN_DIR   := $(DIR)
 UTILS_DIR := ./utils
+
+ifeq ($(IS_IFX), ifx)
+    MOD_OUT_FLAG := -module $(BUILD_DIR)
+else
+    MOD_OUT_FLAG := -J$(BUILD_DIR)
+endif
+
+FC_FLAGS := $(OMP) $(COND) $(EXTRA) -I$(BUILD_DIR)
+L_FLAGS  := $(OMP) $(LIBS) $(COND) $(EXTRA) -I$(BUILD_DIR)
 
 SUBROUTINE_NAMES := \
     berry_curvature_subs \
@@ -57,14 +65,12 @@ SUBPROGRAM_NAMES := \
 
 SUBROUTINE_OBJS := $(foreach name,$(SUBROUTINE_NAMES),$(BUILD_DIR)/subroutines/$(name).o)
 SUBPROGRAM_OBJS := $(foreach name,$(SUBPROGRAM_NAMES),$(BUILD_DIR)/subprograms/$(name).o)
-
-MODULE_OBJECTS := $(SUBROUTINE_OBJS) $(SUBPROGRAM_OBJS)
+MODULE_OBJECTS  := $(SUBROUTINE_OBJS) $(SUBPROGRAM_OBJS)
 
 MAIN_SRC  := $(SRC_DIR)/wtb_main.F90
 MAIN_EXEC := $(BIN_DIR)/wtb.x
 
-# Define os arquivos-fonte para as regras que têm múltiplos
-PCE_SOURCES := $(UTILS_DIR)/slme/pce-code.f90 $(UTILS_DIR)/slme/pce-subs.f90
+PCE_SOURCES    := $(UTILS_DIR)/slme/pce-code.f90 $(UTILS_DIR)/slme/pce-subs.f90
 HUCKEL_SOURCES := $(UTILS_DIR)/huckel2wtb/src/overlaps_jc.f90 $(UTILS_DIR)/huckel2wtb/src/diagonalize.f90 $(UTILS_DIR)/huckel2wtb/src/Huckel_TB.f90
 
 all: $(MAIN_EXEC) pp
@@ -79,12 +85,12 @@ $(MAIN_EXEC): $(MODULE_OBJECTS) $(MAIN_SRC) makefile.inc
 $(BUILD_DIR)/subroutines/%.o: $(SRC_DIR)/subroutines/%.F90 makefile.inc
 	@mkdir -p $(dir $@)
 	@echo "Compiling Subroutine: $< -> $@"
-	$(FOR) -c $< -o $@ $(FC_FLAGS)
+	$(FOR) -c $< -o $@ $(FC_FLAGS) $(MOD_OUT_FLAG)
 
 $(BUILD_DIR)/subprograms/%.o: $(SRC_DIR)/subprograms/%.F90 makefile.inc
 	@mkdir -p $(dir $@)
 	@echo "Compiling Subprogram: $< -> $@"
-	$(FOR) -c $< -o $@ $(FC_FLAGS)
+	$(FOR) -c $< -o $@ $(FC_FLAGS) $(MOD_OUT_FLAG)
 
 UTILS_EXECS := $(BIN_DIR)/nc_nv_finder.x \
                $(BIN_DIR)/param_gen.x \
@@ -109,17 +115,15 @@ $(BIN_DIR)/param_gen_vasp.x: $(UTILS_DIR)/param_gen_vasp.F90 makefile.inc
 $(BIN_DIR)/absorbance.x: $(UTILS_DIR)/absorbance.F90 makefile.inc
 	$(FOR) $< -o $@ $(L_FLAGS)
 
-# CORRIGIDO: Usa a variável PCE_SOURCES explícita em vez de $^
 $(BIN_DIR)/pce.x: $(PCE_SOURCES) makefile.inc
 	$(FOR) $(PCE_SOURCES) -o $@ $(L_FLAGS)
 
-# CORRIGIDO: Usa a variável HUCKEL_SOURCES explícita em vez de $^
 $(BIN_DIR)/huckel2wtb.x: $(HUCKEL_SOURCES) makefile.inc
 	$(FOR) $(HUCKEL_SOURCES) -o $@ $(L_FLAGS)
 
 clean:
 	@echo "--- Cleaning build, bin, and .mod files ---"
-	@rm -rf $(BUILD_DIR) $(BIN_DIR) ./*.mod
+	@rm -rf $(BUILD_DIR) $(BIN_DIR)
 	@mkdir -p $(BUILD_DIR) $(BIN_DIR)
 
 $(BUILD_DIR)/subroutines/coulomb_pot.o: $(BUILD_DIR)/subroutines/ei_spec_funct.o
