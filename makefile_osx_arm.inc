@@ -9,8 +9,8 @@ OMP   = -fopenmp
 LIBS  = -L$(OPENBLAS_PREFIX)/lib -lopenblas
 
 ### If necessary, use Apple's Accelerate library, which is optimized for M-series ARM chips.
+#LIBS  = -framework Accelerate
 
-EXTRA =
 COND  = -cpp -O3 -march=native
 DIR   = "./bin/"
 
