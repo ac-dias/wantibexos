@@ -210,7 +210,7 @@ subroutine berrycurvbz(nthreads,dft,outputfolder,params,sme,ngrid,mshift,nocpf,f
 
 
 		call berryct2(nocpk(j),kpts(j,1),kpts(j,2),kpts(j,3),ffactor,w90basis,nvec,rlat,rvec,hopmatrices,&
-		  	ihopmatrices,efermi,eigvf(j,:),vector(j,:,:),nthreads,gammas,bxy,bxz,byz)
+		  	ihopmatrices,efermi,eigvf(j,:),vector(j,:,:),nthreads,bxy,bxz,byz)
 		  	
 		! $omp ordered
 			 !write(300,*) kpts(j,1),kpts(j,2),aimag(berry)

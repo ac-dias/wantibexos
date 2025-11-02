@@ -195,7 +195,7 @@ subroutine berrycurv(nthreads,dft,outputfolder,params,kpaths,sme,nocpf,fermishif
 
 
 		call berryct2(nocpk(j),kx,ky,kz,ffactor,w90basis,nvec,rlat,rvec,hopmatrices,&
-		  	ihopmatrices,efermi,eigvf(j,:),vector(j,:,:),nthreads,gammas,bxy,bxz,byz)
+		  	ihopmatrices,efermi,eigvf(j,:),vector(j,:,:),nthreads,bxy,bxz,byz)
 
 		
 			 write(300,"(4F15.4)") kp,2.00*aimag(byz),2.00*aimag(bxz),2.00*aimag(bxy)

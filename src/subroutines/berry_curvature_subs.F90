@@ -1,5 +1,5 @@
 subroutine berryct2(nocp,kx,ky,kz,ffactor,w90basis,nvec,rlat,rvec,hopmatrices,&
-		  ihopmatrices,efermi,energias,autovetores,nthread,gammas,bxy,bxz,byz)
+		  ihopmatrices,efermi,energias,autovetores,nthread,bxy,bxz,byz)
 		   
 
 	implicit none
@@ -97,7 +97,7 @@ subroutine berryct2(nocp,kx,ky,kz,ffactor,w90basis,nvec,rlat,rvec,hopmatrices,&
 	bfyz=0.0
 			
 
-	else if (abs(energias(i)-energias(n)) .lt. 1.0E-37 ) then
+	else if (abs(1.0/(energias(i)-energias(n))) .eq. (1.0/0.0) ) then
 
 
 	bfxy=0.0
@@ -106,7 +106,7 @@ subroutine berryct2(nocp,kx,ky,kz,ffactor,w90basis,nvec,rlat,rvec,hopmatrices,&
 
 	else
 	
-	berryaux= (energias(n)-energias(i))**2+(gammas)
+	berryaux= (energias(n)-energias(i))**2
 	
 
 	bfxy=(((vx(i))*conjg(vy(i)))/(berryaux))
