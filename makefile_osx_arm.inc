@@ -12,4 +12,4 @@ LIBS  = -L$(OPENBLAS_PREFIX)/lib -lopenblas
 
 EXTRA =
 COND  = -cpp -O3 -march=native
-DIR   = "./bin/"
+DIR   = ./bin
