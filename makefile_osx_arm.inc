@@ -12,5 +12,5 @@ LIBS  = -L$(OPENBLAS_PREFIX)/lib -lopenblas
 #LIBS  = -framework Accelerate
 
 COND  = -cpp -O3 -march=native
-DIR   = "./bin/"
+DIR   = ./bin
 
