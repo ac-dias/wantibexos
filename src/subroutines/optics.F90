@@ -54,25 +54,25 @@ subroutine hlm(kx,ky,kz,ffactor,w90basis,nvec,rlat,rvec,hopmatrices,&
 
 		do i=1,nvec
 
-			if ( (rvec(i,1) .eq. 0) .and. (rvec(i,2) .eq. 0) .and. (rvec(i,3) .eq. 0)) then
+			!if ( (rvec(i,1) .eq. 0) .and. (rvec(i,2) .eq. 0) .and. (rvec(i,3) .eq. 0)) then
 
-				hopmatrices2 = hopmatrices(i,:,:)
-				ihopmatrices2 = ihopmatrices(i,:,:)
+			!	hopmatrices2 = hopmatrices(i,:,:)
+			!	ihopmatrices2 = ihopmatrices(i,:,:)
 
-				do j=1,w90basis
+			!	do j=1,w90basis
 
-					hopmatrices2(j,j) = 0.0
-					ihopmatrices2(j,j) = 0.0
-				end do
+			!		hopmatrices2(j,j) = 0.0
+			!		ihopmatrices2(j,j) = 0.0
+			!	end do
 
-				htbx=htbx+kvecsx(i)*exp(kvecs(i))*(hopmatrices2+imag*ihopmatrices2)*(1.0/real(ffactor(i)))
+			!	htbx=htbx+kvecsx(i)*exp(kvecs(i))*(hopmatrices2+imag*ihopmatrices2)*(1.0/real(ffactor(i)))
 
-				htby=htby+kvecsy(i)*exp(kvecs(i))*(hopmatrices2+imag*ihopmatrices2)*(1.0/real(ffactor(i)))
+			!	htby=htby+kvecsy(i)*exp(kvecs(i))*(hopmatrices2+imag*ihopmatrices2)*(1.0/real(ffactor(i)))
 
-				htbz=htbz+kvecsz(i)*exp(kvecs(i))*(hopmatrices2+imag*ihopmatrices2)*(1.0/real(ffactor(i)))
+			!	htbz=htbz+kvecsz(i)*exp(kvecs(i))*(hopmatrices2+imag*ihopmatrices2)*(1.0/real(ffactor(i)))
 				
 
-			else
+			!else
 
 				htbx=htbx+kvecsx(i)*exp(kvecs(i))*(hopmatrices(i,:,:)+imag*ihopmatrices(i,:,:))*(1.0/real(ffactor(i)))
 
@@ -81,7 +81,7 @@ subroutine hlm(kx,ky,kz,ffactor,w90basis,nvec,rlat,rvec,hopmatrices,&
 				htbz=htbz+kvecsz(i)*exp(kvecs(i))*(hopmatrices(i,:,:)+imag*ihopmatrices(i,:,:))*(1.0/real(ffactor(i)))
 
 
-			end if
+			!end if
 
 		end do
 

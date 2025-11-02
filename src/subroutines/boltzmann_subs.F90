@@ -40,11 +40,27 @@ function dfermidist(mu,temp,energy) !minus 1 multiplied for the Energy derivativ
 	
 	!dfermidist = (1.00/(keV*temp))*(fdis)*(1.00-fdis)
 	
-	if ( aux2 .gt. 1.0E+37) then
-	 dfermidist = 0.0 
+	!dfermidist = aux1/aux2
+	
+	dfermidist= (1.0/(4.0*keV*temp))*(1.0/cosh((energy-mu)/(2.0*keV*temp)))**2
+	
+	if (isnan(dfermidist)) then
+		
+		dfermidist = 0.0
+	
 	else
-	 dfermidist = aux1/aux2
+	
+		continue
+	
 	end if
+	
+	
+	!if ( aux2 .gt. 1.0E+37) then
+	 !dfermidist = 0.0 
+	!else
+	 !dfermidist = aux1/aux2
+	 
+	!end if
 
 end function dfermidist
 

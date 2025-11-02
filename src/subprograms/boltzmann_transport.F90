@@ -85,8 +85,8 @@ subroutine boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc
     	if (erro/=0) stop "Error opening ZT - figure of merit output file" 
 	OPEN(UNIT=305, FILE=trim(outputfolder)//trim(file6),STATUS='unknown', IOSTAT=erro)
     	if (erro/=0) stop "Error opening TDF - transport distribution function output file"  
-	OPEN(UNIT=306, FILE=trim(outputfolder)//"DFERMI.dat",STATUS='unknown', IOSTAT=erro)
-    	if (erro/=0) stop "Error opening derivative fermi distribution output file"     	  	   	  	
+	!OPEN(UNIT=306, FILE=trim(outputfolder)//"DFERMI.dat",STATUS='unknown', IOSTAT=erro)
+    	!if (erro/=0) stop "Error opening derivative fermi distribution output file"     	  	   	  	
     	
 	call cpu_time(t0)
 	call date_and_time(VALUES=values)
@@ -265,8 +265,6 @@ subroutine boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc
    	do i=1,nsteps
    	   write(305,"(1F18.6,3E18.8)") enint(i),tdfres(i,1),tdfres(i,2),tdfres(i,3)
    	   
-   	   !write(306,"(1F18.6,2E18.8)") enint(i),dfermidist(0.0,btemp,enint(i)),df1(0.0,btemp,enint(i))
-   	   
    	end do
    	
 	write(400,*) 'transport distribution function calculated'
@@ -286,22 +284,22 @@ subroutine boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc
    	
    	!allocate(dfermi(6,nsteps))
    	
-   	write(306,*) "#","  ", "mu","  ","energy","  ","dfermi"
+   	!write(306,*) "#","  ", "mu","  ","energy","  ","dfermi"
    	
-   	do i=1,nmu
-   	        mu(i) = mu0 + (muf-mu0)*((real(i)-1.0)/(real(nmu)-1.0))
-   	 do j=1,nsteps
+   	!do i=1,nmu
+   	 !       mu(i) = mu0 + (muf-mu0)*((real(i)-1.0)/(real(nmu)-1.0))
+   	 !do j=1,nsteps
    	 
    	 	!dfermi(i,j) = dfermidist(mu(i),btemp,enint(j))
    	 	
-   	 	write(306,"(2F18.6,2E18.8)") mu(i),enint(j),dfermidist(mu(i),btemp,enint(j)),df1(mu(i),btemp,enint(j))
+   	 !	write(306,"(2F18.6,2E18.8)") mu(i),enint(j),dfermidist(mu(i),btemp,enint(j)),df1(mu(i),btemp,enint(j))
    	 	
-   	 end do
+   	 !end do
    	 
-   	end do
+   	!end do
    	
-   	write(400,*) 'Fermi Distribution derivative calculated'
-	call flush(400) 
+   	!write(400,*) 'Fermi Distribution derivative calculated'
+	!call flush(400) 
   	 
         !write(*,*) mu0,muf  	   	
 
@@ -333,9 +331,9 @@ subroutine boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc
    			!seij(i,2) = (sigsij(i,2)*elft(2))/(sijaux(i,2)+1.0E-37)
    			!seij(i,3) = (sigsij(i,3)*elft(3))/(sijaux(i,3)+1.0E-37) 
    			
-   			seij(i,1) = (sigsij(i,1))/(sij(i,1)+1.0E-37)
-   			seij(i,2) = (sigsij(i,2))/(sij(i,2)+1.0E-37)
-   			seij(i,3) = (sigsij(i,3))/(sij(i,3)+1.0E-37)    			 			   						   						   			
+   			!seij(i,1) = (sigsij(i,1))/(sij(i,1))
+   			!seij(i,2) = (sigsij(i,2))/(sij(i,2))
+   			!seij(i,3) = (sigsij(i,3))/(sij(i,3))    			 			   						   						   			
    		
    		else
    		
@@ -353,16 +351,76 @@ subroutine boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc
    			!seij(i,2) = (sigsij(i,2)*hlft(2))/(sijaux(i,2)+1.0E-37)
    			!seij(i,3) = (sigsij(i,3)*hlft(3))/(sijaux(i,3)+1.0E-37) 
    			
-   			seij(i,1) = (sigsij(i,1))/(sij(i,1)+1.0E-37)
-   			seij(i,2) = (sigsij(i,2))/(sij(i,2)+1.0E-37)
-   			seij(i,3) = (sigsij(i,3))/(sij(i,3)+1.0E-37)   			   			   		
+   	   			  			   			   		
    		
    		end if
+
+   			seij(i,1) = (sigsij(i,1))/(sij(i,1))
+   			seij(i,2) = (sigsij(i,2))/(sij(i,2))
+   			seij(i,3) = (sigsij(i,3))/(sij(i,3))
+   			
+   			
+   	 		do j=1,3
+   	
+   			 if ( isnan(seij(i,j)) ) then
    		
+   			  seij(i,j) = 0.0
+   		
+   			 else
+   		
+   			 continue
+   		
+   			 end if
+
+
+   			 if (abs(seij(i,j)) .eq. (1.0/0.0) ) then
+   		
+   			  seij(i,j) = 0.0
+   		
+   			 else
+   		
+   			  continue
+   		
+   			 end if   		
+   		
+   		
+   	  		end do
+   			
+   			   		
    		!write(403,*) mu(i)
  
    	end do
-   	!$omp end parallel do   	
+   	!$omp end parallel do   
+   	
+   	! $omp parallel do default(shared) private(i,j)
+   	!do i=1,nmu
+   	 ! do j=1,3
+   	
+   	!	if ( isnan(seij(i,j)) ) then
+   		
+   	!		seij(i,j) = 0.0
+   		
+   	!	else
+   		
+   	!		continue
+   		
+   	!	end if
+
+
+   	!	if (abs(seij(i,j)) .eq. (1.0/0.0) ) then
+   		
+   	!		seij(i,j) = 0.0
+   		
+   	!	else
+   		
+   	!		continue
+   		
+   	!	end if   		
+   		
+   		
+   	 ! end do
+   	!end do	
+   	! $omp end parallel do
    	
    	allocate(pfij(nmu,3))
    	allocate(ztij(nmu,3)) 
@@ -379,7 +437,7 @@ subroutine boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc
    	seij = seij*auxseij
    	!pfij = pfij*auxpfij
    	
-   	! $omp parallel do default(shared) private(i) 
+   	!$omp parallel do default(shared) private(i,j) 
  	do i=1,nmu
  	 do j=1,3
  	 
@@ -390,7 +448,7 @@ subroutine boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc
  	 
  	 end do
  	end do  	
-   	! $omp end parallel do
+   	!$omp end parallel do
    	
    	
 
@@ -441,7 +499,7 @@ subroutine boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc
    	close(303)
    	close(304)
    	close(305)
-   	close(306)   	
+   	!close(306)   	
    	
    	
     		
