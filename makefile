@@ -1,6 +1,6 @@
 include makefile.inc
 
-SRC_DIR   := ./src
+SRC_DIR   := ./
 BUILD_DIR := ./build
 BIN_DIR   := $(DIR)
 UTILS_DIR := ./utils
