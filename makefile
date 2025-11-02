@@ -8,19 +8,15 @@ BUILD_DIR := ./build
 BIN_DIR   := $(DIR)
 UTILS_DIR := ./utils
 
+ALL_SOURCES := $(shell find $(SRC_DIR) -name '*.F90')
+
+OLD_FILES := $(filter %/old/%, $(ALL_SOURCES))
+
+MANUAL_EXCLUDES := $(SRC_DIR)/subroutines/other.F90
+
 MAIN_SRC := $(SRC_DIR)/wtb_main.F90
-MAIN_EXEC := $(BIN_DIR)/wtb.x
 
-ALL_MODULE_SOURCES := $(shell find $(SRC_DIR)/subroutines -name '*.F90') \
-                      $(shell find $(SRC_DIR)/subprograms -name '*.F90')
-
-EXCLUDE_FILES := $(SRC_DIR)/subroutines/other.F90 \
-                 $(SRC_DIR)/subroutines/old/hamiltonian_tb.f90 \
-                 $(SRC_DIR)/subprograms/old/tdos-tool.F90 \
-                 $(SRC_DIR)/subprograms/old/spin_txt.F90 \
-                 $(SRC_DIR)/subprograms/old/pce-code.F90
-
-MODULE_SOURCES := $(filter-out $(EXCLUDE_FILES), $(ALL_MODULE_SOURCES))
+MODULE_SOURCES := $(filter-out $(MAIN_SRC) $(OLD_FILES) $(MANUAL_EXCLUDES), $(ALL_SOURCES))
 
 MODULE_OBJECTS := $(MODULE_SOURCES:$(SRC_DIR)/%.F90=$(BUILD_DIR)/%.o)
 
@@ -75,3 +71,4 @@ clean:
 	@mkdir -p $(BUILD_DIR) $(BIN_DIR)
 
 .PHONY: all pp clean
+
