@@ -11,6 +11,10 @@ LIBS  = -I$(OPENBLAS_PREFIX)/include -L$(OPENBLAS_PREFIX)/lib -lopenblas
 ### If necessary, use Apple's Accelerate library, which is optimized for M-series ARM chips.
 #LIBS = -framework Accelerate
 
-EXTRA= -Wno-argument-mismatch -Wargument-mismatch  -Wunderflow -Werror=line-truncation -DOPENBLAS
+### For older verssion of GCC
+#EXTRA= -Wno-argument-mismatch -Wargument-mismatch  -Wunderflow -Werror=line-truncation -DOPENBLAS
+
+EXTRA= -Wno-argument-mismatch -Werror=line-truncation -DOPENBLAS
+
 COND  = -cpp -O3 -march=native
 DIR   = ./bin
