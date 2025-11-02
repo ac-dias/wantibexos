@@ -1,93 +1,127 @@
 include makefile.inc
 
-SUB_OBJ=\
-	./build/subroutines/*.o \
+FC_FLAGS := $(OMP) $(COND) $(EXTRA)
+L_FLAGS  := $(OMP) $(LIBS) $(COND) $(EXTRA)
 
+SRC_DIR   := ./src
+BUILD_DIR := ./build
+BIN_DIR   := $(DIR)
+UTILS_DIR := ./utils
 
-SUB_PROGRAM=\
-	./build/subprograms/*.o \
+SUBROUTINE_NAMES := \
+    berry_curvature_subs \
+    boltzmann_subs \
+    bse_subs \
+    bse_subs_kpath \
+    bse_subs_temp \
+    special_funct \
+    ei_spec_funct \
+    coulomb_pot \
+    diel-pp-subs \
+    dos_subs \
+    efmass-subs \
+    general_subs \
+    hamiltonians \
+    hamiltonian_tb \
+    mhkpack_subs \
+    module_input_read \
+    optics \
+    spin_txt_subs \
+    emission_subs \
+    coulomb_pot_gw \
+    gw_subs
 
-																			
+SUBPROGRAM_NAMES := \
+    bands-kpath-tool \
+    berry_curvature_bz-tool \
+    berry_curvature_kpath-tool \
+    bse_diel-tool \
+    bse_diel-tool-pol \
+    bse_kpath-tool \
+    bse_kpath-tool-temp \
+    bse_solver-tool-diel \
+    bse_solver-tool-diel-temp \
+    diel-pp-bse \
+    diel-pp-bse-pol \
+    tdos-tool-stxt \
+    diel-pp \
+    diel-pp-pol \
+    efmass \
+    exciton_lifetime \
+    sp_diel-tool \
+    sp_diel-tool-pol \
+    sp_opt_bz-tool \
+    sp_solver-tool-diel \
+    boltzmann_transport \
+    emission_PL
 
-all : main pp
-	
-pp :
-	$(FOR) ./utils/nc_nv_finder.F90 -o $(DIR)nc_nv_finder.x $(OMP) $(LIBS)
-	$(FOR) ./utils/param_gen.F90  -o $(DIR)param_gen.x
-	$(FOR) ./utils/param_gen_vasp.F90  -o $(DIR)param_gen_vasp.x
-	$(FOR) ./utils/absorbance.F90  -o $(DIR)absorbance.x	
-	$(FOR) ./utils/slme/pce-code.f90 ./utils/slme/pce-subs.f90  -o $(DIR)pce.x
-	$(FOR) ./utils/huckel2wtb/src/overlaps_jc.f90 ./utils/huckel2wtb/src/diagonalize.f90 ./utils/huckel2wtb/src/Huckel_TB.f90 -o $(DIR)huckel2wtb.x $(LIBS)
-	cp ./utils/*.py  $(DIR)
-	rm ./*.mod
+SUBROUTINE_OBJS := $(foreach name,$(SUBROUTINE_NAMES),$(BUILD_DIR)/subroutines/$(name).o)
+SUBPROGRAM_OBJS := $(foreach name,$(SUBPROGRAM_NAMES),$(BUILD_DIR)/subprograms/$(name).o)
 
+MODULE_OBJECTS := $(SUBROUTINE_OBJS) $(SUBPROGRAM_OBJS)
 
-main :  subprograms
-	$(FOR) ./src/wtb_main.F90 $(SUB_OBJ) $(SUB_PROGRAM) -o ./build/wtb.x $(LIBS) $(OMP) $(COND) $(EXTRA) 
-	cp ./build/wtb.x $(DIR)wtb.x
-	rm ./*.mod	
+MAIN_SRC  := $(SRC_DIR)/wtb_main.F90
+MAIN_EXEC := $(BIN_DIR)/wtb.x
 
-subprograms: lib
-	[ -d ./build/subprograms ] || mkdir ./build/subprograms
-	$(FOR) -c ./src/subprograms/bands-kpath-tool.F90 $(OMP) $(LIBS) $(COND) $(EXTRA) -L./build/libwtb.a
-	$(FOR) -c ./src/subprograms/berry_curvature_bz-tool.F90 $(OMP) $(LIBS) $(COND) $(EXTRA) -L./build/libwtb.a
-	$(FOR) -c ./src/subprograms/berry_curvature_kpath-tool.F90 $(OMP) $(LIBS) $(COND) $(EXTRA) -L./build/libwtb.a
-	$(FOR) -c ./src/subprograms/bse_diel-tool.F90 $(OMP) $(LIBS) $(COND) $(EXTRA) -L./build/libwtb.a
-	$(FOR) -c ./src/subprograms/bse_diel-tool-pol.F90 $(OMP) $(LIBS) $(COND) $(EXTRA) -L./build/libwtb.a
-	$(FOR) -c ./src/subprograms/bse_kpath-tool.F90 $(OMP) $(LIBS) $(COND) $(EXTRA) -L./build/libwtb.a
-	$(FOR) -c ./src/subprograms/bse_kpath-tool-temp.F90 $(OMP) $(LIBS) $(COND) $(EXTRA) -L./build/libwtb.a
-	$(FOR) -c ./src/subprograms/bse_solver-tool-diel.F90 $(OMP) $(LIBS) $(COND) $(EXTRA) -L./build/libwtb.a
-	$(FOR) -c ./src/subprograms/bse_solver-tool-diel-temp.F90 $(OMP) $(LIBS) $(COND) $(EXTRA) -L./build/libwtb.a
-	$(FOR) -c ./src/subprograms/diel-pp-bse.F90 $(OMP) $(LIBS) $(COND) $(EXTRA) -L./build/libwtb.a
-	$(FOR) -c ./src/subprograms/diel-pp-bse-pol.F90 $(OMP) $(LIBS) $(COND) $(EXTRA) -L./build/libwtb.a
-	$(FOR) -c ./src/subprograms/tdos-tool-stxt.F90 $(OMP) $(LIBS) $(COND) $(EXTRA) -L./build/libwtb.a
-	$(FOR) -c ./src/subprograms/diel-pp.F90 $(OMP) $(LIBS) $(COND) $(EXTRA) -L./build/libwtb.a
-	$(FOR) -c ./src/subprograms/diel-pp-pol.F90 $(OMP) $(LIBS) $(COND) $(EXTRA) -L./build/libwtb.a
-	$(FOR) -c ./src/subprograms/efmass.F90 $(OMP) $(LIBS) $(COND) $(EXTRA) -L./build/libwtb.a
-	$(FOR) -c ./src/subprograms/exciton_lifetime.F90 $(OMP) $(LIBS) $(COND) $(EXTRA) -L./build/libwtb.a
-	$(FOR) -c ./src/subprograms/sp_diel-tool.F90 $(OMP) $(LIBS) $(COND) $(EXTRA) -L./build/libwtb.a
-	$(FOR) -c ./src/subprograms/sp_diel-tool-pol.F90 $(OMP) $(LIBS) $(COND) $(EXTRA) -L./build/libwtb.a
-	$(FOR) -c ./src/subprograms/sp_opt_bz-tool.F90 $(OMP) $(LIBS) $(COND) $(EXTRA) -L./build/libwtb.a
-	$(FOR) -c ./src/subprograms/sp_solver-tool-diel.F90 $(OMP) $(LIBS) $(COND) $(EXTRA) -L./build/libwtb.a
-	$(FOR) -c ./src/subprograms/boltzmann_transport.F90 $(OMP) $(LIBS) $(COND) $(EXTRA) -L./build/libwtb.a
-	$(FOR) -c ./src/subprograms/emission_PL.F90 $(OMP) $(LIBS) $(COND) $(EXTRA) -L./build/libwtb.a	
-	mv *.o ./build/subprograms
+# Define os arquivos-fonte para as regras que têm múltiplos
+PCE_SOURCES := $(UTILS_DIR)/slme/pce-code.f90 $(UTILS_DIR)/slme/pce-subs.f90
+HUCKEL_SOURCES := $(UTILS_DIR)/huckel2wtb/src/overlaps_jc.f90 $(UTILS_DIR)/huckel2wtb/src/diagonalize.f90 $(UTILS_DIR)/huckel2wtb/src/Huckel_TB.f90
 
-lib: subroutines
-	ar rcs ./build/libwtb.a $(SUB_OBJ)
-	 		
-subroutines :
-	[ -d ./build/subroutines ] || mkdir ./build/subroutines
-	$(FOR) -c ./src/subroutines/berry_curvature_subs.F90 
-	$(FOR) -c ./src/subroutines/boltzmann_subs.F90 
-	$(FOR) -c ./src/subroutines/bse_subs.F90 
-	$(FOR) -c ./src/subroutines/bse_subs_kpath.F90 
-	$(FOR) -c ./src/subroutines/bse_subs_temp.F90 
-	$(FOR) -c ./src/subroutines/special_funct.F90
-	$(FOR) -c ./src/subroutines/ei_spec_funct.F90
-	$(FOR) -c ./src/subroutines/coulomb_pot.F90 
-	$(FOR) -c ./src/subroutines/diel-pp-subs.F90 
-	$(FOR) -c ./src/subroutines/dos_subs.F90 
-	$(FOR) -c ./src/subroutines/efmass-subs.F90 
-	$(FOR) -c ./src/subroutines/general_subs.F90 $(LIBS)
-	$(FOR) -c ./src/subroutines/hamiltonians.F90 
-	$(FOR) -c ./src/subroutines/hamiltonian_tb.F90 $(LIBS) $(OMP)
-	$(FOR) -c ./src/subroutines/mhkpack_subs.F90 
-	$(FOR) -c ./src/subroutines/module_input_read.F90 
-	$(FOR) -c ./src/subroutines/optics.F90  
-	$(FOR) -c ./src/subroutines/spin_txt_subs.F90 
-	$(FOR) -c ./src/subroutines/emission_subs.F90	
-	$(FOR) -c ./src/subroutines/coulomb_pot_gw.F90	
-	$(FOR) -c ./src/subroutines/gw_subs.F90
-	mv *.o ./build/subroutines
+all: $(MAIN_EXEC) pp
+	@echo "--- Build Complete ---"
+
+$(MAIN_EXEC): $(MODULE_OBJECTS) $(MAIN_SRC) makefile.inc
+	@mkdir -p $(BIN_DIR)
+	@echo "--- Linking Main Executable: $@ ---"
+	$(FOR) $(MAIN_SRC) $(MODULE_OBJECTS) -o $@ $(L_FLAGS)
+	@cp $@ ./build/wtb.x
+
+$(BUILD_DIR)/subroutines/%.o: $(SRC_DIR)/subroutines/%.F90 makefile.inc
+	@mkdir -p $(dir $@)
+	@echo "Compiling Subroutine: $< -> $@"
+	$(FOR) -c $< -o $@ $(FC_FLAGS)
+
+$(BUILD_DIR)/subprograms/%.o: $(SRC_DIR)/subprograms/%.F90 makefile.inc
+	@mkdir -p $(dir $@)
+	@echo "Compiling Subprogram: $< -> $@"
+	$(FOR) -c $< -o $@ $(FC_FLAGS)
+
+UTILS_EXECS := $(BIN_DIR)/nc_nv_finder.x \
+               $(BIN_DIR)/param_gen.x \
+               $(BIN_DIR)/param_gen_vasp.x \
+               $(BIN_DIR)/absorbance.x \
+               $(BIN_DIR)/pce.x \
+               $(BIN_DIR)/huckel2wtb.x
+
+pp: $(UTILS_EXECS)
+	@echo "--- Copying Python Scripts ---"
+	@cp $(UTILS_DIR)/*.py $(BIN_DIR)
+
+$(BIN_DIR)/nc_nv_finder.x: $(UTILS_DIR)/nc_nv_finder.F90 makefile.inc
+	$(FOR) $< -o $@ $(L_FLAGS)
+
+$(BIN_DIR)/param_gen.x: $(UTILS_DIR)/param_gen.F90 makefile.inc
+	$(FOR) $< -o $@ $(L_FLAGS)
+
+$(BIN_DIR)/param_gen_vasp.x: $(UTILS_DIR)/param_gen_vasp.F90 makefile.inc
+	$(FOR) $< -o $@ $(L_FLAGS)
+
+$(BIN_DIR)/absorbance.x: $(UTILS_DIR)/absorbance.F90 makefile.inc
+	$(FOR) $< -o $@ $(L_FLAGS)
+
+# CORRIGIDO: Usa a variável PCE_SOURCES explícita em vez de $^
+$(BIN_DIR)/pce.x: $(PCE_SOURCES) makefile.inc
+	$(FOR) $(PCE_SOURCES) -o $@ $(L_FLAGS)
+
+# CORRIGIDO: Usa a variável HUCKEL_SOURCES explícita em vez de $^
+$(BIN_DIR)/huckel2wtb.x: $(HUCKEL_SOURCES) makefile.inc
+	$(FOR) $(HUCKEL_SOURCES) -o $@ $(L_FLAGS)
 
 clean:
-	rm -r ./build/subroutines
-	rm -r ./build/subprograms
-	rm -r ./build/wtb.x
-	rm -r ./build/libwtb.a
-	rm  ./bin/*.x	
-	rm  ./bin/*.py	
+	@echo "--- Cleaning build, bin, and .mod files ---"
+	@rm -rf $(BUILD_DIR) $(BIN_DIR) ./*.mod
+	@mkdir -p $(BUILD_DIR) $(BIN_DIR)
 
+$(BUILD_DIR)/subroutines/coulomb_pot.o: $(BUILD_DIR)/subroutines/ei_spec_funct.o
 
-.PHONY : all clean 
+.PHONY: all pp clean
