@@ -69,6 +69,7 @@ MODULE_OBJECTS  := $(SUBROUTINE_OBJS) $(SUBPROGRAM_OBJS)
 
 MAIN_SRC  := $(SRC_DIR)/wtb_main.F90
 MAIN_EXEC := $(BIN_DIR)/wtb.x
+LIB_FILE  := $(BUILD_DIR)/libwtb.a
 
 PCE_SOURCES    := $(UTILS_DIR)/slme/pce-code.f90 $(UTILS_DIR)/slme/pce-subs.f90
 HUCKEL_SOURCES := $(UTILS_DIR)/huckel2wtb/src/overlaps_jc.f90 $(UTILS_DIR)/huckel2wtb/src/diagonalize.f90 $(UTILS_DIR)/huckel2wtb/src/Huckel_TB.f90
@@ -76,11 +77,15 @@ HUCKEL_SOURCES := $(UTILS_DIR)/huckel2wtb/src/overlaps_jc.f90 $(UTILS_DIR)/hucke
 all: $(MAIN_EXEC) pp
 	@echo "--- Build Complete ---"
 
-$(MAIN_EXEC): $(MODULE_OBJECTS) $(MAIN_SRC) makefile.inc
+$(MAIN_EXEC): $(LIB_FILE) $(MAIN_SRC) makefile.inc
 	@mkdir -p $(BIN_DIR)
 	@echo "--- Linking Main Executable: $@ ---"
-	$(FOR) $(MAIN_SRC) $(MODULE_OBJECTS) -o $@ $(L_FLAGS)
+	$(FOR) $(MAIN_SRC) -o $@ $(L_FLAGS) -L$(BUILD_DIR) -lwtb
 	@cp $@ ./build/wtb.x
+
+$(LIB_FILE): $(MODULE_OBJECTS)
+	@echo "--- Creating Static Library: $@ ---"
+	ar rcs $@ $(MODULE_OBJECTS)
 
 $(BUILD_DIR)/subroutines/%.o: $(SRC_DIR)/subroutines/%.F90 makefile.inc
 	@mkdir -p $(dir $@)
@@ -104,26 +109,29 @@ pp: $(UTILS_EXECS)
 	@cp $(UTILS_DIR)/*.py $(BIN_DIR)
 
 $(BIN_DIR)/nc_nv_finder.x: $(UTILS_DIR)/nc_nv_finder.F90 makefile.inc
-	$(FOR) $< -o $@ $(L_FLAGS)
+	$(FOR) $< -o $@ $(L_FLAGS) $(MOD_OUT_FLAG)
 
 $(BIN_DIR)/param_gen.x: $(UTILS_DIR)/param_gen.F90 makefile.inc
-	$(FOR) $< -o $@ $(L_FLAGS)
+	$(FOR) $< -o $@ $(L_FLAGS) $(MOD_OUT_FLAG)
 
 $(BIN_DIR)/param_gen_vasp.x: $(UTILS_DIR)/param_gen_vasp.F90 makefile.inc
-	$(FOR) $< -o $@ $(L_FLAGS)
+	$(FOR) $< -o $@ $(L_FLAGS) $(MOD_OUT_FLAG)
 
 $(BIN_DIR)/absorbance.x: $(UTILS_DIR)/absorbance.F90 makefile.inc
-	$(FOR) $< -o $@ $(L_FLAGS)
+	$(FOR) $< -o $@ $(L_FLAGS) $(MOD_OUT_FLAG)
 
 $(BIN_DIR)/pce.x: $(PCE_SOURCES) makefile.inc
-	$(FOR) $(PCE_SOURCES) -o $@ $(L_FLAGS)
+	$(FOR) $(PCE_SOURCES) -o $@ $(L_FLAGS) $(MOD_OUT_FLAG)
 
 $(BIN_DIR)/huckel2wtb.x: $(HUCKEL_SOURCES) makefile.inc
-	$(FOR) $(HUCKEL_SOURCES) -o $@ $(L_FLAGS)
+	$(FOR) $(HUCKEL_SOURCES) -o $@ $(L_FLAGS) $(MOD_OUT_FLAG)
+
+	rm -rf $(BUILD_DIR)/*.mod
 
 clean:
 	@echo "--- Cleaning build, bin, and .mod files ---"
 	@rm -rf $(BUILD_DIR) $(BIN_DIR)
+	@rm -f ./*.mod
 	@mkdir -p $(BUILD_DIR) $(BIN_DIR)
 
 $(BUILD_DIR)/subroutines/coulomb_pot.o: $(BUILD_DIR)/subroutines/ei_spec_funct.o
