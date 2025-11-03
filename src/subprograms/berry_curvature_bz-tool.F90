@@ -235,7 +235,7 @@ subroutine berrycurvbz(nthreads,dft,outputfolder,params,sme,ngrid,mshift,nocpf,f
 	write(300,*) "#kx ky kz yz xz xy"
 
 	do j=1,ngkpt
-		write(300,"(6F15.4)") output(j,1),output(j,2),output(j,3),2.00*output(j,6),2.00*output(j,5),2.00*output(j,4)
+		write(300,"(6F15.4)") output(j,1),output(j,2),output(j,3),output(j,6),output(j,5),output(j,4)
 		!write(300,*) output(j,1),output(j,2),output(j,3),output(j,8),output(j,6),output(j,5)
 	
 	end do

@@ -76,6 +76,11 @@ HUCKEL_SOURCES := $(UTILS_DIR)/huckel2wtb/src/overlaps_jc.f90 $(UTILS_DIR)/hucke
 
 all: $(MAIN_EXEC) pp
 	@echo "--- Build Complete ---"
+	@rm -f ./*.mod
+
+main: $(MAIN_EXEC)
+	@echo "--- Main Executable Build Complete ---"
+	@rm -f ./*.mod 
 
 $(MAIN_EXEC): $(LIB_FILE) $(MAIN_SRC) makefile.inc
 	@mkdir -p $(BIN_DIR)
@@ -126,8 +131,6 @@ $(BIN_DIR)/pce.x: $(PCE_SOURCES) makefile.inc
 $(BIN_DIR)/huckel2wtb.x: $(HUCKEL_SOURCES) makefile.inc
 	$(FOR) $(HUCKEL_SOURCES) -o $@ $(L_FLAGS) $(MOD_OUT_FLAG)
 
-	rm -rf $(BUILD_DIR)/*.mod
-
 clean:
 	@echo "--- Cleaning build, bin, and .mod files ---"
 	@rm -rf $(BUILD_DIR) $(BIN_DIR)
@@ -136,4 +139,4 @@ clean:
 
 $(BUILD_DIR)/subroutines/coulomb_pot.o: $(BUILD_DIR)/subroutines/ei_spec_funct.o
 
-.PHONY: all pp clean
+.PHONY: all pp clean main

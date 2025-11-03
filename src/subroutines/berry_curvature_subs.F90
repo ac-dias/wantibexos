@@ -34,7 +34,7 @@ subroutine berryct2(nocp,kx,ky,kz,ffactor,w90basis,nvec,rlat,rvec,hopmatrices,&
 	complex, dimension(w90basis) :: vflagx,vflagy,vflagz
 	complex, dimension(w90basis) :: vn,vm,vl
 
-	complex,dimension(w90basis) :: vx,vy,vz
+	complex :: vx,vy,vz
 
 	complex,dimension(w90basis) :: vxa,vya
 	complex, dimension(w90basis) :: vflagxa,vflagya
@@ -68,7 +68,7 @@ subroutine berryct2(nocp,kx,ky,kz,ffactor,w90basis,nvec,rlat,rvec,hopmatrices,&
 
 	call matvec(hx,autovetores(i,:),w90basis,vflagx)
 
-	call prodintsq(vn,vflagx,w90basis,vx(i))
+	call prodintsq(vn,vflagx,w90basis,vx)
 
 	!write(*,*) vx(i)
 
@@ -77,7 +77,7 @@ subroutine berryct2(nocp,kx,ky,kz,ffactor,w90basis,nvec,rlat,rvec,hopmatrices,&
 
 	call matvec(hy,autovetores(i,:),w90basis,vflagy)
 
-	call prodintsq(vm,vflagy,w90basis,vy(i))
+	call prodintsq(vm,vflagy,w90basis,vy)
 	
 
 	!write(*,*) vy(i)
@@ -86,18 +86,10 @@ subroutine berryct2(nocp,kx,ky,kz,ffactor,w90basis,nvec,rlat,rvec,hopmatrices,&
 
 	call matvec(hz,autovetores(i,:),w90basis,vflagz)
 
-	call prodintsq(vl,vflagz,w90basis,vz(i))
+	call prodintsq(vl,vflagz,w90basis,vz)
 	
 
-	if (i == n) then
-
-
-	bfxy=0.0
-	bfxz=0.0
-	bfyz=0.0
-			
-
-	else if (abs(1.0/(energias(i)-energias(n))) .eq. (1.0/0.0) ) then
+	if (abs(1.0/(energias(i)-energias(n))) .gt. huge(1.0) ) then
 
 
 	bfxy=0.0
@@ -109,9 +101,9 @@ subroutine berryct2(nocp,kx,ky,kz,ffactor,w90basis,nvec,rlat,rvec,hopmatrices,&
 	berryaux= (energias(n)-energias(i))**2
 	
 
-	bfxy=(((vx(i))*conjg(vy(i)))/(berryaux))
-	bfxz=(((vx(i))*conjg(vz(i)))/(berryaux))
-	bfyz=(((vy(i))*conjg(vz(i)))/(berryaux))
+	bfxy=2.*((vx*conjg(vy))/(berryaux))
+	bfxz=2.*((vx*conjg(vz))/(berryaux))
+	bfyz=2.*((vy*conjg(vz))/(berryaux))
 
 						
 

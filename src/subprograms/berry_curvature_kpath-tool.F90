@@ -198,7 +198,7 @@ subroutine berrycurv(nthreads,dft,outputfolder,params,kpaths,sme,nocpf,fermishif
 		  	ihopmatrices,efermi,eigvf(j,:),vector(j,:,:),nthreads,bxy,bxz,byz)
 
 		
-			 write(300,"(4F15.4)") kp,2.00*aimag(byz),2.00*aimag(bxz),2.00*aimag(bxy)
+			 write(300,"(4F15.4)") kp,aimag(byz),aimag(bxz),aimag(bxy)
 		
 
 

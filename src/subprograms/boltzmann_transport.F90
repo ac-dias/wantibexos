@@ -373,7 +373,7 @@ subroutine boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc
    			 end if
 
 
-   			 if (abs(seij(i,j)) .eq. (1.0/0.0) ) then
+   			 if (abs(seij(i,j)) .ge. huge(1.0) ) then
    		
    			  seij(i,j) = 0.0
    		
