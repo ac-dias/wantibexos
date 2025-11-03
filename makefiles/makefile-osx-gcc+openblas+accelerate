@@ -14,7 +14,7 @@ LIBS  = -I$(OPENBLAS_PREFIX)/include -L$(OPENBLAS_PREFIX)/lib -lopenblas
 ### For older verssion of GCC
 #EXTRA= -Wno-argument-mismatch -Wargument-mismatch  -Wunderflow -Werror=line-truncation -DOPENBLAS
 
-EXTRA= -Wno-argument-mismatch -Werror=line-truncation -DOPENBLAS
+EXTRA= -Wno-argument-mismatch -Wno-underflow -Werror=line-truncation -DOPENBLAS
 
 COND  = -cpp -O3 -march=native
 DIR   = ./bin
