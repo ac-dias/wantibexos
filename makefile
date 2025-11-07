@@ -133,10 +133,15 @@ $(BIN_DIR)/huckel2wtb.x: $(HUCKEL_SOURCES) makefile.inc
 
 clean:
 	@echo "--- Cleaning build, bin, and .mod files ---"
-	@rm -rf $(BUILD_DIR) $(BIN_DIR)
+	@rm -rf $(BUILD_DIR) 
+	@rm -rf $(BIN_DIR)/*.py
+	@rm -rf $(BIN_DIR)/*.x
 	@rm -f ./*.mod
-	@mkdir -p $(BUILD_DIR) $(BIN_DIR)
+	@mkdir -p $(BUILD_DIR) 
 
 $(BUILD_DIR)/subroutines/coulomb_pot.o: $(BUILD_DIR)/subroutines/ei_spec_funct.o
 
 .PHONY: all pp clean main
+
+
+
