@@ -139,7 +139,7 @@ clean:
 	@rm -f ./*.mod
 	@mkdir -p $(BUILD_DIR) 
 
-$(BUILD_DIR)/subroutines/coulomb_pot.o: $(BUILD_DIR)/subroutines/ei_spec_funct.o
+#$(BUILD_DIR)/subroutines/coulomb_pot.o: $(BUILD_DIR)/subroutines/ei_spec_funct.o
 
 .PHONY: all pp clean main
 

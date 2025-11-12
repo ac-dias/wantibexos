@@ -320,21 +320,21 @@ subroutine dostool(nthreads,outputfolder,ngrid,numdos, &
 	
 	write(500,*) "2"
 	write(500,*) "C"	
-	write(500,"(3E18.8,I7,1F18.8)") kpts(nkv,2),kpts(nkv,3),kpts(nkv,4),nocpj(nkv),vbm
-	write(500,"(3E18.8,I7,1F18.8)") kpts(nkc,2),kpts(nkc,3),kpts(nkc,4),nocpj(nkc)+1,cbm
+	write(500,"(3E18.8,I7,1F18.8)") kpts(nkv,1),kpts(nkv,2),kpts(nkv,3),nocpj(nkv),vbm
+	write(500,"(3E18.8,I7,1F18.8)") kpts(nkc,1),kpts(nkc,2),kpts(nkc,3),nocpj(nkc)+1,cbm
 	
 	write(501,*) "fundamental band gap (eV):",cbm-vbm
 	write(501,*) "direct band gap (eV):",gap
 	write(501,*)
 	write(501,*)
 	write(501,*)"kpoint cbm"
-	write(501,"(3E18.8)")kpts(nkc,2),kpts(nkc,3),kpts(nkc,4)
+	write(501,"(3E18.8)")kpts(nkc,1),kpts(nkc,2),kpts(nkc,3)
 	write(501,*)	
 	write(501,*)"kpoint vbm"
-	write(501,"(3E18.8)")kpts(nkv,2),kpts(nkv,3),kpts(nkv,4)
+	write(501,"(3E18.8)")kpts(nkv,1),kpts(nkv,2),kpts(nkv,3)
 	write(501,*)		 
 	write(501,*)"kpoint direct band gap"
-	write(501,"(3E18.8)")kpts(nkgap,2),kpts(nkgap,3),kpts(nkgap,4)
+	write(501,"(3E18.8)")kpts(nkgap,1),kpts(nkgap,2),kpts(nkgap,3)
 	
 	deallocate(ebands)		
 	
