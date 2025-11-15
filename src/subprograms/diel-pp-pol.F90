@@ -26,6 +26,8 @@ subroutine spoptproppol(numbse,outputfolder)
 	real :: refl_xx,refl_sp,refl_sm,refl_yy,refl_zz !reflectibilidade
 	real :: abs_xx,abs_sp,abs_sm,abs_yy,abs_zz !coeficiente de absorcao
 	real :: els_xx,els_sp,els_sm,els_yy,els_zz !energy loss function	
+	
+	complex :: optc_xx,optc_sp,optc_sm,optc_yy,optc_zz
 
 	character(len=70) :: outputfolder
 	real ::  numbse
@@ -59,6 +61,10 @@ subroutine spoptproppol(numbse,outputfolder)
 	if (erro/=0) stop "Error opening ipa_absorption_coef-pol output file"
 	OPEN(UNIT=600, FILE=trim(outputfolder)//"ipa_en_loss_func-pol.dat",STATUS='unknown', IOSTAT=erro)
 	if (erro/=0) stop "Error opening ipa_en_loss_func-pol output file"		
+	OPEN(UNIT=700, FILE=trim(outputfolder)//"ipa_opt_cond_real-pol.dat",STATUS='unknown', IOSTAT=erro)
+	if (erro/=0) stop "Error opening ipa_opt_cond_real-pol output file"
+	OPEN(UNIT=800, FILE=trim(outputfolder)//"ipa_opt_cond_imag-pol.dat",STATUS='unknown', IOSTAT=erro)
+	if (erro/=0) stop "Error opening ipa_opt_cond_imag-pol output file"
 
 	read(100,*) aread
 	read(101,*) aread
@@ -90,7 +96,9 @@ subroutine spoptproppol(numbse,outputfolder)
 	write(300,*) "#","  ","energy","  ","x","  ","y","  ","z","  ","sp","  ","sm"
 	write(400,*) "#","  ","energy","  ","x","  ","y","  ","z","  ","sp","  ","sm"
 	write(500,*) "#","  ","energy","  ","x","  ","y","  ","z","  ","sp","  ","sm"
-	write(600,*) "#","  ","energy","  ","x","  ","y","  ","z","  ","sp","  ","sm"	
+	write(600,*) "#","  ","energy","  ","x","  ","y","  ","z","  ","sp","  ","sm"
+	write(700,*) "#","  ","energy","  ","x","  ","y","  ","z","  ","sp","  ","sm"
+	write(800,*) "#","  ","energy","  ","x","  ","y","  ","z","  ","sp","  ","sm"		
 
 	do i=1,dimpp
 
@@ -139,7 +147,15 @@ subroutine spoptproppol(numbse,outputfolder)
 
 		write(600,"(6F15.6)") energy(i),els_xx,els_yy,els_zz,els_sp,els_sm		
 
+		call optcondcalc(rxx(i),ixx(i),energy(i),optc_xx)
+		call optcondcalc(ryy(i),iyy(i),energy(i),optc_yy)
+		call optcondcalc(rzz(i),izz(i),energy(i),optc_zz)
+		call optcondcalc(rsp(i),isp(i),energy(i),optc_sp)
+		call optcondcalc(rsm(i),ism(i),energy(i),optc_sm)
+										
 
+		write(700,"(1F15.6,5E15.6)") energy(i),real(optc_xx),real(optc_yy),real(optc_zz),real(optc_sp),real(optc_sm)
+		write(800,"(1F15.6,5E15.6)") energy(i),aimag(optc_xx),aimag(optc_yy),aimag(optc_zz),aimag(optc_sp),aimag(optc_sm)
 
 
 	end do
@@ -165,6 +181,8 @@ subroutine spoptproppol(numbse,outputfolder)
 	close(400)
 	close(500)
 	close(600)
+	close(700)
+	close(800)	
 
 
 

@@ -26,7 +26,9 @@ subroutine bseoptprop(numbse,outputfolder)
 	real :: ext_xx,ext_xy,ext_xz,ext_yy,ext_yz,ext_zz !indice extincao
 	real :: refl_xx,refl_xy,refl_xz,refl_yy,refl_yz,refl_zz !reflectibilidade
 	real :: abs_xx,abs_xy,abs_xz,abs_yy,abs_yz,abs_zz !coeficiente de absorcao
-	real :: els_xx,els_xy,els_xz,els_yy,els_yz,els_zz !energy loss function	
+	real :: els_xx,els_xy,els_xz,els_yy,els_yz,els_zz !energy loss function
+	
+	complex :: optc_xx,optc_xy,optc_xz,optc_yy,optc_yz,optc_zz		
 
 	character(len=70) :: outputfolder
 	real ::  numbse
@@ -61,7 +63,10 @@ subroutine bseoptprop(numbse,outputfolder)
 	if (erro/=0) stop "Error opening bse_absorption_coef output file"
 	OPEN(UNIT=600, FILE=trim(outputfolder)//"bse_en_loss_func.dat",STATUS='unknown', IOSTAT=erro)
 	if (erro/=0) stop "Error opening bse_en_loss_func output file"	
-
+	OPEN(UNIT=700, FILE=trim(outputfolder)//"bse_opt_cond_real.dat",STATUS='unknown', IOSTAT=erro)
+	if (erro/=0) stop "Error opening bse_opt_cond_real output file"
+	OPEN(UNIT=800, FILE=trim(outputfolder)//"bse_opt_cond_imag.dat",STATUS='unknown', IOSTAT=erro)
+	if (erro/=0) stop "Error opening bse_opt_cond_imag output file"
 
 	read(100,*) aread
 	read(101,*) aread
@@ -94,7 +99,8 @@ subroutine bseoptprop(numbse,outputfolder)
 	write(400,*) "#","  ","energy","  ","xx","  ","yy","  ","zz","  ","xy","  ","xz","  ","yz"
 	write(500,*) "#","  ","energy","  ","xx","  ","yy","  ","zz","  ","xy","  ","xz","  ","yz"
 	write(600,*) "#","  ","energy","  ","xx","  ","yy","  ","zz","  ","xy","  ","xz","  ","yz"	
-
+	write(700,*) "#","  ","energy","  ","xx","  ","yy","  ","zz","  ","xy","  ","xz","  ","yz"
+	write(800,*) "#","  ","energy","  ","xx","  ","yy","  ","zz","  ","xy","  ","xz","  ","yz"	
 
 	do i=1,dimpp
 
@@ -143,6 +149,15 @@ subroutine bseoptprop(numbse,outputfolder)
 
 		write(600,"(7F15.6)") energy(i),els_xx,els_yy,els_zz,els_xy,els_xz,els_yz		
 
+		call optcondcalc(rxx(i),ixx(i),energy(i),optc_xx)
+		call optcondcalc(ryy(i),iyy(i),energy(i),optc_yy)
+		call optcondcalc(rzz(i),izz(i),energy(i),optc_zz)
+		call optcondcalc(rxy(i),ixy(i),energy(i),optc_xy)
+		call optcondcalc(rxz(i),ixz(i),energy(i),optc_xz)
+		call optcondcalc(ryz(i),iyz(i),energy(i),optc_yz)										
+
+		write(700,"(1F15.6,6E15.6)") energy(i),real(optc_xx),real(optc_yy),real(optc_zz),real(optc_xy),real(optc_xz),real(optc_yz)
+		write(800,"(1F15.6,6E15.6)") energy(i),aimag(optc_xx),aimag(optc_yy),aimag(optc_zz),aimag(optc_xy),aimag(optc_xz),aimag(optc_yz)
 
 	end do
 
@@ -167,7 +182,8 @@ subroutine bseoptprop(numbse,outputfolder)
 	close(400)
 	close(500)
 	close(600)
-
+	close(700)
+	close(800)
 
 
 end subroutine bseoptprop

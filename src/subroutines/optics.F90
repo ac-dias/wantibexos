@@ -241,6 +241,55 @@ subroutine optdiel(rtype,vc,dimse,ngrid,elux,exciton,fosc,sme,rpart,ipart)
 
 end subroutine optdiel
 
+subroutine jdoscalc(vc,dimbse,ngrid,elux,exciton,sme,jdos)
+
+	implicit none
+	
+	real :: vc
+	integer :: dimbse
+	integer,dimension(3) :: ngrid
+	real,dimension(dimbse) :: exciton
+	real :: elux,sme,jdos,smeavg,smef
+	
+	integer :: i
+	real :: gaussian2
+	real :: baux
+	
+	call avgsme(dimbse,exciton,smeavg)
+	
+	smef = smeavg+sme
+	
+	baux = real(ngrid(1)*ngrid(2)*ngrid(3))
+	
+	jdos = 0.0
+	
+	do i=1,dimbse
+	
+	jdos = jdos + (gaussian2(elux-exciton(i),smef)/baux)
+	
+	end do
+	
+
+end subroutine jdoscalc
+
+function gaussian2(deltaen,sme)
+
+	implicit none
+	
+	real :: gaussian2
+	real :: deltaen,sme
+	real,parameter :: pi=acos(-1.)
+	
+	real :: norm,deno,aux1	
+	
+	norm = 1.0D0/(sme*sqrt(2.0D0*pi))
+	deno = 2.0D0*sme*sme
+	aux1 = -1.0D0*((deltaen)*(deltaen))/deno
+	
+	gaussian2 = norm*exp(aux1)	
+
+end function gaussian2
+
 subroutine optspbz(vv,vc,kx,ky,kz,ffactor,w90basis,nvec,rlat,rvec,hopmatrices,ihopmatrices,&
 		    hxsp,hysp,hzsp)
 

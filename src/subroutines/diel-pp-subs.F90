@@ -1,3 +1,26 @@
+subroutine optcondcalc(e1,e2,efoton,optcond)
+
+	implicit none
+	
+	complex,parameter :: imag=cmplx(0.0,-1.0)
+	real :: e1,e2
+	complex :: edielec,optcond
+	real,parameter :: hbar = 6.582119569E-16 !hbar planck's constant
+	real,parameter:: pi=acos(-1.)
+	real :: efoton,omega,aux
+	
+	edielec = cmplx(e1,e2)
+	
+	omega = efoton/hbar
+	
+	aux = omega/(4.0*pi)
+	
+	optcond = imag*aux*(edielec-1.0)
+
+
+end subroutine optcondcalc
+
+
 subroutine refracao(e1,e2,refrac)
 
 	implicit none

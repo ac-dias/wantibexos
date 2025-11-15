@@ -32,7 +32,9 @@ subroutine bsedielraw(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebse0,
 
 
 	real,allocatable,dimension(:,:) :: dielfxx,dielfyy,dielfzz
-	real,allocatable,dimension(:,:) :: dielfxy,dielfxz,dielfyz	
+	real,allocatable,dimension(:,:) :: dielfxy,dielfxz,dielfyz
+	
+	real :: jdos	
 
 	!modificacoes versao 2.1
 
@@ -113,6 +115,8 @@ subroutine bsedielraw(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebse0,
 	if (erro/=0) stop "Error opening bse_diel_yz output file"
 	OPEN(UNIT=305, FILE=trim(outputfolder)//"bse_diel_zz.dat",STATUS='unknown', IOSTAT=erro)
 	if (erro/=0) stop "Error opening bse_diel_zz output file"
+	OPEN(UNIT=306, FILE=trim(outputfolder)//"bse_jdos.dat",STATUS='unknown', IOSTAT=erro)
+	if (erro/=0) stop "Error opening bse_jdos output file"
 
 
 	!parametros do calculo
@@ -128,6 +132,8 @@ subroutine bsedielraw(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebse0,
 	allocate(ebse(dimbse))
 	allocate(exxf(dimbse),exyf(dimbse),exzf(dimbse),eyyf(dimbse))
 	allocate(eyzf(dimbse),ezzf(dimbse))
+	
+	
 
 	read(100,*) aread
 		
@@ -232,6 +238,18 @@ subroutine bsedielraw(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebse0,
 	
 	end do
 
+	write(306,*) "#","  ","energy","  ","jdos"
+	
+	do j=1,int(numbse)
+	
+		elux= ebse0 + real(((ebsef-ebse0)*(j-1))/(numbse-1.))
+	
+		call jdoscalc(vc,dimbse,ngrid,elux,ebse,sme,jdos)
+		
+		write(306,*) elux,spinf*jdos
+	
+	end do
+
 	deallocate(ebse)
 	deallocate(exxf,exyf,exzf,eyyf)
 	deallocate(eyzf,ezzf)
@@ -250,7 +268,8 @@ subroutine bsedielraw(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebse0,
 	close(302)
 	close(303)
 	close(304)
-	close(305)	
+	close(305)
+	close(306)	
 
 
 

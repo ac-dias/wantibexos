@@ -29,7 +29,9 @@ subroutine spdielraw(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebse0,e
 	real :: spinf
 	
 	real,allocatable,dimension(:,:) :: dielfxx,dielfyy,dielfzz
-	real,allocatable,dimension(:,:) :: dielfxy,dielfxz,dielfyz	
+	real,allocatable,dimension(:,:) :: dielfxy,dielfxz,dielfyz
+	
+	real :: jdos	
 
 	!modificacoes versao 2.1
 
@@ -107,7 +109,8 @@ subroutine spdielraw(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebse0,e
 	if (erro/=0) stop "Error opening ipa_diel_yz output file"
 	OPEN(UNIT=305, FILE=trim(outputfolder)//"ipa_diel_zz.dat",STATUS='unknown', IOSTAT=erro)
 	if (erro/=0) stop "Error opening ipa_diel_zz output file"
-
+	OPEN(UNIT=306, FILE=trim(outputfolder)//"ipa_jdos.dat",STATUS='unknown', IOSTAT=erro)
+	if (erro/=0) stop "Error opening ipa_jdos output file"
 
 	!parametros do calculo
 
@@ -225,6 +228,18 @@ subroutine spdielraw(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebse0,e
 	
 	end do	
 
+	write(306,*) "#","  ","energy","  ","jdos"
+	
+	do j=1,int(numbse)
+	
+		elux= ebse0 + real(((ebsef-ebse0)*(j-1))/(numbse-1.))
+	
+		call jdoscalc(vc,dimbse,ngrid,elux,esp,sme,jdos)
+		
+		write(306,*) elux,spinf*jdos
+	
+	end do	
+
 	deallocate(esp)
 	deallocate(exxf,exyf,exzf,eyyf)
 	deallocate(eyzf,ezzf)
@@ -243,7 +258,8 @@ subroutine spdielraw(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebse0,e
 	close(301)
 	close(303)
 	close(304)
-	close(305)	
+	close(305)
+	close(306)	
 
 
 
