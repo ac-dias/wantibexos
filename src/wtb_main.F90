@@ -122,7 +122,8 @@ program main
 		     spdiel,spdielpol,sppolbz,berryk,berrybz,pponly,bsewf,excwf0,excwff,&
 		     tmcoef,ez,w,lc,r0,sysdim,dtfull,cpol,cshift,dft,&
 		     st,phavg,temp,ta,pce,ses,ctemp,tmax,eg,egd,egs,ebgs,renorm,emt,emfile,dk,&
-		     nocpf,fermishift,bsealgo,spintxt,meshgen,exc,mag,boltz,nmu,nsteps,mu0,muf,btemp,klat,elft,hlft,smeboltz)
+		     nocpf,fermishift,bsealgo,spintxt,meshgen,exc,mag,boltz,nmu,nsteps,mu0,muf,&
+		     btemp,klat,elft,hlft,smeboltz,ni,ns)
 
 	call cpu_time(t0)
 	call date_and_time(VALUES=values)
@@ -288,7 +289,7 @@ program main
 
 	call bsedielraw(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebse0,ebsef,numbse,cshift) !calculate dielectric constants with BSE
 
-	call bseoptprop(numbse,outputfolder) !calculate abs coeficient and other properties with BSE
+	call bseoptprop(numbse,outputfolder,tmax,ni,ns) !calculate abs coeficient and other properties with BSE
 		
 	call lifetime(sysdim,numbse,ngrid,rlat,nc,nv,outputfolder)
 	
@@ -300,7 +301,7 @@ program main
 	 if (cpol) then
 	
 	 call bsedielrawpol(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebse0,ebsef,numbse,cshift) !calculate dielectric constants with BSE for 													different light polarization
-	 call bseoptproppol(numbse,outputfolder) !calculate abs coeficient and other properties with BSE
+	 call bseoptproppol(numbse,outputfolder,tmax,ni,ns) !calculate abs coeficient and other properties with BSE
 	
 	 call lifetimepol(sysdim,numbse,ngrid,rlat,nc,nv,outputfolder)
 	 
@@ -324,7 +325,7 @@ program main
 
 	call spdielraw(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebse0,ebsef,numbse,cshift) !calculate dielectric constants
 
-	call spoptprop(numbse,outputfolder) !calculate abs coeficient and other properties
+	call spoptprop(numbse,outputfolder,tmax,ni,ns) !calculate abs coeficient and other properties
 	
 	call emissionopt(nthreads,"IPA",outputfolder,numbse,ngrid,nc,nv,ctemp,cshift,eg)
 
@@ -334,7 +335,7 @@ program main
      		if (cpol) then
      		
      			call spdielrawpol(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebse0,ebsef,numbse,cshift) !calculate dielectric constants different 												       light polarizations
-			call spoptproppol(numbse,outputfolder) !calculate abs coeficient and other properties
+			call spoptproppol(numbse,outputfolder,tmax,ni,ns) !calculate abs coeficient and other properties
 
 			call emissionopt(nthreads,"IPP",outputfolder,numbse,ngrid,nc,nv,ctemp,cshift,eg)
 

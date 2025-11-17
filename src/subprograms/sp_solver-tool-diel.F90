@@ -256,13 +256,13 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 	write(302,*) "number of kpoints:",ngkpt
 	write(302,*) "number of conduction states",nc
 	write(302,*) "number of valence states",nv
-	write(302,*) "#"," ", "kx", " ", "ky"," ", "kz"," ","nocp"," ", "nc"," ", "nv","  ", "energy","  ","xx","  ",&
+	write(302,*) "#"," ", "kx", " ", "ky"," ", "kz"," ","nocp"," ", "nc"," ", "nv","  ","ec "," ","ev"," ", "energy","  ","xx","  ",&
 		      "yy","  ","zz","  ","xy","  ","xz","  ","yz"
 		      
 	write(304,*) "number of kpoints:",ngkpt
 	write(304,*) "number of conduction states",nc
 	write(304,*) "number of valence states",nv
-	write(304,*) "#"," ", "kx", " ", "ky"," ", "kz"," ","nocp"," ", "nc"," ", "nv","  ", "energy","  ","xx","  ",&
+	write(304,*) "#"," ", "kx", " ", "ky"," ", "kz"," ","nocp"," ", "nc"," ", "nv","  ","ec "," ","ev","  ", "energy","  ","xx","  ",&
 		      "yy","  ","zz","  ","sp","  ","sm"		   
 		      
 	else
@@ -315,12 +315,14 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 		write(303,"(6F15.6)") vecres(i,7),vecres(i,8),vecres(i,9),vecres(i,10),vecres(i,14),vecres(i,15)
 		
 		if (tmcoef) then
-	        write(302,"(3F10.6,3I10.0,7F10.6)") vecres(i,1),vecres(i,2),vecres(i,3),int(vecres(i,4)),int(vecres(i,5)),&
-						  int(vecres(i,6)),vecres(i,7),vecres(i,8),vecres(i,9),vecres(i,10),&
+	        write(302,"(3F10.6,3I10.0,9F10.6)") vecres(i,1),vecres(i,2),vecres(i,3),int(vecres(i,4)),int(vecres(i,5)),&
+						  int(vecres(i,6)),eigv(stt(i,4),stt(i,3)),eigv(stt(i,4),stt(i,2)),vecres(i,7),&
+						  vecres(i,8),vecres(i,9),vecres(i,10),&
 						  vecres(i,11),vecres(i,12),vecres(i,13)
 	        
-	        write(304,"(3F10.6,3I10.0,6F10.6)") vecres(i,1),vecres(i,2),vecres(i,3),int(vecres(i,4)),int(vecres(i,5)),&
-						  int(vecres(i,6)),vecres(i,7),vecres(i,8),vecres(i,9),vecres(i,10),&
+	        write(304,"(3F10.6,3I10.0,8F10.6)") vecres(i,1),vecres(i,2),vecres(i,3),int(vecres(i,4)),int(vecres(i,5)),&
+						  int(vecres(i,6)),eigv(stt(i,4),stt(i,3)),eigv(stt(i,4),stt(i,2)),vecres(i,7),vecres(i,8),&
+						  vecres(i,9),vecres(i,10),&
 						  vecres(i,14),vecres(i,15)						  
 						  
 		end if

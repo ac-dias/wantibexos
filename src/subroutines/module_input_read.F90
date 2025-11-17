@@ -317,6 +317,8 @@ module input_variables
 	real :: mu0,muf
 	real :: btemp,klat
 	real,dimension(3) :: elft,hlft
+	
+	real :: ni,ns
 
 
 	
@@ -478,6 +480,9 @@ subroutine input_read
 	elft = 1.0
 	hlft = 1.0
 	
+	ni = 1.0
+	ns = 1.0
+	
 	!lowdin = .false.
 	!power = 5
 
@@ -489,6 +494,15 @@ subroutine input_read
 	if (erro/=0) exit
 
 	select case (a)
+
+	case ("NI=")
+
+		read(b,*) ni
+		
+	case ("NS=")
+
+		read(b,*) ns
+
 
 	case ("MAG_X=")
 
@@ -884,7 +898,7 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 		     spdiel,spdielpol,sppolbz,berryk,berrybz,pponly,bsewf,excwf0,excwff,&
 		     tmcoef,ez,w,lc,r0,sysdim,dtfull,cpol,cshift,dft,&
 		     st,phavg,temp,ta,pce,ses,ctemp,tmax,eg,egd,egs,ebgs,renorm,emt,emfile,&
-		     dk,nocpf,fermishift,bsealgo,spintxt,meshgen,exc,mag,boltz,nmu,nsteps,mu0,muf,btemp,klat,elft,hlft,smeboltz)
+		     dk,nocpf,fermishift,bsealgo,spintxt,meshgen,exc,mag,boltz,nmu,nsteps,mu0,muf,btemp,klat,elft,hlft,smeboltz,ni,ns)
 
 	implicit none
 	integer :: unitout
@@ -946,7 +960,9 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	integer :: nmu
 	integer :: nsteps
 	real :: mu0,muf
-	real :: btemp,klat			
+	real :: btemp,klat
+	
+	real :: ni,ns			
 
 	write(unitout,"(A10,I0)") "NTHREADS= ",nthreads
 	write(unitout,"(A8,A2)") "SYSDIM= ",sysdim
@@ -1015,7 +1031,9 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	write(unitout,"(A10,I0)") "EXC_WF_F= ",excwff
 	write(unitout,"(A13,A5)") "COULOMB_POT= ",coultype
 	write(unitout,"(A8,F8.4)") "CSHIFT= ", cshift	
-	write(unitout,"(A6,L1)") "RNMD= ",renorm		
+	write(unitout,"(A6,L1)") "RNMD= ",renorm
+	write(unitout,"(A4,F8.4)") "NI= ",ni
+	write(unitout,"(A4,F8.4)") "NS= ",ns				
 	write(unitout,*)
 	write(unitout,*) "PARAMETERS FOR COULOMB POTENTIALS"
 	write(unitout,*)

@@ -1,3 +1,40 @@
+subroutine transmittance(ni,ns,tmax,optcond,tr)
+
+	implicit none
+	
+	real :: ni,ns,tmax,tr
+	complex :: optcond,traux,aux2
+	
+	real,parameter:: pi=acos(-1.)
+	real,parameter :: clight=3.0E+08
+	
+	aux2 = (4.0*pi)*tmax*optcond/clight
+	
+	traux = (2.0)/(ni+ns+aux2)
+	
+	tr = ns*traux*conjg(traux)
+
+end subroutine transmittance
+
+subroutine reflectance(ni,ns,tmax,optcond,ref)
+
+	real :: ni,ns,tmax,ref
+	complex :: optcond,refaux,aux2
+	
+	real,parameter:: pi=acos(-1.)
+	real,parameter :: clight=3.0E+08
+	
+	aux2 = (4.0*pi)*tmax*optcond/clight
+	
+	refaux = (ni-ns-aux2)/(1.0+ns+aux2)
+	
+	ref = refaux*conjg(refaux)
+
+end subroutine reflectance
+
+
+
+
 subroutine optcondcalc(e1,e2,efoton,optcond)
 
 	implicit none

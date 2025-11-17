@@ -1,13 +1,15 @@
 
 !ifort diel-pp.f90 -o diel-pp.x -qopenmp -mkl
 !bseoptproppol
-subroutine spoptproppol(numbse,outputfolder)
+subroutine spoptproppol(numbse,outputfolder,tmax,ni,ns)
 
 	use omp_lib
 
 	implicit none
 
 	integer :: i,j,erro,dimpp
+	
+	real :: tmax,ni,ns	
 
 	real,allocatable,dimension(:) :: rxx,ryy,rzz
 	real,allocatable,dimension(:) :: rsp,rsm
@@ -28,6 +30,10 @@ subroutine spoptproppol(numbse,outputfolder)
 	real :: els_xx,els_sp,els_sm,els_yy,els_zz !energy loss function	
 	
 	complex :: optc_xx,optc_sp,optc_sm,optc_yy,optc_zz
+	
+	real :: tr_xx,tr_yy,tr_zz,tr_sp,tr_sm
+	real :: ref_xx,ref_yy,ref_zz,ref_sp,ref_sm
+	real :: abt_xx,abt_yy,abt_zz,abt_sp,abt_sm	
 
 	character(len=70) :: outputfolder
 	real ::  numbse
@@ -65,6 +71,12 @@ subroutine spoptproppol(numbse,outputfolder)
 	if (erro/=0) stop "Error opening ipa_opt_cond_real-pol output file"
 	OPEN(UNIT=800, FILE=trim(outputfolder)//"ipa_opt_cond_imag-pol.dat",STATUS='unknown', IOSTAT=erro)
 	if (erro/=0) stop "Error opening ipa_opt_cond_imag-pol output file"
+	OPEN(UNIT=900, FILE=trim(outputfolder)//"ipa_transmittance-pol.dat",STATUS='unknown', IOSTAT=erro)
+	if (erro/=0) stop "Error opening ipa_transmittance-pol.dat output file"
+	OPEN(UNIT=901, FILE=trim(outputfolder)//"ipa_reflectance-pol.dat",STATUS='unknown', IOSTAT=erro)
+	if (erro/=0) stop "Error opening ipa_reflectance-pol output file"
+	OPEN(UNIT=902, FILE=trim(outputfolder)//"ipa_absorptance-pol.dat",STATUS='unknown', IOSTAT=erro)
+	if (erro/=0) stop "Error opening ipa_absorptance-pol output file"
 
 	read(100,*) aread
 	read(101,*) aread
@@ -98,7 +110,10 @@ subroutine spoptproppol(numbse,outputfolder)
 	write(500,*) "#","  ","energy","  ","x","  ","y","  ","z","  ","sp","  ","sm"
 	write(600,*) "#","  ","energy","  ","x","  ","y","  ","z","  ","sp","  ","sm"
 	write(700,*) "#","  ","energy","  ","x","  ","y","  ","z","  ","sp","  ","sm"
-	write(800,*) "#","  ","energy","  ","x","  ","y","  ","z","  ","sp","  ","sm"		
+	write(800,*) "#","  ","energy","  ","x","  ","y","  ","z","  ","sp","  ","sm"
+	write(900,*) "#","  ","energy","  ","x","  ","y","  ","z","  ","sp","  ","sm"
+	write(901,*) "#","  ","energy","  ","x","  ","y","  ","z","  ","sp","  ","sm"
+	write(902,*) "#","  ","energy","  ","x","  ","y","  ","z","  ","sp","  ","sm"					
 
 	do i=1,dimpp
 
@@ -157,6 +172,34 @@ subroutine spoptproppol(numbse,outputfolder)
 		write(700,"(1F15.6,5E15.6)") energy(i),real(optc_xx),real(optc_yy),real(optc_zz),real(optc_sp),real(optc_sm)
 		write(800,"(1F15.6,5E15.6)") energy(i),aimag(optc_xx),aimag(optc_yy),aimag(optc_zz),aimag(optc_sp),aimag(optc_sm)
 
+		call transmittance(ni,ns,tmax,optc_xx,tr_xx)
+		call transmittance(ni,ns,tmax,optc_yy,tr_yy)
+		call transmittance(ni,ns,tmax,optc_zz,tr_zz)
+		call transmittance(ni,ns,tmax,optc_sp,tr_sp)
+		call transmittance(ni,ns,tmax,optc_sm,tr_sm)
+	
+		
+		write(900,"(1F15.6,5E15.6)")  energy(i),tr_xx,tr_yy,tr_zz,tr_sp,tr_sm							
+
+
+		call reflectance(ni,ns,tmax,optc_xx,ref_xx)
+		call reflectance(ni,ns,tmax,optc_yy,ref_yy)
+		call reflectance(ni,ns,tmax,optc_zz,ref_zz)
+		call reflectance(ni,ns,tmax,optc_sp,ref_sp)
+		call reflectance(ni,ns,tmax,optc_sm,ref_sm)
+	
+		
+		write(901,"(1F15.6,5E15.6)")  energy(i),ref_xx,ref_yy,ref_zz,ref_sp,ref_sm		
+
+		abt_xx = 1.0 - ref_xx - tr_xx
+		abt_yy = 1.0 - ref_yy - tr_yy
+		abt_zz = 1.0 - ref_zz - tr_zz
+		abt_sp = 1.0 - ref_sp - tr_sp
+		abt_sm = 1.0 - ref_sm - tr_sm
+										
+
+		write(902,"(1F15.6,5E15.6)")  energy(i),abt_xx,abt_yy,abt_zz,abt_sp,abt_sm
+
 
 	end do
 
@@ -182,7 +225,10 @@ subroutine spoptproppol(numbse,outputfolder)
 	close(500)
 	close(600)
 	close(700)
-	close(800)	
+	close(800)
+	close(900)
+	close(901)
+	close(902)				
 
 
 
