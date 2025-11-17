@@ -480,8 +480,8 @@ subroutine input_read
 	elft = 1.0
 	hlft = 1.0
 	
-	ni = 1.0
-	ns = 1.0
+	ni = 1.00
+	ns = 1.47
 	
 	!lowdin = .false.
 	!power = 5
