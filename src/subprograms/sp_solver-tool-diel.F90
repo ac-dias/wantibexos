@@ -247,7 +247,7 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 	!allocate(auxx(dimsp),auxy(dimsp),auxz(dimsp))
 	!allocate(auyy(dimsp),auyz(dimsp),auzz(dimsp))
 	
-	allocate(vecres(dimsp,15))
+	allocate(vecres(dimsp,17))
 
 	write(301,*) "#","  ", "energy","  ","xx","  ","yy","  ","zz","  ","xy","  ","xz","  ","yz"
 	write(303,*) "#","  ", "energy","  ","xx","  ","yy","  ","zz","  ","sp","  ","sm"
@@ -300,14 +300,16 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 		vecres(i,12) = real(hxsp*conjg(hzsp))
 		vecres(i,13) = real(hysp*conjg(hzsp))		 
 		vecres(i,14) = real(hrsp*conjg(hrsp))
-		vecres(i,15) = real(hrsm*conjg(hrsm))		
+		vecres(i,15) = real(hrsm*conjg(hrsm))
+		vecres(i,16) = real(eigv(stt(i,4),stt(i,3)))
+		vecres(i,17) =	real(eigv(stt(i,4),stt(i,2)))			
 
 
 	end do
 
 	!$omp end parallel do
 
-	call Bubblem(7,15,vecres, dimsp)
+	call Bubblem(7,17,vecres, dimsp)
 	
 	do i=1,dimsp
 	
@@ -316,12 +318,12 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 		
 		if (tmcoef) then
 	        write(302,"(3F10.6,3I10.0,9F10.6)") vecres(i,1),vecres(i,2),vecres(i,3),int(vecres(i,4)),int(vecres(i,5)),&
-						  int(vecres(i,6)),eigv(stt(i,4),stt(i,3)),eigv(stt(i,4),stt(i,2)),vecres(i,7),&
+						  int(vecres(i,6)),vecres(i,16),vecres(i,17),vecres(i,7),&
 						  vecres(i,8),vecres(i,9),vecres(i,10),&
 						  vecres(i,11),vecres(i,12),vecres(i,13)
 	        
 	        write(304,"(3F10.6,3I10.0,8F10.6)") vecres(i,1),vecres(i,2),vecres(i,3),int(vecres(i,4)),int(vecres(i,5)),&
-						  int(vecres(i,6)),eigv(stt(i,4),stt(i,3)),eigv(stt(i,4),stt(i,2)),vecres(i,7),vecres(i,8),&
+						  int(vecres(i,6)),vecres(i,16),vecres(i,17),vecres(i,7),vecres(i,8),&
 						  vecres(i,9),vecres(i,10),&
 						  vecres(i,14),vecres(i,15)						  
 						  

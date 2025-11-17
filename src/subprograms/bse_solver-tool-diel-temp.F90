@@ -499,7 +499,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 
 	
-	allocate(vecres(dimbse,15))	
+	allocate(vecres(dimbse,17))	
 	
 	write(401,*) "#","  ", "energy","  ","xx","  ","yy","  ","zz","  ","xy","  ","xz","  ","yz"
 	write(403,*) "#","  ", "energy","  ","xx","  ","yy","  ","zz","  ","sp","  ","sm"
@@ -557,6 +557,8 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		vecres(i,13) = real(hry(i)*conjg(hrz(i)))*fdeh(i)		 
 		vecres(i,14) = real(hrsp(i)*conjg(hrsp(i)))*fdeh(i)
 		vecres(i,15) = real(hrsm(i)*conjg(hrsm(i)))*fdeh(i)			     
+		vecres(i,16) = real(eigv(stt(i,4),stt(i,3)))
+		vecres(i,17) =	real(eigv(stt(i,4),stt(i,2)))
 
 
 	end do
@@ -576,12 +578,12 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		
 		if (tmcoef) then
 	        write(402,"(3F10.6,3I10.0,9F10.6)")  vecres(i,1),vecres(i,2),vecres(i,3),int(vecres(i,4)),int(vecres(i,5)),&
-						  int(vecres(i,6)),eigv(stt(i,4),stt(i,3)),eigv(stt(i,4),stt(i,2)),vecres(i,7),&
+						  int(vecres(i,6)),vecres(i,16),vecres(i,17),vecres(i,7),&
 						  vecres(i,8),vecres(i,9),vecres(i,10),&
 						  vecres(i,11),vecres(i,12),vecres(i,13)
 	        
 	        write(404,"(3F10.6,3I10.0,8F10.6)") vecres(i,1),vecres(i,2),vecres(i,3),int(vecres(i,4)),int(vecres(i,5)),&
-						  int(vecres(i,6)),eigv(stt(i,4),stt(i,3)),eigv(stt(i,4),stt(i,2)),vecres(i,7),vecres(i,8),&
+						  int(vecres(i,6)),vecres(i,16),vecres(i,17),vecres(i,7),vecres(i,8),&
 						  vecres(i,9),vecres(i,10),&
 						  vecres(i,14),vecres(i,15)							  
 						  
