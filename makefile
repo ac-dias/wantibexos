@@ -73,6 +73,7 @@ LIB_FILE  := $(BUILD_DIR)/libwtb.a
 
 PCE_SOURCES    := $(UTILS_DIR)/slme/pce-code.f90 $(UTILS_DIR)/slme/pce-subs.f90
 HUCKEL_SOURCES := $(UTILS_DIR)/huckel2wtb/src/overlaps_jc.f90 $(UTILS_DIR)/huckel2wtb/src/diagonalize.f90 $(UTILS_DIR)/huckel2wtb/src/Huckel_TB.f90
+SQ_SOURCES    := $(UTILS_DIR)/slme/sq-curve.f90 $(UTILS_DIR)/slme/pce-subs.f90
 
 all: $(MAIN_EXEC) pp
 	@echo "--- Build Complete ---"
@@ -107,11 +108,13 @@ UTILS_EXECS := $(BIN_DIR)/nc_nv_finder.x \
                $(BIN_DIR)/param_gen_vasp.x \
                $(BIN_DIR)/absorbance.x \
                $(BIN_DIR)/pce.x \
-               $(BIN_DIR)/huckel2wtb.x
-
+               $(BIN_DIR)/huckel2wtb.x \
+               $(BIN_DIR)/sq_curve.x \
+               
 pp: $(UTILS_EXECS)
 	@echo "--- Copying Python Scripts ---"
 	@cp $(UTILS_DIR)/*.py $(BIN_DIR)
+	@rm -f ./*.mod
 
 $(BIN_DIR)/nc_nv_finder.x: $(UTILS_DIR)/nc_nv_finder.F90 makefile.inc
 	$(FOR) $< -o $@ $(L_FLAGS) $(MOD_OUT_FLAG)
@@ -127,6 +130,9 @@ $(BIN_DIR)/absorbance.x: $(UTILS_DIR)/absorbance.F90 makefile.inc
 
 $(BIN_DIR)/pce.x: $(PCE_SOURCES) makefile.inc
 	$(FOR) $(PCE_SOURCES) -o $@ $(L_FLAGS) $(MOD_OUT_FLAG)
+	
+$(BIN_DIR)/sq_curve.x: $(PCE_SOURCES) makefile.inc
+	$(FOR) $(SQ_SOURCES) -o $@ $(L_FLAGS) $(MOD_OUT_FLAG)	
 
 $(BIN_DIR)/huckel2wtb.x: $(HUCKEL_SOURCES) makefile.inc
 	$(FOR) $(HUCKEL_SOURCES) -o $@ $(L_FLAGS) $(MOD_OUT_FLAG)
