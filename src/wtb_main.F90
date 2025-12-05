@@ -129,7 +129,7 @@ program main
 	call date_and_time(VALUES=values)
 
 	write(2077,*)
-	write(2077,*) 'Begin','  ','day',values(3),'',values(5),'hours',values(6),'min',values(7),'seg'
+	write(2077,*) 'Begin','  ','month',values(2),'day',values(3),'',values(5),'hours',values(6),'min',values(7),'seg'
 	write(2077,*)
 
 
@@ -370,7 +370,7 @@ program main
 	call date_and_time(VALUES=values2)
 
 	write(2077,*)
-	write(2077,*) 'End','   ','day',values2(3),'',values2(5),'hours',values2(6),'min',values2(7),'seg'
+	write(2077,*) 'End','   ','month',values2(2),'day',values2(3),'',values2(5),'hours',values2(6),'min',values2(7),'seg'
 	write(2077,*)
 	!write(2077,*) "Total Time:",(tf-t0)/nthreads,"s"	
 

@@ -138,7 +138,7 @@ subroutine boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc
 	write(400,*) 'mu steps:',nmu
 	write(400,*) 'mu initial:', mu0,' ','mu final:',muf
 	write(400,*)				
-	write(400,*) 'begin','  ','day',values(3),'',values(5),'hours',values(6),'min',values(7),'seg'
+	write(400,*) 'begin','  ','month',values(2),'day',values(3),'',values(5),'hours',values(6),'min',values(7),'seg'
 	write(400,*) 
 
 	call flush(400)	   	
@@ -477,7 +477,7 @@ subroutine boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc
 	call date_and_time(VALUES=values2)
 
 	write(400,*)
-	write(400,*) 'end','   ','day',values2(3),'',values2(5),'hours',values2(6),'min',values2(7),'seg'
+	write(400,*) 'end','   ','month',values2(2),'day',values2(3),'',values2(5),'hours',values2(6),'min',values2(7),'seg'
 	write(400,*)	
 	
 

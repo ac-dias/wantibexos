@@ -211,7 +211,7 @@ subroutine bsebnds(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	write(300,*) 'number of kpoints in the path:','   ',(nks/2)*nkpts
 	write(300,*)
 	write(300,*)
-	write(300,*) 'begin','  ','day',values(3),'',values(5),'hours',values(6),'min',values(7),'seg'
+	write(300,*) 'begin','  ','month',values(2),'day',values(3),'',values(5),'hours',values(6),'min',values(7),'seg'
 	write(300,*) 
 
 	call flush(300)
@@ -799,7 +799,7 @@ hbse(i2,j)= matrizelbsekq(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,q,rlat,
 	call date_and_time(VALUES=values2)
 
 	write(300,*)
-	write(300,*) 'end','   ','day',values2(3),'',values2(5),'hours',values2(6),'min',values2(7),'seg'
+	write(300,*) 'end','   ','month',values2(2),'day',values2(3),'',values2(5),'hours',values2(6),'min',values2(7),'seg'
 	write(300,*)
 
 	close(200)
