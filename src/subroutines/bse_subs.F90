@@ -591,7 +591,7 @@ subroutine excwfi(outputfolder,ngkpt,kpt,qpt,nc,nv,nocp,stt,excenergy,excnum,qpt
 	OPEN(UNIT=700+excnum*qptnum, FILE=trim(outputfolder)//trim(file1),STATUS='unknown', IOSTAT=erro)
     	if (erro/=0) stop "Error opening wf BSE output file"
     	
-    	OPEN(UNIT=800+excnum, FILE=trim(outputfolder)//trim(file2),STATUS='unknown', IOSTAT=erro)
+    	OPEN(UNIT=800+excnum*qptnum, FILE=trim(outputfolder)//trim(file2),STATUS='unknown', IOSTAT=erro)
     	if (erro/=0) stop "Error opening den BSE output file"    	
     	
     	write(700+excnum*qptnum,*) "#"," ","excitonic momentum",real(qpt(2)),real(qpt(3)),real(qpt(4))
