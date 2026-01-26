@@ -1085,12 +1085,12 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	real :: dk	
 	
 	real :: exc
-	real,dimension(3) :: mag,elft,hlft
+	real,dimension(3) :: mag,elft,hlft,klat
 	
 	integer :: nmu
 	integer :: nsteps
 	real :: mu0,muf
-	real :: btemp,klat
+	real :: btemp
 	
 	real :: ni,ns
 	
