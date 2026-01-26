@@ -732,7 +732,7 @@ else
 	do i=1,ngqpt
 	
 		write(303,*) '#kpt n:',i,kpt(i,1),kpt(i,2),kpt(i,3)
-		write(303,*) 'Omega Re(Pi0(q,omega)) Im(Pi0(q,omega)) V(q) Re(W0(q,omega)) Im(W0(q,omega))'
+		write(303,*) '#Omega Re(Pi0(q,omega)) Im(Pi0(q,omega)) V(q) Re(W0(q,omega)) Im(W0(q,omega))'
 		write(303,*)		
 	
 	 do j=1,nomega
@@ -798,7 +798,7 @@ end if
 	do i=1,nkpt
 	
 		write(301,*) '#kpt n:',i,kpt(i,1),kpt(i,2),kpt(i,3)
-		write(301,*) 'EnTB G0W0cor selfx Re(selfc) Im(selfc) Znk'
+		write(301,*) '#EnTB G0W0cor selfx Re(selfc) Im(selfc) Znk'
 		write(301,*)
 		
 	 do j=1,w90basis
@@ -822,6 +822,8 @@ end if
 	
 	 end do
 	end do	
+	
+	write(304,*) '#G0W0cor-avg selfx-avg Re(selfc-avg) Im(selfc-avg) Znk-avg'
 	
 	do i=1,w90basis
 	

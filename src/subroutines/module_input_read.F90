@@ -316,8 +316,8 @@ module input_variables
 	integer :: nmu
 	integer :: nsteps
 	real :: mu0,muf
-	real :: btemp,klat
-	real,dimension(3) :: elft,hlft
+	real :: btemp
+	real,dimension(3) :: elft,hlft,klat
 	
 	real :: ni,ns
 	
@@ -891,9 +891,17 @@ subroutine input_read
 
 		read(b,*) muf
 	
-	case ("KappaL=")
+	case ("KappaL_X=")
 		
-		read(b,*) klat
+		read(b,*) klat(1)
+		
+	case ("KappaL_Y=")
+		
+		read(b,*) klat(2)
+		
+	case ("KappaL_Z=")
+		
+		read(b,*) klat(3)				
 															 
 	case ("ELFT_X=")
 	
@@ -1222,7 +1230,9 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	write(unitout,"(A6,I0)") "NEMU= ",nmu
 	write(unitout,"(A6,F8.4)") "MU_I= ",mu0
 	write(unitout,"(A6,F8.4)") "MU_F= ",muf
-	write(unitout,"(A8,F8.4)") "KappaL= ",klat
+	write(unitout,"(A10,F8.4)") "KappaL_X= ",klat(1)
+	write(unitout,"(A10,F8.4)") "KappaL_Y= ",klat(2)
+	write(unitout,"(A10,F8.4)") "KappaL_Z= ",klat(3)		
 	write(unitout,"(A8,E15.4)") "ELFT_X= ",elft(1)
 	write(unitout,"(A8,E15.4)") "ELFT_Y= ",elft(2)
 	write(unitout,"(A8,E15.4)") "ELFT_Z= ",elft(3)		
@@ -1245,7 +1255,7 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	write(unitout,"(A9,F8.4)") "SIGMA_GW= ", smegw	
 	write(unitout,"(A16,A5)") "COULOMB_POT_GW= ",coultypegw
 	write(unitout,"(A13,L1)") "SELF_X_ONLY= ",selfxonly
-	write(unitout,"(A9,F8.8)") "IFACTOR= ",ifactor					
+	write(unitout,"(A9,F8.4)") "IFACTOR= ",ifactor					
 	write(unitout,*)
 	write(unitout,*) "PARAMETERS FOR GW COULOMB POTENTIALS"
 	write(unitout,*)

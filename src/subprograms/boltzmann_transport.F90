@@ -21,8 +21,8 @@ subroutine boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc
 	real :: fermishift	
 	
 	integer :: nsteps,nmu
-	real :: mu0,muf,klat
-	real,dimension(3) :: elft,hlft
+	real :: mu0,muf
+	real,dimension(3) :: elft,hlft,klat
 	real :: btemp
 	real :: e0,ef
 	
@@ -133,7 +133,7 @@ subroutine boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc
 	write(400,*) 'hole lifetime - y:',hlft(2)
 	write(400,*) 'hole lifetime - z:',hlft(3)		
 	write(400,*) 
-	write(400,*) 'lattice thermal conductivity:',klat					
+	write(400,*) 'lattice thermal conductivity:',klat(1),klat(2),klat(3)					
 	write(400,*)
 	write(400,*) 'mu steps:',nmu
 	write(400,*) 'mu initial:', mu0,' ','mu final:',muf
@@ -443,8 +443,8 @@ subroutine boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc
  	 
  	 	pfij(i,j) = sijaux(i,j)*((seij(i,j))**2)
  	 	
- 	 	!ztij(i,j) = (pfij(i,j)*btemp)/(kij(i,j)+klat)
- 	 	ztij(i,j) = ((sij(i,j)*auxsij*((seij(i,j))**2))*btemp)/((kij(i,j)*auxkij)+klat)
+ 	 	ztij(i,j) = (pfij(i,j)*btemp)/(kijaux(i,j)+klat(j))
+ 	 	!ztij(i,j) = ((sij(i,j)*auxsij*((seij(i,j))**2))*btemp)/((kij(i,j)*auxkij)+klat(j))
  	 
  	 end do
  	end do  	
