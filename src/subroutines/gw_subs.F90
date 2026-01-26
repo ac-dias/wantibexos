@@ -31,11 +31,11 @@ subroutine ovpsqr(dft,w90basis,wf1,sk1,wf2,sk2,ovpmn)
 	
 	case("S")
 	
-	call vecconjg(wf1,w90basis,wf1c)
+	!call vecconjg(wf1,w90basis,wf1c)
 	
 	skaux = 0.5*(sk1+sk2)
 	
-	call sandwich(w90basis,wf1c,skaux,wf2,vc)
+	call sandwich(w90basis,wf1,skaux,wf2,vc)
 	
 	ovpmn = vc*conjg(vc)
 	
@@ -51,7 +51,7 @@ subroutine ovpsqr(dft,w90basis,wf1,sk1,wf2,sk2,ovpmn)
 
 end subroutine ovpsqr
 
-subroutine polarization(fermishift,sysdim,ngrid,nk,rlat,w,nomega,w90basis,systype,eta,ek,ekq,ovpmnkkq,pol) !given polarization for a given q for all w-freq
+subroutine polarization(fermishift,sysdim,ngrid,nk,rlat,omega,w90basis,systype,eta,ek,ekq,ovpmnkkq,pol) !given polarization for a given q for all w-freq
 
 	implicit none
 	real :: fermishift
@@ -61,22 +61,22 @@ subroutine polarization(fermishift,sysdim,ngrid,nk,rlat,w,nomega,w90basis,systyp
 	real,parameter:: pi=acos(-1.)
 	real,dimension(3,3) :: rlat	
 	
-	integer :: nomega
-	real,dimension(nomega) :: w
+
+	real :: omega
 	
 	integer :: w90basis
 	character(len=4) :: systype
 	real :: eta
-	real,dimension(w90basis,nk) :: ek,ekq
+	real,dimension(nk,w90basis) :: ek,ekq
 	real,dimension(w90basis,w90basis,nk) :: ovpmnkkq
 	
 
 	
-	complex,dimension(nomega) :: pol
+	complex :: pol
 	
 	real :: gs,wk,waux,enocp
 	
-	real :: aux1
+	real :: aux1,auxa,auxb
 	complex :: aux2
 	
 	integer :: i,j,k,l
@@ -96,27 +96,31 @@ subroutine polarization(fermishift,sysdim,ngrid,nk,rlat,w,nomega,w90basis,systyp
 	
 	pol = 0.0
 	
-	do l=1,nomega
+	 
 	  do i=1,nk
 	    do j=1,w90basis
 	      do k=1,w90basis
+	      
+	      
 	    
-	    	aux1 = enocp(fermishift,ek(j,i)) - enocp(fermishift,ekq(k,i))
+	    	aux1 = enocp(fermishift,ek(i,j)) - enocp(fermishift,ekq(i,k))
 	    	
-	    	aux2 = w(l) - (ekq(k,i)-ek(j,i)) + eta*cmplx(0.0,1.0)
 	    	
-	    	pol(l) = pol(l) + ((aux1/aux2)*ovpmnkkq(j,k,i))
+	    	
+	    	aux2 = omega - (ekq(i,k)-ek(i,j)) + eta*cmplx(0.0,1.0)
+	    	
+	    	pol = pol + ((aux1/aux2)*ovpmnkkq(j,k,i))
 	    
 	      end do
 	    end do
 	  end do
-	end do
+
 	
 		pol = pol*gs*waux
 	
 end subroutine polarization
 
-subroutine w0coul(qpt,nomega,rlat,ngrid,nk,coultype,ediel,lc,ez,w,r0,tolr,w0)  !given W0 (Coulomb interaction) for a given q for all w-freq
+subroutine w0coul(qpt,nomega,rlat,ngrid,nk,coultype,ediel,lc,ez,w,r0,tolr,pol,vqa,w0)  !given W0 (Coulomb interaction) for a given q for all w-freq
 
 	implicit none
 	integer :: nomega,i
@@ -126,6 +130,7 @@ subroutine w0coul(qpt,nomega,rlat,ngrid,nk,coultype,ediel,lc,ez,w,r0,tolr,w0)  !
 	real,dimension(3) :: qpt,v0
 	character(len=5) :: coultype
 	complex,dimension(nomega) :: pol,w0
+	real,dimension(nomega) :: vqa
 	real :: vq
 	real :: tolr
 	real,dimension(3) :: ediel
@@ -202,7 +207,9 @@ subroutine w0coul(qpt,nomega,rlat,ngrid,nk,coultype,ediel,lc,ez,w,r0,tolr,w0)  !
 	
 	do i=1,nomega
 	
+		vqa(i) = vq
 		w0(i) = (vq)/(1.0-(vq*pol(i)))
+		!w0(i) = pol(i)
 	
 	end do
 
@@ -429,6 +436,10 @@ subroutine self_c_znk(w90basis,sysdim,rlat,ngrid,nq,fermishift,n,enk,emkmq,kpt,o
 	
 	    integral1 = 0.0
 	    integral2 = 0.0
+	    
+	    !aux1 = 0.0
+	    !aux2 = 0.0
+	    
 	    !1/2 simpson integral
 	    do k=1,nomega-1
 	      
@@ -444,6 +455,7 @@ subroutine self_c_znk(w90basis,sysdim,rlat,ngrid,nq,fermishift,n,enk,emkmq,kpt,o
 	
 	    end do
 	    
+	      
 	      scnk = scnk + (integral1*ovpmnkkmq(n,j,i)*waux)
 	      
 	      dscnk = dscnk + (integral2*ovpmnkkmq(n,j,i)*waux)
@@ -457,5 +469,38 @@ subroutine self_c_znk(w90basis,sysdim,rlat,ngrid,nq,fermishift,n,enk,emkmq,kpt,o
 end subroutine self_c_znk
 
 
+subroutine selfavg(nqpt,w90basis,selfx,selfc,znk,selfxavg,selfcavg,znkavg)
+
+	implicit none
+	
+	integer :: i,j
+	integer :: nqpt,w90basis
+	
+	real,dimension(w90basis,nqpt) :: selfx,znk
+	complex,dimension(w90basis,nqpt) :: selfc
+	
+	real,dimension(w90basis) :: selfxavg,znkavg
+	complex,dimension(w90basis) :: selfcavg
+	
+	real :: aux
+	
+	aux = 1.0/real(nqpt)
+	
+	selfxavg = 0.0
+	selfcavg = 0.0
+	znkavg = 0.0
+	
+	do i=1,w90basis
+	 do j=1,nqpt
+	 
+	 	selfxavg(i) = selfxavg(i) + aux*selfx(i,j)
+	 	selfcavg(i) = selfcavg(i) + aux*selfc(i,j)
+	 	znkavg(i) = znkavg(i) + aux*znk(i,j)	 		 
+	 end do
+	end do
+	
+
+
+end subroutine selfavg
 
 

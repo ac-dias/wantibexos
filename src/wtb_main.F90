@@ -121,9 +121,12 @@ program main
 		     mshift,coultype,bandscalc,doscalc,bse,bsepol,bsekpath,spec,&
 		     spdiel,spdielpol,sppolbz,berryk,berrybz,pponly,bsewf,excwf0,excwff,&
 		     tmcoef,ez,w,lc,r0,sysdim,dtfull,cpol,cshift,dft,&
-		     st,phavg,temp,ta,pce,ses,ctemp,tmax,eg,egd,egs,ebgs,renorm,emt,emfile,dk,&
-		     nocpf,fermishift,bsealgo,spintxt,meshgen,exc,mag,boltz,nmu,nsteps,mu0,muf,&
-		     btemp,klat,elft,hlft,smeboltz,ni,ns)
+		     st,phavg,temp,ta,pce,ses,ctemp,tmax,eg,egd,egs,ebgs,renorm,emt,emfile,&
+		     dk,nocpf,fermishift,bsealgo,spintxt,meshgen,exc,mag,boltz,nmu,nsteps,mu0,&
+		     muf,btemp,klat,elft,hlft,smeboltz,ni,ns,edielgw,r0gw,lcgw,ezgw,wgw,coultypegw,&
+		     nomega,omegamax,gwmesh,gwmeshuse,gwbnd,gwbnduse,gwbsebnd,ktolgw,smegw,selfxonly,ifactor)
+		     
+   
 
 	call cpu_time(t0)
 	call date_and_time(VALUES=values)
@@ -136,6 +139,50 @@ program main
 
 	!calculo estrutura eletronica
 	if (pponly) go to 131
+	
+	if (gwmesh) then
+	
+	  !call gw_pi0_calc(nthreads,outputfolder,ngrid,smegw,params,&
+          !             exc,mshift,nocpf,fermishift,dft,mag,&
+          !             nomega,omegamax,sysdim)
+	
+	 !call gwmeshcalc(nthreads,outputfolder,calcparms,ngrid,smegw,ktolgw,params,edielgw,&
+          !             exc,mshift,coultypegw,ezgw,wgw,r0gw,lcgw,rk,meshtype,nocpf,fermishift,dft,mag,&
+           !            nomega,omegamax,sysdim,selfxonly)
+                       
+	 !call sgw(nthreads,outputfolder,ngrid,smegw,ktolgw,params,edielgw,&
+          !             exc,mshift,coultypegw,ezgw,wgw,r0gw,lcgw,rk,meshtype,nocpf,fermishift,dft,mag,&
+           !            nomega,omegamax,sysdim,selfxonly) 
+                       
+	 call sgw_mesh(nthreads,outputfolder,ngrid,ifactor,smegw,ktolgw,params,edielgw,&
+                       exc,mshift,coultypegw,ezgw,wgw,r0gw,lcgw,rk,meshtype,nocpf,fermishift,dft,mag,&
+                       nomega,omegamax,sysdim,selfxonly)                                               
+	
+	 write(2077,*) "G0W0 k-mesh finished"
+         call flush(2077)
+	
+	end if	
+	
+	!if (gwbnd) then
+	
+	  !call gw_pi0_calc(nthreads,outputfolder,ngrid,smegw,params,&
+          !             exc,mshift,nocpf,fermishift,dft,mag,&
+          !             nomega,omegamax,sysdim)
+	
+	 !call gwmeshcalc(nthreads,outputfolder,calcparms,ngrid,smegw,ktolgw,params,edielgw,&
+          !             exc,mshift,coultypegw,ezgw,wgw,r0gw,lcgw,rk,meshtype,nocpf,fermishift,dft,mag,&
+           !            nomega,omegamax,sysdim,selfxonly)
+                       
+	 !call sgw_bnd(nthreads,outputfolder,ngrid,smegw,ktolgw,params,kpaths,edielgw,&
+          !             exc,mshift,coultypegw,ezgw,wgw,r0gw,lcgw,rk,meshtype,nocpf,fermishift,dft,mag,&
+           !            nomega,omegamax,sysdim,selfxonly)                       
+	
+	 !write(2077,*) "G0W0 k-path finished"
+         !call flush(2077)
+	
+	!end if		
+	
+
 
 	if (bandscalc) then
 

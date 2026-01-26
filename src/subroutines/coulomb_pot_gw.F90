@@ -195,6 +195,7 @@ function v2dgw(kpt1,kpt2,rlat,ngrid,tolr)
 	else 
 
 		v2dgw = vbz*(cic/ed)*(1.0/(modk))
+		!v2dgw = modk
 	end if
 
 end function 

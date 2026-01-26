@@ -293,6 +293,7 @@ module input_variables
 	logical :: spintxt
 	logical :: boltz
 	
+	
 	integer :: excwf0,excwff
 	
 	real :: ez,w,lc,r0
@@ -319,6 +320,23 @@ module input_variables
 	real,dimension(3) :: elft,hlft
 	
 	real :: ni,ns
+	
+	!gw variables
+	
+	logical :: gwmesh, gwbnd
+	logical :: gwmeshuse, gwbnduse
+	logical :: gwbsebnd
+	logical :: selfxonly
+	
+	integer :: nomega
+	real :: omegamax
+	
+	character(len=5) :: coultypegw
+	real :: ezgw,wgw,lcgw,r0gw
+	real,dimension(3) :: edielgw
+	real :: ktolgw,smegw,ifactor
+	
+	
 
 
 	
@@ -487,6 +505,32 @@ subroutine input_read
 	!power = 5
 
 	!end default values
+	
+	!gw variables
+		
+
+	gwmesh = .false.
+	gwbnd = .false.
+	gwmeshuse = .false.
+	gwbnduse = .false.
+	gwbsebnd = .false.
+	selfxonly = .false.
+	
+	nomega = 300
+	omegamax = 150
+	smegw = 0.01
+
+	coultypegw = "V3D"
+	
+	edielgw(1) = 1.0
+	edielgw(2) = 1.0
+	edielgw(3) = 1.0
+	ezgw = 1.0
+	wgw = 0.0
+	lcgw = 1.0
+	r0gw = 1.0
+	ktolgw = 0.001
+	ifactor = 1.0	
 
 	do 
 
@@ -877,7 +921,83 @@ subroutine input_read
 		
 	case("SIGMA_BOLTZ=")
 	
-		read(b,*) smeboltz						
+		read(b,*) smeboltz
+		
+	case ("EDIEL_T_GW=")
+
+		read(b,*) edielgw(1) 
+
+	case ("EDIEL_GW=")
+
+		read(b,*) edielgw(2) 		
+
+	case ("EDIEL_B_GW=")
+
+		read(b,*) edielgw(3)
+		
+	case ("R_0_GW=")
+	
+		read(b,*) r0gw	
+	
+	case ("LC_GW=")
+	
+		read(b,*) lcgw	
+	
+	case ("EDIEL_Z_GW=")
+	
+		read(b,*) ezgw
+	
+	case ("W_COUL_GW=")
+	
+		read(b,*) wgw
+		
+	case ("COULOMB_POT_GW=")
+
+		coultypegw = b	
+	
+	case ("NOMEGA=")
+
+		read(b,*) nomega	
+		
+	case ("OMEGAMAX=")
+
+		read(b,*) omegamax		
+		
+	case ("GW_MESH=")
+
+		read(b,*) gwmesh		
+
+	case ("GW_MESH_USE=")
+
+		read(b,*) gwmeshuse
+		
+	case ("GW_BND=")
+
+		read(b,*) gwbnd		
+
+	case ("GW_BND_USE=")
+
+		read(b,*) gwbnduse
+
+	case ("GW_BSE_BND_USE=")
+
+		read(b,*) gwbsebnd
+		
+	case ("KTOL_GW=")
+
+		read(b,*) ktolgw 
+		
+	case ("SIGMA_GW=")
+
+		read(b,*) smegw 
+		
+	case ("SELF_X_ONLY=")
+
+		read(b,*) selfxonly
+		
+	case ("IFACTOR=")
+
+		read(b,*) ifactor																
 
 	case default
 	 continue
@@ -898,7 +1018,9 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 		     spdiel,spdielpol,sppolbz,berryk,berrybz,pponly,bsewf,excwf0,excwff,&
 		     tmcoef,ez,w,lc,r0,sysdim,dtfull,cpol,cshift,dft,&
 		     st,phavg,temp,ta,pce,ses,ctemp,tmax,eg,egd,egs,ebgs,renorm,emt,emfile,&
-		     dk,nocpf,fermishift,bsealgo,spintxt,meshgen,exc,mag,boltz,nmu,nsteps,mu0,muf,btemp,klat,elft,hlft,smeboltz,ni,ns)
+		     dk,nocpf,fermishift,bsealgo,spintxt,meshgen,exc,mag,boltz,nmu,nsteps,mu0,&
+		     muf,btemp,klat,elft,hlft,smeboltz,ni,ns,edielgw,r0gw,lcgw,ezgw,wgw,coultypegw,&
+		     nomega,omegamax,gwmesh,gwmeshuse,gwbnd,gwbnduse,gwbsebnd,ktolgw,smegw,selfxonly,ifactor)
 
 	implicit none
 	integer :: unitout
@@ -962,7 +1084,24 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	real :: mu0,muf
 	real :: btemp,klat
 	
-	real :: ni,ns			
+	real :: ni,ns
+	
+	!gw variables
+	
+	logical :: gwmesh, gwbnd
+	logical :: gwmeshuse, gwbnduse
+	logical :: gwbsebnd
+	logical :: selfxonly
+	
+	integer :: nomega
+	real :: omegamax
+	
+	character(len=5) :: coultypegw
+	real :: ezgw,wgw,lcgw,r0gw
+	real,dimension(3) :: edielgw
+	real :: ktolgw,smegw	
+	real :: ifactor
+				
 
 	write(unitout,"(A10,I0)") "NTHREADS= ",nthreads
 	write(unitout,"(A8,A2)") "SYSDIM= ",sysdim
@@ -999,7 +1138,12 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	!write(unitout,"(A5,L1)") "PCE= ",pce
 	write(unitout,"(A11,L1)") "EM_TENSOR= ",emt
 	write(unitout,"(A10,L1)") "SPIN_TXT= ",spintxt
-	write(unitout,"(A7,L1)") "BOLTZ= ",boltz					
+	write(unitout,"(A7,L1)") "BOLTZ= ",boltz
+	write(unitout,"(A9,L1)") "GW_MESH= ",gwmesh
+	write(unitout,"(A13,L1)") "GW_MESH_USE= ",gwmeshuse
+	write(unitout,"(A8,L1)") "GW_BND= ",gwbnd
+	write(unitout,"(A12,L1)") "GW_BND_USE= ",gwbnduse
+	write(unitout,"(A16,L1)") "GW_BSE_BND_USE= ",gwbsebnd										
 	write(unitout,*)
 	write(unitout,*) "K-MESH"
 	write(unitout,*)
@@ -1092,8 +1236,26 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	write(unitout,"(A10,F8.4)") "SPIN_EXC= ", exc
 	write(unitout,"(A7,F8.4)") "MAG_X= ", mag(1)
 	write(unitout,"(A7,F8.4)") "MAG_Y= ", mag(2)
-	write(unitout,"(A7,F8.4)") "MAG_Z= ", mag(3)	
-	write(unitout,*)	
+	write(unitout,"(A7,F8.4)") "MAG_Z= ", mag(3)
+	write(unitout,*)
+	write(unitout,*) "PARAMETERS FOR GW CALCULATION"
+	write(unitout,"(A8,I0)") "NOMEGA= ",nomega
+	write(unitout,"(A10,F8.4)") "OMEGAMAX= ",omegamax
+	write(unitout,"(A8,F8.4)") "KTOL_GW= ", ktolgw
+	write(unitout,"(A9,F8.4)") "SIGMA_GW= ", smegw	
+	write(unitout,"(A16,A5)") "COULOMB_POT_GW= ",coultypegw
+	write(unitout,"(A13,L1)") "SELF_X_ONLY= ",selfxonly
+	write(unitout,"(A9,F8.8)") "IFACTOR= ",ifactor					
+	write(unitout,*)
+	write(unitout,*) "PARAMETERS FOR GW COULOMB POTENTIALS"
+	write(unitout,*)
+	write(unitout,"(A12,F8.4)") "EDIEL_Z_GW= ",ezgw
+	write(unitout,"(A11,F8.4)") "W_COUL_GW= ",wgw
+	write(unitout,"(A7,F8.4)") "LC_GW= ",lcgw
+	write(unitout,"(A8,F8.4)") "R_0_GW= ",r0gw
+	write(unitout,"(A12,F8.4)") "EDIEL_T_GW= ", edielgw(1)
+	write(unitout,"(A12,F8.4)") "EDIEL_B_GW= ", edielgw(3)
+	write(unitout,"(A10,F8.4)") "EDIEL_GW= ", edielgw(2)			
 	!write(unitout,*) "LOWDIN ORBITALS"
 	!write(unitout,*)
 	!write(unitout,"(A8,L1)") "LOWDIN= ", lowdin

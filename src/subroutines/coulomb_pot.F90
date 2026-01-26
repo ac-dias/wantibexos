@@ -72,7 +72,7 @@ function vcoul(kpt1,kpt2,rlat,ngrid,tolr)
 
 	ed = 1.0
 
-	vbz= 2./((ngrid(1)*ngrid(2)*ngrid(3))*(vc))
+	vbz= 1./((ngrid(1)*ngrid(2)*ngrid(3))*(vc))
 
 	if (modk .lt. tolr) then
 
@@ -107,7 +107,7 @@ function v3diel(kpt1,kpt2,ediel,rlat,ngrid,tolr)
 
 	ed = ediel(2)
 
-	vbz= 2./((ngrid(1)*ngrid(2)*ngrid(3))*(vc))
+	vbz= 1./((ngrid(1)*ngrid(2)*ngrid(3))*(vc))
 
 	if (modk .lt. tolr) then
 
@@ -140,6 +140,7 @@ function v2d(kpt1,kpt2,rlat,ngrid,tolr)
 
 	call modvec(kpt1,kpt2,modk)
 	call vcell2D(rlat,vc)
+	
 
 	ed = 1.0
 
@@ -176,6 +177,7 @@ function v2diel(kpt1,kpt2,ediel,rlat,ngrid,tolr)
 
 	call modvec(kpt1,kpt2,modk)
 	call vcell2D(rlat,vc)
+	
 
 	ed = ediel(2)
 

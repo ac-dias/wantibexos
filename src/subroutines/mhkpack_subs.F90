@@ -336,14 +336,14 @@ subroutine monhkhorst_pack(n1,n2,n3,shift,rlat1,rlat2,rlat3,kpt)
 	    !kpt(counter,3) =(blat1(3)/dble(n1))*(dble(i)+shift(1))+(blat2(3)/dble(n2))*(dble(j)+shift(2))&
 		!	     +(blat3(3)/dble(n3))*(dble(k)+shift(3))	
 
-	    kpt(counter,1) = (blat1(1)/dble(n1))*(dble(i))+(blat2(1)/dble(n2))*(dble(j))&
-			     +(blat3(1)/dble(n3))*(dble(k))+kshift(1)
+	    kpt(counter,1) = (blat1(1)/real(n1))*(real(i))+(blat2(1)/real(n2))*(real(j))&
+			     +(blat3(1)/real(n3))*(real(k))+kshift(1)
 
-	    kpt(counter,2) = (blat1(2)/dble(n1))*(dble(i))+(blat2(2)/dble(n2))*(dble(j))&
-			     +(blat3(2)/dble(n3))*(dble(k))+kshift(2)
+	    kpt(counter,2) = (blat1(2)/real(n1))*(real(i))+(blat2(2)/real(n2))*(real(j))&
+			     +(blat3(2)/real(n3))*(real(k))+kshift(2)
 
-	    kpt(counter,3) =(blat1(3)/dble(n1))*(dble(i))+(blat2(3)/dble(n2))*(dble(j))&
-			     +(blat3(3)/dble(n3))*(dble(k))+kshift(3)	
+	    kpt(counter,3) =(blat1(3)/real(n1))*(real(i))+(blat2(3)/real(n2))*(real(j))&
+			     +(blat3(3)/real(n3))*(real(k))+kshift(3)	
    
 	    counter = counter+1
 
@@ -581,7 +581,56 @@ subroutine gridgen2dret(ngridx,ngridy,a,b,kpt)
 
 end subroutine gridgen2dret
 
+subroutine monhkhorst_pack_adp(n1,n2,n3,shift,rlat1,rlat2,rlat3,kpt)
 
+	implicit none
+	
+	integer :: n1,n2,n3
+	real,dimension(3) :: shift,kshift
+	real,dimension(3) :: rlat1,rlat2,rlat3
+	real,dimension(n1*n2*n3,3) :: kpt
+
+	integer :: i,j,k, counter
+	real,dimension(3) :: blat1,blat2,blat3
+	
+	real :: n1aux,n2aux,n3aux
+
+	call recvec(rlat1,rlat2,rlat3,blat1,blat2,blat3)
+
+	counter = 1
+
+	kshift(1) = blat1(1)*shift(1)+blat2(1)*shift(2)+blat3(1)*shift(3) 
+	kshift(2) = blat1(2)*shift(1)+blat2(2)*shift(2)+blat3(2)*shift(3)
+	kshift(3) = blat1(3)*shift(1)+blat2(3)*shift(2)+blat3(3)*shift(3)
+
+	do i=0,n1-1
+	
+		n1aux = -0.5 + (1.0)/(real(n1))*(real(i))
+		
+	 do j=0,n2-1
+	  
+	  	n2aux = -0.5 + (1.0)/(real(n2))*(real(j))
+	 
+	  do k=0,n3-1
+
+	  	n3aux = -0.5 + (1.0)/(real(n3))*(real(k))
+
+	    kpt(counter,1) = (blat1(1)/real(n1))*(real(n1aux))+(blat2(1)/real(n2))*(real(n2aux))&
+			     +(blat3(1)/real(n3))*(real(n3aux))+kshift(1)
+
+	    kpt(counter,2) = (blat1(2)/real(n1))*(real(n1aux))+(blat2(2)/real(n2))*(real(n2aux))&
+			     +(blat3(2)/real(n3))*(real(n3aux))+kshift(2)
+
+	    kpt(counter,3) =(blat1(3)/real(n1))*(real(n1aux))+(blat2(3)/real(n2))*(real(n2aux))&
+			     +(blat3(3)/real(n3))*(real(n3aux))+kshift(3)	
+   
+	    counter = counter+1
+
+	  end do
+	 end do
+	end do
+
+end subroutine monhkhorst_pack_adp
 
 
 
