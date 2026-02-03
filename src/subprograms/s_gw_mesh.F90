@@ -170,7 +170,8 @@ subroutine sgw_mesh(nthreads,outputfolder,ngrid,ifactor,smegw,ktolgw,params,edie
 	write(300,*) 'NOMEGA:',nomega
 	write(300,*) 'OMEGAMAX:',omegamax
 	write(300,*) 'SIGMA_GW:',smegw
-	write(300,*) 'SELF_X_ONLY:',selfxonly	
+	write(300,*) 'SELF_X_ONLY:',selfxonly
+	write(300,*) 'KTOL_GW:', ktolgw	
 	
 	write(300,*)
 	write(300,*) 'begin','  ','month',values(2),'day',values(3),'',values(5),'hours',values(6),'min',values(7),'seg'
