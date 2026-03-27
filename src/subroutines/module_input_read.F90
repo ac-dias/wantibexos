@@ -1251,8 +1251,8 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	write(unitout,*) "PARAMETERS FOR GW CALCULATION"
 	write(unitout,"(A8,I0)") "NOMEGA= ",nomega
 	write(unitout,"(A10,F8.4)") "OMEGAMAX= ",omegamax
-	write(unitout,"(A8,E8.4)") "KTOL_GW= ", ktolgw
-	write(unitout,"(A9,E8.4)") "SIGMA_GW= ", smegw	
+	write(unitout,"(A8,F8.4)") "KTOL_GW= ", ktolgw
+	write(unitout,"(A9,F8.4)") "SIGMA_GW= ", smegw	
 	write(unitout,"(A16,A5)") "COULOMB_POT_GW= ",coultypegw
 	write(unitout,"(A13,L1)") "SELF_X_ONLY= ",selfxonly
 	write(unitout,"(A9,F8.4)") "IFACTOR= ",ifactor					
