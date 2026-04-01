@@ -1,3 +1,52 @@
+subroutine jvcurve(fileout,npoints,ctemp,jsc,fr,j0,voc)
+
+	implicit none
+	double precision,parameter :: keV =8.617330350E-5  !Boltzmann's constant eV/K
+	double precision,parameter :: e =1.602176620898E-19 !Coulomb
+	double precision,parameter :: k =1.3806485279E-23  !Boltzmann's constant J/K
+	
+	integer :: fileout,i
+	integer :: npoints
+	double precision ::  ctemp,jsc,j0,fr,voc,j0fr
+	double precision :: vmax
+	double precision :: kbt
+	
+	double precision,dimension(npoints) :: jv,v,aux1
+	
+	jv = 0d0
+	v = 0d0
+	aux1 = 0d0
+	
+	kbt = k*ctemp
+	j0fr = j0/fr
+	
+	vmax = voc+2.0
+	
+	do i=1,npoints
+	
+		v(i) = ((i-1.0)/(npoints-1.0))*voc
+	
+		aux1(i) = (e*v(i))/(kbt)
+		jv(i) = jsc - ((j0fr)*((dexp(aux1(i))-1.0)))
+		
+		if (jv(i) .lt. 0d0) then
+		
+			jv(i) = 0d0
+		 
+		end if 
+	
+	end do
+
+
+	do i=1,npoints
+	
+		write(fileout,*) v(i),jv(i)
+	
+	end do
+
+
+end subroutine jvcurve
+
 
 subroutine slme(ndim,ctemp,trial,bbpflux,sepflux,absc,isolar,pin,fr,pm,jsc1,j01,j1,j2,vmax,voc,ff,pce)
 

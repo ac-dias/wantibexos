@@ -183,25 +183,44 @@ subroutine pcecalc(outputfolder,noptics,mode,ctemp,ses,thickmaxm,indgap,dirgap)
 	
 	!write(*,*) outputfolder
 	
-	OPEN(UNIT=500, FILE=trim(outputfolder)//"ipa_absorption_coef.dat",STATUS='old', IOSTAT=erro)	
-	if (erro/=0) stop "Error opening ipa_absorption_coef input file"
+	 OPEN(UNIT=500, FILE=trim(outputfolder)//"ipa_absorption_coef.dat",STATUS='old', IOSTAT=erro)	
+	 if (erro/=0) stop "Error opening ipa_absorption_coef input file"
 	
-	OPEN(UNIT=600, FILE= trim(outputfolder)//"PCE-Limit-ipa.dat",STATUS='unknown', IOSTAT=erro)
-    	if (erro/=0) stop "Erro opening PCE-Limit-ipa output file" 
+	 OPEN(UNIT=600, FILE= trim(outputfolder)//"PCE-Limit-ipa.dat",STATUS='unknown', IOSTAT=erro)
+    	 if (erro/=0) stop "Erro opening PCE-Limit-ipa output file" 
     	
-    	OPEN(UNIT=700, FILE= trim(outputfolder)//"SLME-ipa.dat",STATUS='unknown', IOSTAT=erro)
-    	if (erro/=0) stop "Erro opening SLME-ipa output file" 		
+    	 OPEN(UNIT=700, FILE= trim(outputfolder)//"SLME-ipa.dat",STATUS='unknown', IOSTAT=erro)
+    	 if (erro/=0) stop "Erro opening SLME-ipa output file" 		
+    	 
+    	 OPEN(UNIT=800, FILE= trim(outputfolder)//"jv_curve-ipa-sq.dat",STATUS='unknown', IOSTAT=erro)
+    	 if (erro/=0) stop "Erro opening jv_curve-ipa-sq output file" 
+    	 
+    	 OPEN(UNIT=801, FILE= trim(outputfolder)//"jv_curve-ipa-slme_max.dat",STATUS='unknown', IOSTAT=erro)
+    	 if (erro/=0) stop "Erro opening jv_curve-ipa-slme_max output file"    	    	 
+
+    	 OPEN(UNIT=802, FILE= trim(outputfolder)//"jv_curve-ipa-slme.dat",STATUS='unknown', IOSTAT=erro)
+    	 if (erro/=0) stop "Erro opening jv_curve-ipa-slme output file"
 			
 	else if (mode .eq. "BSE") then
 	
-	OPEN(UNIT=500, FILE=trim(outputfolder)//"bse_absorption_coef.dat",STATUS='old', IOSTAT=erro)
-	if (erro/=0) stop "Error opening bse_absorption_coef input file"
+	 OPEN(UNIT=500, FILE=trim(outputfolder)//"bse_absorption_coef.dat",STATUS='old', IOSTAT=erro)
+	 if (erro/=0) stop "Error opening bse_absorption_coef input file"
 	
-	OPEN(UNIT=600, FILE= trim(outputfolder)//"PCE-Limit-bse.dat",STATUS='unknown', IOSTAT=erro)
-    	if (erro/=0) stop "Erro opening PCE-Limit-bse output file" 
+	 OPEN(UNIT=600, FILE= trim(outputfolder)//"PCE-Limit-bse.dat",STATUS='unknown', IOSTAT=erro)
+    	 if (erro/=0) stop "Erro opening PCE-Limit-bse output file" 
     	
-        OPEN(UNIT=700, FILE= trim(outputfolder)//"SLME-bse.dat",STATUS='unknown', IOSTAT=erro)
-    	if (erro/=0) stop "Erro opening SLME-bse output file" 			
+         OPEN(UNIT=700, FILE= trim(outputfolder)//"SLME-bse.dat",STATUS='unknown', IOSTAT=erro)
+    	 if (erro/=0) stop "Erro opening SLME-bse output file" 			
+
+
+    	 OPEN(UNIT=800, FILE= trim(outputfolder)//"jv_curve-bse-sq.dat",STATUS='unknown', IOSTAT=erro)
+    	 if (erro/=0) stop "Erro opening jv_curve-bse-sq output file" 
+    	 
+    	 OPEN(UNIT=801, FILE= trim(outputfolder)//"jv_curve-bse-slme_max.dat",STATUS='unknown', IOSTAT=erro)
+    	 if (erro/=0) stop "Erro opening jv_curve-bse-slme_max output file"    	    	 
+
+    	 OPEN(UNIT=802, FILE= trim(outputfolder)//"jv_curve-bse-slme.dat",STATUS='unknown', IOSTAT=erro)
+    	 if (erro/=0) stop "Erro opening jv_curve-bse-slme output file"
 	
 	else
 		write(*,*) "Wrong mode"
@@ -11785,6 +11804,8 @@ solarinc(1697,2) = 3.380E-12
 	write(600,*) '#Voc:',voct,'V'
 	write(600,*) "#SQ-PCE",pce*100,"%"
 	write(600,*) "#FF",ff*100,"%"	
+
+	call jvcurve(800,1000,ctemp,jsc1,1d0,j01,voct)
 	
 	write(600,*) 	
 	write(600,*) "SLME-Limit"	
@@ -11794,7 +11815,9 @@ solarinc(1697,2) = 3.380E-12
 	write(600,*) '#Voc:',voct,'V'
 	write(600,*) '#fr:',fr	
 	write(600,*) "#SLME_max-PCE",pce*100,"%"
-	write(600,*) "#FF",ff*100,"%"			
+	write(600,*) "#FF",ff*100,"%"	
+	
+	call jvcurve(801,1000,ctemp,jsc1,fr,j01,voct)		
 	
 	pceaux = 0.0
 
@@ -11848,7 +11871,9 @@ solarinc(1697,2) = 3.380E-12
 	write(700,*) '#fr:',faux2
 	write(700,*) "#SLME-max",faux7*100.00,"%"
 	write(700,*) '#Thickness:',faux1*1E6,'micro m'
-	write(700,*) "#FF",faux9*100.00,"%"	
+	write(700,*) "#FF",faux9*100.00,"%"
+	
+	call jvcurve(802,1000,ctemp,faux3,faux2,faux4,faux6)	
 
 155 continue
 
@@ -11856,7 +11881,11 @@ solarinc(1697,2) = 3.380E-12
 
 	close(500)
 	close(600)
-	close(700)	
+	close(700)
+	
+	close(800)
+	close(801)
+	close(802)			
 
 
 
