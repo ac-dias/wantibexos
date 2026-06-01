@@ -77,6 +77,7 @@ program main
 	real :: flag
 	character(len=70) ::cflag
 	
+    call mpi_init(MPIError)
 
 	call input_read
 
