@@ -76,11 +76,30 @@ program main
 	real,dimension(3,3) :: rlatv
 	real :: flag
 	character(len=70) ::cflag
-	
-    call mpi_init(MPIError)
 
-	call input_read
+#ifdef MPI
+      integer:: MPIError, Node, Nodes
+#endif
 
+#ifdef MPI
+      call MPI_Init(MPIError)
+      call MPI_Comm_Rank( MPI_Comm_World, Node, MPIerror )
+      call MPI_Comm_Size( MPI_Comm_World, Nodes, MPIerror )
+#else
+      Node =  0
+      Nodes = 1
+#endif
+
+    if (Node == 0) then
+	  call input_read
+    endif
+
+! Broadcast all variables between nodes
+#ifdef MPI
+    call bcast_input_read
+#endif
+
+    if (Node == 0 ) then
 	OPEN(UNIT=2055, FILE= params,STATUS='unknown', IOSTAT=erro)
     	if (erro/=0) stop "Error opening hamiltonian input file (main)"	
 
@@ -114,10 +133,18 @@ program main
 
 	close(2055)
 
-	OPEN(UNIT=2077, FILE= trim(calcparms)//"log.dat",STATUS='unknown', IOSTAT=erro)
+    endif
+#ifdef MPI
+      call mpi_barrier(MPI_COMM_WORLD,MPIError)
+      call mpi_bcast()
+#endif
+
+    if (Node == 0) then
+    OPEN(UNIT=2077, FILE= trim(calcparms)//"log.dat",STATUS='unknown', IOSTAT=erro)
     	if (erro/=0) stop "Error opening log output file "
 
-	call param_out(2077,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
+! This subroutine only prints things
+    call param_out(2077,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		     ebse0,ebsef,numbse,sme,ktol,params,kpaths,kpathsbse,orbw,ediel, &
 		     mshift,coultype,bandscalc,doscalc,bse,bsepol,bsekpath,spec,&
 		     spdiel,spdielpol,sppolbz,berryk,berrybz,pponly,bsewf,excwf0,excwff,&
@@ -136,13 +163,17 @@ program main
 	write(2077,*) 'Begin','  ','month',values(2),'day',values(3),'',values(5),'hours',values(6),'min',values(7),'seg'
 	write(2077,*)
 
-
+    endif
 
 	!calculo estrutura eletronica
 	if (pponly) go to 131
 	
 	if (gwmesh) then
-	
+        if (Nodes .neq. 1) then
+         write(2077,*) "Not implemented in parallel yet"
+         call mpi_abort(MPI_Comm_World,1, MPIError)
+        endif
+
 	  !call gw_pi0_calc(nthreads,outputfolder,ngrid,smegw,params,&
           !             exc,mshift,nocpf,fermishift,dft,mag,&
           !             nomega,omegamax,sysdim)
@@ -186,7 +217,10 @@ program main
 
 
 	if (bandscalc) then
-
+        if (Nodes .neq. 1) then
+         write(2077,*) "Not implemented in parallel yet"
+         call mpi_abort(MPI_Comm_World,1, MPIError)
+        endif
 	 call bandstool(nthreads,outputfolder,params,kpaths,orbw, &
 		     exc,mag,mshift,dft,nocpf,fermishift)
 	 write(2077,*) "Band Structure finished"
@@ -195,6 +229,10 @@ program main
 
 
 	if (doscalc) then
+        if (Nodes .neq. 1) then
+         write(2077,*) "Not implemented in parallel yet"
+         call mpi_abort(MPI_Comm_World,1, MPIError)
+        endif
 
 	 call dostool(nthreads,outputfolder,ngrid,numdos, &
 		      sme,params,orbw,exc,mag,mshift,dft,nocpf,fermishift,spintxt)
@@ -204,13 +242,17 @@ program main
 	end if
 	
 	if (spintxt) then
-	
+     if (Nodes .neq. 1) call mpi_abort("Not implemented in parallel yet", MPIError)
 	write(2077,*) "Spin Texture finished"
 	call flush(2077)
 	end if
 	
 		
 	if (emt) then
+        if (Nodes .neq. 1) then
+         write(2077,*) "Not implemented in parallel yet"
+         call mpi_abort(MPI_Comm_World,1, MPIError)
+        endif
 
 	 !call efmass(nthreads,dft,outputfolder,params,emfile,dk,nocpf,fermishift,exc,mag,sysdim)
 	 
@@ -221,7 +263,10 @@ program main
 	end if	
 	
 	if (boltz) then
-	
+        if (Nodes .neq. 1) then
+         write(2077,*) "Not implemented in parallel yet"
+         call mpi_abort(MPI_Comm_World,1, MPIError)
+        endif
 		call boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc,mag,mshift,dft,nocpf,fermishift, &
                            mu0,muf,nmu,btemp,klat,elft,hlft)
                            
@@ -245,7 +290,11 @@ program main
      		call flush(2077)
 		
 		else
-		
+            if (Nodes .neq. 1) then
+             write(2077,*) "Not implemented in parallel yet"
+             call mpi_abort(MPI_Comm_World,1, MPIError)
+            endif
+
 		call bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		     ebse0,ebsef,numbse,cshift,ktol,params,kpaths,kpathsbse,orbw,ediel, &
 		     exc,mshift,coultype,ez,w,r0,lc,rk,meshtype,bsewf,excwf0,excwff,dtfull,&
@@ -416,7 +465,7 @@ program main
 
 	call cpu_time(tf)
 	call date_and_time(VALUES=values2)
-
+    if (Node == 0) then
 	write(2077,*)
 	write(2077,*) 'End','   ','month',values2(2),'day',values2(3),'',values2(5),'hours',values2(6),'min',values2(7),'seg'
 	write(2077,*)
@@ -426,6 +475,12 @@ program main
 
 
 	close(2077)
+    endif
+
+    #ifdef MPI
+          call mpi_barrier(MPI_COMM_WORLD,MPIError)
+          call mpi_finalize(MPIError)
+    #endif
 
 end program main
 

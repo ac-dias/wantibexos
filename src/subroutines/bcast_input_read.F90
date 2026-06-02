@@ -140,3 +140,46 @@ call MPI_BCAST(gwbsebnd,1,MPI_LOGICAL,root,MPI_COMM_WORLD,ierr)
 call MPI_BCAST(selfxonly,1,MPI_LOGICAL,root,MPI_COMM_WORLD,ierr)
 
 use bcast_input_read
+
+subroutine bcast_hamil
+
+
+use hamiltonian_input_variables
+
+! Scalars
+call MPI_BCAST(w90basis,  1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+call MPI_BCAST(ntype,     1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+call MPI_BCAST(nocp,      1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+
+call MPI_BCAST(efermi,    1, MPI_REAL,    0, MPI_COMM_WORLD, ierr)
+call MPI_BCAST(scs,       1, MPI_REAL,    0, MPI_COMM_WORLD, ierr)
+
+call MPI_BCAST(nvec,      1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+
+call MPI_BCAST(rlat,      9, MPI_REAL,    0, MPI_COMM_WORLD, ierr)
+
+call MPI_BCAST(systype, len(4), MPI_CHARACTER, 0, MPI_COMM_WORLD, ierr)
+
+! Spin-polarized parameters
+call MPI_BCAST(w90basisu, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+call MPI_BCAST(w90basisd, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+
+call MPI_BCAST(nvecu,     1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+call MPI_BCAST(nvecd,     1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+
+! Allocated arrays
+call MPI_BCAST(ffactor, size(ffactor), MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+
+call MPI_BCAST(rvec, &
+     nvec, MPI_REAL, 0, MPI_COMM_WORLD, ierr)
+
+call MPI_BCAST(hopmatrices, &
+     size(hopmatrices), MPI_REAL, 0, MPI_COMM_WORLD, ierr)
+
+call MPI_BCAST(ihopmatrices, &
+     size(ihopmatrices), MPI_REAL, 0, MPI_COMM_WORLD, ierr)
+
+call MPI_BCAST(ovp, &
+     size(ovp), MPI_REAL, 0, MPI_COMM_WORLD, ierr)
+
+end subroutine bcasst_hamil

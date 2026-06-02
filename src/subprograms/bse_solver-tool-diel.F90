@@ -122,7 +122,8 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
     	!if (erro/=0) stop "Erro na abertura do arquivo de entrada orb weight"
 
 	!OUTPUT
-
+    
+    if (Nope == 0) then
 	OPEN(UNIT=300, FILE=trim(outputfolder)//"log_bse_optics.dat",STATUS='unknown', IOSTAT=erro)
     	if (erro/=0) stop "Error opening log_bse-diel output file"
 	OPEN(UNIT=301, FILE=trim(outputfolder)//"bse_oscf.dat",STATUS='unknown', IOSTAT=erro)
@@ -147,6 +148,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
     	OPEN(UNIT=403, FILE=trim(outputfolder)//"ipa_oscf-pol.dat",STATUS='unknown', IOSTAT=erro)
     	if (erro/=0) stop "Error opening ipa_oscf-pol.dat output file"	
 
+    endif
 
 	!OPEN(UNIT=500, FILE=trim(outputfolder)//"log_bse-matrix.dat",STATUS='unknown', IOSTAT=erro)
     	!if (erro/=0) stop "Error opening bse hamiltonian matrix progress output file"
