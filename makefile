@@ -37,7 +37,8 @@ SUBROUTINE_NAMES := \
     spin_txt_subs \
     emission_subs \
     coulomb_pot_gw \
-    gw_subs
+    gw_subs \
+    bcast_input_read 
 
 SUBPROGRAM_NAMES := \
     bands-kpath-tool \
