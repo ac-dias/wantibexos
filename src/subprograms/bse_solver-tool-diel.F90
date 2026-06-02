@@ -161,7 +161,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 !#endif
 
 
-
+    if (Node == 0) then
 	!inicio leitura parametros
 
 	select case (dft)
@@ -195,6 +195,12 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	write(301,*) "#","  ", "exciton energy","  ","xx","  ","yy","  ","zz"," ","xy","  ","xz","  ","yz"
 	write(302,*) "#","  ", "exciton energy","  ","xx","  ","yy","  ","zz"," ","sp","  ","sm"	
 
+    endif
+
+#ifdef MPI
+      call mpi_barrier(MPI_COMM_WORLD,MPIError)
+      call bcast_hamil()
+#endif
 
 	!termino parametros calculo 
 
@@ -212,7 +218,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		
 	!end if
 
-
+    if (Node == 0) then
 	!Informações para o arquivo de log do calculo
 	write(300,*)
 	write(300,*)
@@ -255,8 +261,9 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	write(300,*) 
 
 	call flush(300)
+    endif
 
-	allocate(kpt(ngkpt,3))
+    allocate(kpt(ngkpt,3))
 
 	!shift = 0.0
 	call monhkhorst_pack(ngrid(1),ngrid(2),ngrid(3),mshift,rlat(1,:),rlat(2,:),rlat(3,:),kpt)
