@@ -143,7 +143,6 @@ use bcast_input_read
 
 subroutine bcast_hamil
 
-
 use hamiltonian_input_variables
 
 ! Scalars
@@ -168,18 +167,18 @@ call MPI_BCAST(nvecu,     1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
 call MPI_BCAST(nvecd,     1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
 
 ! Allocated arrays
-call MPI_BCAST(ffactor, size(ffactor), MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+call MPI_BCAST(ffactor, size(nvec), MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
 
 call MPI_BCAST(rvec, &
      nvec, MPI_REAL, 0, MPI_COMM_WORLD, ierr)
 
 call MPI_BCAST(hopmatrices, &
-     size(hopmatrices), MPI_REAL, 0, MPI_COMM_WORLD, ierr)
+      nvec*w90basis*w90basis, MPI_REAL, 0, MPI_COMM_WORLD, ierr)
 
 call MPI_BCAST(ihopmatrices, &
-     size(ihopmatrices), MPI_REAL, 0, MPI_COMM_WORLD, ierr)
+      nvec*w90basis*w90basis, MPI_REAL, 0, MPI_COMM_WORLD, ierr)
 
 call MPI_BCAST(ovp, &
-     size(ovp), MPI_REAL, 0, MPI_COMM_WORLD, ierr)
+      nvec*w90basis*w90basis, MPI_REAL, 0, MPI_COMM_WORLD, ierr)
 
 end subroutine bcasst_hamil

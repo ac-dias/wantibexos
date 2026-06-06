@@ -12,7 +12,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	real,parameter:: pi=acos(-1.)
 
 	integer :: dimbse !=ngrid*ngrid*nc*nv ! dimensão da matriz bse
-
+    integer :: dimbse ! dimensão da matriz BSE no nó
 
 	real,allocatable,dimension(:,:) :: eigv
 	complex,allocatable,dimension(:,:,:) :: vector
@@ -206,6 +206,14 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 	ngkpt = ngrid(1)*ngrid(2)*ngrid(3)
 	dimbse = ngkpt*nc*nv
+#ifdef MPI
+! For now I will consider only the possibility that the number of k-points is a multiple of the number of processors
+    if (Nodes .neq. 1 ) then
+     dimbseloc = ngkpt/Nodes * nc * nv
+    else
+#else
+    dimbseloc = ngkpt*nc*nv
+#endif
 
 	!call alat(systype,rlat,a)
 
@@ -268,26 +276,20 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	!shift = 0.0
 	call monhkhorst_pack(ngrid(1),ngrid(2),ngrid(3),mshift,rlat(1,:),rlat(2,:),rlat(3,:),kpt)
 
-
-	allocate(eaux(w90basis),vaux(w90basis,w90basis))
 	allocate(eigv(ngkpt,nc+nv),vector(ngkpt,nc+nv,w90basis))
 	allocate(nocpk(ngkpt))
 
-	allocate (stt(ngkpt*nc*nv,4))
+	allocate (stt(dimbse,4))
+    allocate (sttloc(dimbseloc,4))
 	allocate(hrx(dimbse),hry(dimbse),hrz(dimbse),hrsp(dimbse),hrsm(dimbse))
-
-	allocate(hbse(dimbse,dimbse))
-	
-
 
 	allocate(actxx(dimbse),actyy(dimbse),actzz(dimbse),actxy(dimbse))
 	allocate(actxz(dimbse),actyz(dimbse))
 	allocate(actsp(dimbse),actsm(dimbse))	
 	
 	
-	
-	
-	select case (bsealgo)
+	if (Nodes == 1) then
+	 select case (bsealgo)
 		
 		case ("cheev")
 		
@@ -346,7 +348,9 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		 write(*,*) "please select a subroutine for diagonalization"
 		 stop
 		
-	end select
+	 end select
+
+    endif ! end the check if we are going to perform a parallel calculation
 
 	!allocate(orbweight(w90basis))
 	
@@ -358,12 +362,16 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 	egap = 50.0
 
+    if (Node == 0) then ! I am going to run this in serial for now
+     allocate(eaux(w90basis),vaux(w90basis,w90basis))
+     write(300,*) "We are going to perform independent particle calculations in serial for now"
+
 	!$omp parallel do default(shared) private(i,j,l,h,eaux,vaux)
 	do i=1,ngkpt
 
 #ifdef MKL
-		call MKL_SET_NUM_THREADS(1)
-#endif		
+        call MKL_SET_NUM_THREADS(1)
+#endif
 
 
 #ifdef AOCL		
@@ -442,11 +450,14 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	end do
 	!$omp end parallel do
 
+
+
 	deallocate(eaux,vaux)
 	write(300,*) 'direct gap:', egap
 	write(300,*) 'eigenvalues and eigenvectors calculated'
 	call flush(300)
-	
+    endif
+
 	!write(*,*) "autovetores e autovalores"
 
 
@@ -471,20 +482,19 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 
 	!allocate (stt(ngkpt*nc*nv,4))
-
+    
 	call quantumnumbers2(w90basis,ngkpt,nc,nv,nocpk,nocpk,stt)
 
-
-
+    call MPI_Scatter( stt, dimbseloc*4, MPI_REAL, &
+          sttloc, dimbseloc*4, MPI_REAL, 0, MPI_COMM_WORLD, ierr )
 	!allocate(hrx(dimbse),hry(dimbse),hrz(dimbse))
 
+    allocate(vecres(dimbse,17))
+
+    if (Node == 0) then
 	write(300,*) 'quantum numbers for exciton basis set finished'
 	call flush(300)
 
-
-	
-	allocate(vecres(dimbse,17))	
-	
 	write(401,*) "#","  ", "energy","  ","xx","  ","yy","  ","zz","  ","xy","  ","xz","  ","yz"
 	write(403,*) "#","  ", "energy","  ","xx","  ","yy","  ","zz","  ","sp","  ","sm"
 	
@@ -505,7 +515,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	
 	 continue
 	end if	
-
+    endif
 
 	 ! $omp parallel default(shared) private(i,w90basis,rlat,rvec,hopmatrices,ihopmatrices)
 	
@@ -549,7 +559,8 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	 ! $omp end parallel
 	
 	call Bubblem(7,17,vecres, dimbse)
-	
+
+    if (Node == 0) then
 	do i=1,dimbse
 	
 		write(401,"(7F15.6)") vecres(i,7),vecres(i,8),vecres(i,9),vecres(i,10),vecres(i,11),vecres(i,12),vecres(i,13)
@@ -572,32 +583,29 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 	write(300,*) 'IPA single particle optics finished'
 	call flush(300)
+    endif
 
 	deallocate(vecres)
 	
 	!go to 789
 
-	!allocate(hbse(dimbse,dimbse),W(dimbse))
+    allocate(hbse(dimbse,dimbseloc))
 
 	hbse=0.0
 	!counter = 0
 	!$omp parallel do 
 !collapse(2)
 
-	do i=1,dimbse
+	do j=1,dimbse
 
+		do i=1,j+Node*dimbseloc
 
-
-		do j=i,dimbse
-
-
-
-  hbse(i,j)= matrizelbse(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,rlat,stt(i,:),eigv(stt(i,4)&
-  	    ,stt(i,3)),eigv(stt(i,4),stt(i,2)),vector(stt(i,4)&
-            ,stt(i,3),:) ,vector(stt(i,4),stt(i,2),:),kpt(stt(i,4),:),stt(j,:),eigv(stt(j,4),stt(j,3))&
-  	    ,eigv(stt(j,4),stt(j,2)) &
-            ,vector(stt(j,4),stt(j,3),:),vector(stt(j,4),stt(j,2),:),kpt(stt(j,4),:),dft,nvec,rvec,&
-            sk(stt(i,4),:,:),sk(stt(j,4),:,:))
+  hbse(i,j)= matrizelbse(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,rlat,sttloc(i,:),eigv(sttloc(i,4)&
+  	    ,sttloc(i,3)),eigv(sttloc(i,4),sttloc(i,2)),vector(sttloc(i,4)&
+            ,sttloc(i,3),:) ,vector(sttloc(i,4),sttloc(i,2),:),kpt(sttloc(i,4),:),sttloc(j,:),eigv(sttloc(j,4),sttloc(j,3))&
+  	    ,eigv(sttloc(j,4),sttloc(j,2)) &
+            ,vector(sttloc(j,4),sttloc(j,3),:),vector(sttloc(j,4),sttloc(j,2),:),kpt(sttloc(j,4),:),dft,nvec,rvec,&
+            sk(sttloc(i,4),:,:),sk(sttloc(j,4),:,:))
 
 	
 		!write(500,*) "i",i,"/",dimbse,"        ","j",j,"/",dimbse
@@ -610,12 +618,14 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	end do
 
 	!$omp end parallel do
-
-	write(300,*) 'exciton Hamiltonian matrix finished'
-	call flush(300)	
+    if (Node == 0) then
+	 write(300,*) 'exciton Hamiltonian matrix finished'
+	 call flush(300)
+    endif
 
 	!call OMP_SET_NUM_THREADS(nthreads)
 
+    if (Nodes == 1 ) then
 	select case (bsealgo)
 		
 		case ("cheev")
@@ -704,7 +714,9 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		 stop
 		
 	end select			
-	!allocate(pinter(dimbse),pintra(dimbse))
+	endif
+
+    !allocate(pinter(dimbse),pintra(dimbse))
 
 	!if (ntype .eq. 2) then
 

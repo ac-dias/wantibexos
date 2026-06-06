@@ -113,7 +113,8 @@ program main
 	read(2055,*) rlatv(1,1),rlatv(1,2),rlatv(1,3)
 	read(2055,*) rlatv(2,1),rlatv(2,2),rlatv(2,3)
 	read(2055,*) rlatv(3,1),rlatv(3,2),rlatv(3,3)
-
+    close(2055)
+    endif
 
 	if (meshtype .eq. "RK3D") then
 
@@ -131,13 +132,6 @@ program main
 		continue
 	end if
 
-	close(2055)
-
-    endif
-#ifdef MPI
-      call mpi_barrier(MPI_COMM_WORLD,MPIError)
-      call mpi_bcast()
-#endif
 
     if (Node == 0) then
     OPEN(UNIT=2077, FILE= trim(calcparms)//"log.dat",STATUS='unknown', IOSTAT=erro)
