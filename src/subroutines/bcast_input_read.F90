@@ -9,6 +9,10 @@
 subroutine bcast_input_read()
 
 use input_variables
+implicit none
+include 'mpif.h'
+integer, parameter :: root = 0
+integer :: ierr
 
 ! Integers
 call MPI_BCAST(nthreads,1,MPI_INTEGER,root,MPI_COMM_WORLD,ierr)
@@ -139,11 +143,14 @@ call MPI_BCAST(gwbnduse,1,MPI_LOGICAL,root,MPI_COMM_WORLD,ierr)
 call MPI_BCAST(gwbsebnd,1,MPI_LOGICAL,root,MPI_COMM_WORLD,ierr)
 call MPI_BCAST(selfxonly,1,MPI_LOGICAL,root,MPI_COMM_WORLD,ierr)
 
-use bcast_input_read
+end subroutine bcast_input_read
 
-subroutine bcast_hamil
+subroutine bcast_hamil()
 
 use hamiltonian_input_variables
+implicit none
+include 'mpif.h'
+integer :: ierr, rank
 
 ! Scalars
 call MPI_BCAST(w90basis,  1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
@@ -157,7 +164,7 @@ call MPI_BCAST(nvec,      1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
 
 call MPI_BCAST(rlat,      9, MPI_REAL,    0, MPI_COMM_WORLD, ierr)
 
-call MPI_BCAST(systype, len(4), MPI_CHARACTER, 0, MPI_COMM_WORLD, ierr)
+call MPI_BCAST(systype, 4, MPI_CHARACTER, 0, MPI_COMM_WORLD, ierr)
 
 ! Spin-polarized parameters
 call MPI_BCAST(w90basisu, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
@@ -166,11 +173,20 @@ call MPI_BCAST(w90basisd, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
 call MPI_BCAST(nvecu,     1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
 call MPI_BCAST(nvecd,     1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
 
+call MPI_COMM_RANK(MPI_COMM_WORLD, rank, ierr)
+if (rank /= 0) then
+  if (.not. allocated(ffactor)) allocate(ffactor(nvec))
+  if (.not. allocated(rvec)) allocate(rvec(nvec,3))
+  if (.not. allocated(hopmatrices)) allocate(hopmatrices(nvec,w90basis,w90basis))
+  if (.not. allocated(ihopmatrices)) allocate(ihopmatrices(nvec,w90basis,w90basis))
+  if (.not. allocated(ovp)) allocate(ovp(nvec,w90basis,w90basis))
+end if
+
 ! Allocated arrays
-call MPI_BCAST(ffactor, size(nvec), MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+call MPI_BCAST(ffactor, nvec, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
 
 call MPI_BCAST(rvec, &
-     nvec, MPI_REAL, 0, MPI_COMM_WORLD, ierr)
+     nvec*3, MPI_REAL, 0, MPI_COMM_WORLD, ierr)
 
 call MPI_BCAST(hopmatrices, &
       nvec*w90basis*w90basis, MPI_REAL, 0, MPI_COMM_WORLD, ierr)
@@ -181,4 +197,4 @@ call MPI_BCAST(ihopmatrices, &
 call MPI_BCAST(ovp, &
       nvec*w90basis*w90basis, MPI_REAL, 0, MPI_COMM_WORLD, ierr)
 
-end subroutine bcasst_hamil
+end subroutine bcast_hamil
