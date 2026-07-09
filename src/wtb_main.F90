@@ -68,6 +68,9 @@ program main
 	use input_variables
 	use hamiltonian_input_variables
 	implicit none
+#ifdef MPI
+	include 'mpif.h'
+#endif
 	
 	integer :: erro
 	real:: t0,tf
@@ -77,9 +80,7 @@ program main
 	real :: flag
 	character(len=70) ::cflag
 
-#ifdef MPI
       integer:: MPIError, Node, Nodes
-#endif
 
 #ifdef MPI
       call MPI_Init(MPIError)
@@ -477,7 +478,6 @@ program main
     #endif
 
 end program main
-
 
 
 
