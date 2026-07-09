@@ -8,11 +8,13 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	use hamiltonian_input_variables
 
 	implicit none
+#ifdef MPI
+	include 'mpif.h'
+#endif
 
 	real,parameter:: pi=acos(-1.)
 
 	integer :: dimbse !=ngrid*ngrid*nc*nv ! dimensão da matriz bse
-    integer :: dimbse ! dimensão da matriz BSE no nó
 
 	real,allocatable,dimension(:,:) :: eigv
 	complex,allocatable,dimension(:,:,:) :: vector
@@ -69,7 +71,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	real,parameter :: ABSTOL=1.0e-6
 	INTEGER  ::        INFO
 	real,allocatable,dimension(:) :: W,RWORK
-	COMPLEX,allocatable,dimension(:,:) :: hbse
+	COMPLEX,allocatable,dimension(:,:) :: hbse,hbse_dist
 
         INTEGER :: LWMAX
    	INTEGER :: LWORK
@@ -113,6 +115,12 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	logical :: cpol,dtfull
 	logical :: tmcoef	
 
+	integer :: MPIError, Node, Nodes
+	integer :: blacs_ctxt, nprow, npcol, myrow, mycol
+	integer :: mb, nb, locr, locc, lld, ig, jg, li, lj
+	integer :: desca(9), descz(9)
+	integer :: numroc, indxl2g
+
 	!fim modificacoes versao 2.1
 
 	!call input_read
@@ -121,9 +129,18 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	!OPEN(UNIT=203, FILE= orbw,STATUS='old', IOSTAT=erro)
     	!if (erro/=0) stop "Erro na abertura do arquivo de entrada orb weight"
 
+#ifdef MPI
+	call MPI_COMM_RANK(MPI_COMM_WORLD, Node, MPIError)
+	call MPI_COMM_SIZE(MPI_COMM_WORLD, Nodes, MPIError)
+#else
+	Node = 0
+	Nodes = 1
+	MPIError = 0
+#endif
+
 	!OUTPUT
     
-    if (Nope == 0) then
+    if (Node == 0) then
 	OPEN(UNIT=300, FILE=trim(outputfolder)//"log_bse_optics.dat",STATUS='unknown', IOSTAT=erro)
     	if (erro/=0) stop "Error opening log_bse-diel output file"
 	OPEN(UNIT=301, FILE=trim(outputfolder)//"bse_oscf.dat",STATUS='unknown', IOSTAT=erro)
@@ -206,14 +223,6 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 	ngkpt = ngrid(1)*ngrid(2)*ngrid(3)
 	dimbse = ngkpt*nc*nv
-#ifdef MPI
-! For now I will consider only the possibility that the number of k-points is a multiple of the number of processors
-    if (Nodes .neq. 1 ) then
-     dimbseloc = ngkpt/Nodes * nc * nv
-    else
-#else
-    dimbseloc = ngkpt*nc*nv
-#endif
 
 	!call alat(systype,rlat,a)
 
@@ -280,7 +289,6 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	allocate(nocpk(ngkpt))
 
 	allocate (stt(dimbse,4))
-    allocate (sttloc(dimbseloc,4))
 	allocate(hrx(dimbse),hry(dimbse),hrz(dimbse),hrsp(dimbse),hrsm(dimbse))
 
 	allocate(actxx(dimbse),actyy(dimbse),actzz(dimbse),actxy(dimbse))
@@ -350,7 +358,11 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		
 	 end select
 
-    endif ! end the check if we are going to perform a parallel calculation
+	    endif ! end the check if we are going to perform a parallel calculation
+
+	    if (Nodes > 1) then
+	    	allocate(W(dimbse))
+	    end if
 
 	!allocate(orbweight(w90basis))
 	
@@ -458,12 +470,18 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	call flush(300)
     endif
 
+#ifdef MPI
+	call MPI_BCAST(nocpk, ngkpt, MPI_INTEGER, 0, MPI_COMM_WORLD, MPIError)
+	call MPI_BCAST(eigv, ngkpt*(nc+nv), MPI_REAL, 0, MPI_COMM_WORLD, MPIError)
+	call MPI_BCAST(vector, ngkpt*(nc+nv)*w90basis, MPI_COMPLEX, 0, MPI_COMM_WORLD, MPIError)
+	call MPI_BCAST(egap, 1, MPI_REAL, 0, MPI_COMM_WORLD, MPIError)
+#endif
+
 	!write(*,*) "autovetores e autovalores"
 
 
+	allocate(sk(ngkpt,w90basis,w90basis))
 	if (dft .eq. "S") then
-	
-		allocate(sk(ngkpt,w90basis,w90basis))
 		
 		do i=1,ngkpt
 		
@@ -471,10 +489,17 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		
 		end do
 		
-		write(300,*) 'overlap matrices calculated'
-		call flush(300)	
+		if (Node == 0) then
+			write(300,*) 'overlap matrices calculated'
+			call flush(300)
+		end if
 	else
-	
+		sk = 0.0
+		do i=1,ngkpt
+			do j=1,w90basis
+				sk(i,j,j) = 1.0
+			end do
+		end do
 	end if
 
 
@@ -484,9 +509,6 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	!allocate (stt(ngkpt*nc*nv,4))
     
 	call quantumnumbers2(w90basis,ngkpt,nc,nv,nocpk,nocpk,stt)
-
-    call MPI_Scatter( stt, dimbseloc*4, MPI_REAL, &
-          sttloc, dimbseloc*4, MPI_REAL, 0, MPI_COMM_WORLD, ierr )
 	!allocate(hrx(dimbse),hry(dimbse),hrz(dimbse))
 
     allocate(vecres(dimbse,17))
@@ -589,35 +611,63 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	
 	!go to 789
 
-    allocate(hbse(dimbse,dimbseloc))
-
-	hbse=0.0
-	!counter = 0
-	!$omp parallel do 
-!collapse(2)
-
-	do j=1,dimbse
-
-		do i=1,j+Node*dimbseloc
-
-  hbse(i,j)= matrizelbse(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,rlat,sttloc(i,:),eigv(sttloc(i,4)&
-  	    ,sttloc(i,3)),eigv(sttloc(i,4),sttloc(i,2)),vector(sttloc(i,4)&
-            ,sttloc(i,3),:) ,vector(sttloc(i,4),sttloc(i,2),:),kpt(sttloc(i,4),:),sttloc(j,:),eigv(sttloc(j,4),sttloc(j,3))&
-  	    ,eigv(sttloc(j,4),sttloc(j,2)) &
-            ,vector(sttloc(j,4),sttloc(j,3),:),vector(sttloc(j,4),sttloc(j,2),:),kpt(sttloc(j,4),:),dft,nvec,rvec,&
-            sk(sttloc(i,4),:,:),sk(sttloc(j,4),:,:))
-
-	
-		!write(500,*) "i",i,"/",dimbse,"        ","j",j,"/",dimbse
-		!call flush(500)
-
+    if (Nodes == 1) then
+		allocate(hbse(dimbse,dimbse))
+		hbse=0.0
+		!$omp parallel do private(i,j) schedule(dynamic)
+		do j=1,dimbse
+			do i=1,j
+				hbse(i,j)= matrizelbse(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,rlat,stt(i,:),eigv(stt(i,4)&
+				    ,stt(i,3)),eigv(stt(i,4),stt(i,2)),vector(stt(i,4)&
+				    ,stt(i,3),:) ,vector(stt(i,4),stt(i,2),:),kpt(stt(i,4),:),stt(j,:),eigv(stt(j,4),stt(j,3))&
+				    ,eigv(stt(j,4),stt(j,2)) &
+				    ,vector(stt(j,4),stt(j,3),:),vector(stt(j,4),stt(j,2),:),kpt(stt(j,4),:),dft,nvec,rvec,&
+				    sk(stt(i,4),:,:),sk(stt(j,4),:,:))
+			end do
 		end do
+		!$omp end parallel do
+    else
+#ifdef MPI
+		mb = 64
+		nb = 64
+		nprow = int(sqrt(real(Nodes)))
+		do while (mod(Nodes,nprow) /= 0)
+			nprow = nprow - 1
+		end do
+		npcol = Nodes/nprow
 
+		call BLACS_GET(-1, 0, blacs_ctxt)
+		call BLACS_GRIDINIT(blacs_ctxt, 'R', nprow, npcol)
+		call BLACS_GRIDINFO(blacs_ctxt, nprow, npcol, myrow, mycol)
 
+		locr = numroc(dimbse, mb, myrow, 0, nprow)
+		locc = numroc(dimbse, nb, mycol, 0, npcol)
+		lld = max(1,locr)
+		allocate(hbse_dist(lld,max(1,locc)))
+		hbse_dist = 0.0
+		call DESCINIT(desca, dimbse, dimbse, mb, nb, 0, 0, blacs_ctxt, lld, INFO)
+		call DESCINIT(descz, dimbse, dimbse, mb, nb, 0, 0, blacs_ctxt, lld, INFO)
 
-	end do
+		!$omp parallel do private(li,ig,lj,jg) schedule(dynamic)
+		do lj=1,locc
+			jg = indxl2g(lj, nb, mycol, 0, npcol)
+			do li=1,locr
+				ig = indxl2g(li, mb, myrow, 0, nprow)
+				if (ig <= jg) then
+					hbse_dist(li,lj)= matrizelbse(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,rlat,stt(ig,:),&
+					    eigv(stt(ig,4),stt(ig,3)),eigv(stt(ig,4),stt(ig,2)),vector(stt(ig,4),stt(ig,3),:),&
+					    vector(stt(ig,4),stt(ig,2),:),kpt(stt(ig,4),:),stt(jg,:),eigv(stt(jg,4),stt(jg,3)),&
+					    eigv(stt(jg,4),stt(jg,2)),vector(stt(jg,4),stt(jg,3),:),vector(stt(jg,4),stt(jg,2),:),&
+					    kpt(stt(jg,4),:),dft,nvec,rvec,sk(stt(ig,4),:,:),sk(stt(jg,4),:,:))
+				end if
+			end do
+		end do
+		!$omp end parallel do
+#else
+		stop "MPI/ScaLAPACK path requested without MPI support"
+#endif
+    end if
 
-	!$omp end parallel do
     if (Node == 0) then
 	 write(300,*) 'exciton Hamiltonian matrix finished'
 	 call flush(300)
@@ -626,7 +676,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	!call OMP_SET_NUM_THREADS(nthreads)
 
     if (Nodes == 1 ) then
-	select case (bsealgo)
+		select case (bsealgo)
 		
 		case ("cheev")
 
@@ -713,7 +763,35 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		 write(*,*) "please select a subroutine for diagonalization"
 		 stop
 		
-	end select			
+		end select
+	else
+#ifdef MPI
+		LWORK = -1
+		LRWORK = -1
+		allocate(WORK(1),RWORK(1))
+		call PCHEEV('V','U',dimbse,hbse_dist,1,1,desca,W,hbse_dist,1,1,descz,WORK,LWORK,RWORK,LRWORK,INFO)
+		LWORK = max(1,int(real(WORK(1))))
+		LRWORK = max(1,int(RWORK(1)))
+		deallocate(WORK,RWORK)
+		allocate(WORK(LWORK),RWORK(LRWORK))
+		call PCHEEV('V','U',dimbse,hbse_dist,1,1,desca,W,hbse_dist,1,1,descz,WORK,LWORK,RWORK,LRWORK,INFO)
+		if (INFO .ne. 0) then
+			write(*,*) 'ScaLAPACK PCHEEV failed with INFO = ', INFO
+			call MPI_ABORT(MPI_COMM_WORLD, INFO, MPIError)
+		end if
+		allocate(hbse(dimbse,dimbse))
+		hbse = 0.0
+		do lj=1,locc
+			jg = indxl2g(lj, nb, mycol, 0, npcol)
+			do li=1,locr
+				ig = indxl2g(li, mb, myrow, 0, nprow)
+				hbse(ig,jg) = hbse_dist(li,lj)
+			end do
+		end do
+		call MPI_ALLREDUCE(MPI_IN_PLACE, hbse, dimbse*dimbse, MPI_COMPLEX, MPI_SUM, MPI_COMM_WORLD, MPIError)
+		call BLACS_GRIDEXIT(blacs_ctxt)
+		deallocate(hbse_dist)
+#endif
 	endif
 
     !allocate(pinter(dimbse),pintra(dimbse))
@@ -735,30 +813,8 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 	!end if 
 	
-	if (bsewf) then
-	
-	      	do i=excwf0,excwff
-      	
-      			call excwf(outputfolder,ngkpt,kpt,nc,nv,nocpk,stt,W(i),i,hbse(:,i))
-      	
-      		end do
-	
-	else
-	
-	 continue
-	
-	end if
-
-	write(300,*) 'exciton Hamiltonian diagonalized'
-	call flush(300)
-	write(300,*) "exciton ground state",W(1)
-
-	deallocate(eigv,vector)
-	deallocate(rvec,hopmatrices)
-	deallocate(ihopmatrices,ffactor)
-	
-	
-	select case (bsealgo)
+		if (Nodes == 1) then
+		select case (bsealgo)
 	
 		case ("cheev")
 		
@@ -781,8 +837,30 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		 write(*,*) "please select a subroutine for diagonalization"
 		 go to 789	
 		 	
-	end select	
-	!deallocate (IWORK)
+		end select
+		else
+			deallocate(WORK,RWORK)
+		end if
+
+		if (Node == 0) then
+		if (bsewf) then
+	
+	      	do i=excwf0,excwff
+      	
+      			call excwf(outputfolder,ngkpt,kpt,nc,nv,nocpk,stt,W(i),i,hbse(:,i))
+      	
+      		end do
+	
+	else
+	
+	 continue
+	
+	end if
+
+	write(300,*) 'exciton Hamiltonian diagonalized'
+	call flush(300)
+	write(300,*) "exciton ground state",W(1)
+		!deallocate (IWORK)
 
 	!allocate(actxx(dimbse),actyy(dimbse),actzz(dimbse),actxy(dimbse))
 	!allocate(actxz(dimbse),actyz(dimbse))
@@ -858,7 +936,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	call flush(300)
 
 	! $omp do ordered
-	do i=1,dimbse
+		do i=1,dimbse
 		! $omp ordered
 		write(301,"(7F15.6)") W(i),actxx(i),actyy(i),actzz(i),actxy(i),actxz(i),actyz(i)
 		call flush(301)
@@ -869,10 +947,14 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		end if
 
 		! $omp end ordered
-	end do
-	! $omp end do
-	
-	deallocate(hrx,hry,hrz,hrsp,hrsm)
+		end do
+			! $omp end do
+			end if
+			
+		deallocate(eigv,vector)
+		deallocate(rvec,hopmatrices)
+		deallocate(ihopmatrices,ffactor)
+		deallocate(hrx,hry,hrz,hrsp,hrsm)
 	deallocate(actxx,actxy,actxz,actyy,actyz,actzz)
 	deallocate(actsp,actsm)
 	deallocate(hbse,W,stt,nocpk)
@@ -880,15 +962,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 	deallocate(kpt)
 	
-	if (dft .eq. "S") then
-	
-	deallocate(sk)
-	
-	else
-	
-	continue
-	
-	end if	
+		deallocate(sk)
 
 
 789     continue
@@ -896,14 +970,17 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	call cpu_time(tf)
 	call date_and_time(VALUES=values2)
 
-	write(300,*)
-	write(300,*) 'end','   ','month',values2(2),'day',values2(3),'',values2(5),'hours',values2(6),'min',values2(7),'seg'
-	write(300,*)
+		if (Node == 0) then
+			write(300,*)
+			write(300,*) 'end','   ','month',values2(2),'day',values2(3),'',values2(5),'hours',values2(6),'min',values2(7),'seg'
+			write(300,*)
+		end if
 
 
 
 
-	close(200)
+		if (Node == 0) then
+		close(200)
 	!close(203)
 
 
@@ -915,7 +992,8 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	close(401)
 	close(402)
 	close(403)
-	close(404)
+		close(404)
+		end if
 	
 	!close(500)			
 
