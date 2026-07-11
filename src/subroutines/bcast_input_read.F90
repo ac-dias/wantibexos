@@ -9,8 +9,11 @@
 subroutine bcast_input_read()
 
 use input_variables
+use mpi
+
 implicit none
-include 'mpif.h'
+!include 'mpif.h'
+
 integer, parameter :: root = 0
 integer :: ierr
 
@@ -148,8 +151,11 @@ end subroutine bcast_input_read
 subroutine bcast_hamil()
 
 use hamiltonian_input_variables
+
+use mpi
+
 implicit none
-include 'mpif.h'
+!include 'mpif.h'
 integer :: ierr, rank
 
 ! Scalars

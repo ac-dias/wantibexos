@@ -15,7 +15,7 @@ subroutine integralJ0pot(rmax,gperp,res)
 	
 	 r(i)=((i-1d0)/(n-1d0))*rmax+eta
 	 
-	 call caljy0(r(i)*gperp, j0, 0 )
+	 call caljy0(r(i)*gperp*1.0d0, j0*1.0d0, 0 )
 	   
 	 f(i)= r(i)*j0*log(r(i))
 	 

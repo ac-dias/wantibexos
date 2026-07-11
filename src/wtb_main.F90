@@ -65,12 +65,13 @@
 !ifort tbt_main.F90 -o tbt.x -mkl -qopenmp -shared-intel
 program main
 
+#ifdef MPI
+!	include 'mpif.h'
+        use mpi
+#endif
 	use input_variables
 	use hamiltonian_input_variables
 	implicit none
-#ifdef MPI
-	include 'mpif.h'
-#endif
 	
 	integer :: erro
 	real:: t0,tf
@@ -164,7 +165,7 @@ program main
 	if (pponly) go to 131
 	
 	if (gwmesh) then
-        if (Nodes .neq. 1) then
+        if (Nodes /= 1) then
          write(2077,*) "Not implemented in parallel yet"
          call mpi_abort(MPI_Comm_World,1, MPIError)
         endif
@@ -212,7 +213,7 @@ program main
 
 
 	if (bandscalc) then
-        if (Nodes .neq. 1) then
+        if (Nodes /= 1) then
          write(2077,*) "Not implemented in parallel yet"
          call mpi_abort(MPI_Comm_World,1, MPIError)
         endif
@@ -224,7 +225,7 @@ program main
 
 
 	if (doscalc) then
-        if (Nodes .neq. 1) then
+        if (Nodes /= 1) then
          write(2077,*) "Not implemented in parallel yet"
          call mpi_abort(MPI_Comm_World,1, MPIError)
         endif
@@ -237,14 +238,17 @@ program main
 	end if
 	
 	if (spintxt) then
-     if (Nodes .neq. 1) call mpi_abort("Not implemented in parallel yet", MPIError)
+        if (Nodes /= 1) then
+         write(2077,*) "Not implemented in parallel yet"
+         call mpi_abort(MPI_Comm_World,1, MPIError)
+        endif
 	write(2077,*) "Spin Texture finished"
 	call flush(2077)
 	end if
 	
 		
 	if (emt) then
-        if (Nodes .neq. 1) then
+        if (Nodes /= 1) then
          write(2077,*) "Not implemented in parallel yet"
          call mpi_abort(MPI_Comm_World,1, MPIError)
         endif
@@ -258,7 +262,7 @@ program main
 	end if	
 	
 	if (boltz) then
-        if (Nodes .neq. 1) then
+        if (Nodes /= 1) then
          write(2077,*) "Not implemented in parallel yet"
          call mpi_abort(MPI_Comm_World,1, MPIError)
         endif
@@ -285,7 +289,7 @@ program main
      		call flush(2077)
 		
 		else
-            if (Nodes .neq. 1) then
+            if (Nodes /= 1) then
              write(2077,*) "Not implemented in parallel yet"
              call mpi_abort(MPI_Comm_World,1, MPIError)
             endif
@@ -472,10 +476,10 @@ program main
 	close(2077)
     endif
 
-    #ifdef MPI
+#ifdef MPI
           call mpi_barrier(MPI_COMM_WORLD,MPIError)
           call mpi_finalize(MPIError)
-    #endif
+#endif
 
 end program main
 

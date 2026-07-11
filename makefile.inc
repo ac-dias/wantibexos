@@ -1,6 +1,9 @@
-FOR=mpif90
-OMP=-qopenmp -shared-intel 
-LIBS=-qmkl=cluster
-EXTRA= -DMKL
+FOR=/opt/local/bin/mpifort-mpich-mp
+OMP=-fopenmp 
+#-shared-intel 
+LIBS= -L/opt/local/lib  -lopenblas  -lscalapack 
+#-qmkl=cluster
+#EXTRA= -DMKL
 DIR="./bin/"
-COND=-fpp -O2 -DMPI
+COND= -DMPI -O0 
+#-fpp -O2 -DMPI

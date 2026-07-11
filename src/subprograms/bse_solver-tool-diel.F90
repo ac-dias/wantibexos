@@ -4,13 +4,14 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		     exc,mshift,coultype,ez,w1,r0,lc,rk,meshtype,bsewf,excwf0,excwff,&
 		     dtfull,cpol,tmcoef,nocpf,fermishift,bsealgo,dft,mag)
 
+#ifdef MPI
+	use mpi
+!include 'mpif.h'
+#endif
 	use omp_lib
 	use hamiltonian_input_variables
 
 	implicit none
-#ifdef MPI
-	include 'mpif.h'
-#endif
 
 	real,parameter:: pi=acos(-1.)
 
