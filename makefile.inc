@@ -5,5 +5,5 @@ LIBS= -L/opt/local/lib  -lopenblas  -lscalapack
 #-qmkl=cluster
 #EXTRA= -DMKL
 DIR="./bin/"
-COND= -DMPI -O0 
+COND= -DMPI -O0 -fbacktrace -fcheck=all -g 
 #-fpp -O2 -DMPI

@@ -7,6 +7,8 @@ BUILD_DIR := ./build
 BIN_DIR   := $(DIR)
 UTILS_DIR := ./utils
 
+MOD_OUT_FLAG := -J$(BUILD_DIR)
+
 #ifeq ($(IS_IFX), ifx)
 #    MOD_OUT_FLAG := -module $(BUILD_DIR)
 #else
@@ -68,6 +70,8 @@ SUBPROGRAM_NAMES := \
 SUBROUTINE_OBJS := $(foreach name,$(SUBROUTINE_NAMES),$(BUILD_DIR)/subroutines/$(name).o)
 SUBPROGRAM_OBJS := $(foreach name,$(SUBPROGRAM_NAMES),$(BUILD_DIR)/subprograms/$(name).o)
 MODULE_OBJECTS  := $(SUBROUTINE_OBJS) $(SUBPROGRAM_OBJS)
+INPUT_MODULE_OBJ := $(BUILD_DIR)/subroutines/module_input_read.o 
+$(filter-out $(INPUT_MODULE_OBJ),$(MODULE_OBJECTS)): $(INPUT_MODULE_OBJ)
 
 MAIN_SRC  := $(SRC_DIR)/wtb_main.F90
 MAIN_EXEC := $(BIN_DIR)/wtb.x
@@ -79,11 +83,9 @@ SQ_SOURCES    := $(UTILS_DIR)/slme/sq-curve.f90 $(UTILS_DIR)/slme/pce-subs.f90
 
 all: $(MAIN_EXEC) pp
 	@echo "--- Build Complete ---"
-	@rm -f ./*.mod
 
 main: $(MAIN_EXEC)
 	@echo "--- Main Executable Build Complete ---"
-	@rm -f ./*.mod 
 
 $(MAIN_EXEC): $(LIB_FILE) $(MAIN_SRC) makefile.inc
 	@mkdir -p $(BIN_DIR)
@@ -116,7 +118,6 @@ UTILS_EXECS := $(BIN_DIR)/nc_nv_finder.x \
 pp: $(UTILS_EXECS)
 	@echo "--- Copying Python Scripts ---"
 	@cp $(UTILS_DIR)/*.py $(BIN_DIR)
-	@rm -f ./*.mod
 
 $(BIN_DIR)/nc_nv_finder.x: $(UTILS_DIR)/nc_nv_finder.F90 makefile.inc
 	$(FOR) $< -o $@ $(L_FLAGS) $(MOD_OUT_FLAG)

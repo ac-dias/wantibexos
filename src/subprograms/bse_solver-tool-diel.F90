@@ -612,6 +612,13 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	
 	!go to 789
 
+
+    if (Node == 0) then
+	 write(300,*) 'exciton Hamiltonian matrix start'
+	 call flush(300)
+    endif
+
+
     if (Nodes == 1) then
 		allocate(hbse(dimbse,dimbse))
 		hbse=0.0

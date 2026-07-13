@@ -137,6 +137,7 @@ program main
 
     if (Node == 0) then
     OPEN(UNIT=2077, FILE= trim(calcparms)//"log.dat",STATUS='unknown', IOSTAT=erro)
+     print*, trim(calcparms)//"log.dat"
     	if (erro/=0) stop "Error opening log output file "
 
 ! This subroutine only prints things
@@ -165,10 +166,10 @@ program main
 	if (pponly) go to 131
 	
 	if (gwmesh) then
-        if (Nodes /= 1) then
-         write(2077,*) "Not implemented in parallel yet"
-         call mpi_abort(MPI_Comm_World,1, MPIError)
-        endif
+         if (Nodes /= 1) then
+          write(2077,*) "Not implemented in parallel yet"
+          call mpi_abort(MPI_Comm_World,1, MPIError)
+         endif
 
 	  !call gw_pi0_calc(nthreads,outputfolder,ngrid,smegw,params,&
           !             exc,mshift,nocpf,fermishift,dft,mag,&
@@ -277,7 +278,9 @@ program main
 	!calculo optica
 	
 	if (bse) then
-	
+	 write(2077,*) "BSE and Single particle dielectric calculation finished"
+         call flush(2077)
+
 		if (temp .eq. 0.0) then
 		
 		call bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
