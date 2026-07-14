@@ -1029,7 +1029,9 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 		     dk,nocpf,fermishift,bsealgo,spintxt,meshgen,exc,mag,boltz,nmu,nsteps,mu0,&
 		     muf,btemp,klat,elft,hlft,smeboltz,ni,ns,edielgw,r0gw,lcgw,ezgw,wgw,coultypegw,&
 		     nomega,omegamax,gwmesh,gwmeshuse,gwbnd,gwbnduse,gwbsebnd,ktolgw,smegw,selfxonly,ifactor)
-
+#ifdef MPI
+        use mpi
+#endif
 	implicit none
 	integer :: unitout
 
@@ -1039,6 +1041,9 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	integer,dimension(3) :: ngrid
 	integer :: nc,nv,excwf0,excwff
 	integer :: nocpf
+#ifdef MPI
+        integer Nodes
+#endif
 	!integer :: power
 	!integer :: ncrpa,nvrpa
 	!integer :: ncbz,nvbz
@@ -1112,6 +1117,10 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 				
 
 	write(unitout,"(A10,I0)") "NTHREADS= ",nthreads
+#ifdef MPI
+        call MPI_Comm_Size( MPI_Comm_World, Nodes, MPI_SUCCESS )
+        write(unitout,"(A10,I0)") "MPI THREDS= ",Nodes
+#endif
 	write(unitout,"(A8,A2)") "SYSDIM= ",sysdim
 	write(unitout,"(A5,A1)") "DFT= ",dft		
 	write(unitout,*)
