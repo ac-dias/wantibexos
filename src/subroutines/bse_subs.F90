@@ -421,6 +421,126 @@ end subroutine dielbsev
 
 
 
+subroutine dielbsev_dist(dimse,excitonvec,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,hopt,activity,MPIError)
+
+#ifdef MPI
+	use mpi
+#endif
+	implicit none
+
+	integer :: dimse,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,MPIError
+	integer :: li,lj,ig,jg
+	integer, external :: indxl2g
+	complex,dimension(lld,*) :: excitonvec
+	complex,dimension(dimse) :: hopt
+	real,dimension(dimse) :: activity
+	complex,allocatable,dimension(:) :: amplitude
+
+#ifdef MPI
+	allocate(amplitude(dimse))
+	amplitude = cmplx(0.0,0.0)
+
+	do lj=1,locc
+		jg = indxl2g(lj,nb,mycol,0,npcol)
+		if (jg <= dimse) then
+			do li=1,locr
+				ig = indxl2g(li,mb,myrow,0,nprow)
+				if (ig <= dimse) amplitude(jg) = amplitude(jg) + excitonvec(li,lj)*hopt(ig)
+			end do
+		end if
+	end do
+
+	call MPI_ALLREDUCE(MPI_IN_PLACE,amplitude,dimse,MPI_COMPLEX,MPI_SUM,MPI_COMM_WORLD,MPIError)
+	activity = real(amplitude*conjg(amplitude))
+	deallocate(amplitude)
+#else
+	activity = 0.0
+	stop "Distributed BSE postprocessing requires MPI"
+#endif
+
+end subroutine dielbsev_dist
+
+
+subroutine dielbsep_dist(dimse,excitonvec,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,hopt1,hopt2,activity,MPIError)
+
+#ifdef MPI
+	use mpi
+#endif
+	implicit none
+
+	integer :: dimse,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,MPIError
+	integer :: li,lj,ig,jg
+	integer, external :: indxl2g
+	complex,dimension(lld,*) :: excitonvec
+	complex,dimension(dimse) :: hopt1,hopt2
+	real,dimension(dimse) :: activity
+	complex,allocatable,dimension(:) :: amplitude1,amplitude2
+
+#ifdef MPI
+	allocate(amplitude1(dimse),amplitude2(dimse))
+	amplitude1 = cmplx(0.0,0.0)
+	amplitude2 = cmplx(0.0,0.0)
+
+	do lj=1,locc
+		jg = indxl2g(lj,nb,mycol,0,npcol)
+		if (jg <= dimse) then
+			do li=1,locr
+				ig = indxl2g(li,mb,myrow,0,nprow)
+				if (ig <= dimse) then
+					amplitude1(jg) = amplitude1(jg) + excitonvec(li,lj)*hopt1(ig)
+					amplitude2(jg) = amplitude2(jg) + excitonvec(li,lj)*hopt2(ig)
+				end if
+			end do
+		end if
+	end do
+
+	call MPI_ALLREDUCE(MPI_IN_PLACE,amplitude1,dimse,MPI_COMPLEX,MPI_SUM,MPI_COMM_WORLD,MPIError)
+	call MPI_ALLREDUCE(MPI_IN_PLACE,amplitude2,dimse,MPI_COMPLEX,MPI_SUM,MPI_COMM_WORLD,MPIError)
+	activity = real(amplitude1*conjg(amplitude2))
+	deallocate(amplitude1,amplitude2)
+#else
+	activity = 0.0
+	stop "Distributed BSE postprocessing requires MPI"
+#endif
+
+end subroutine dielbsep_dist
+
+
+subroutine bse_eigenvector_column_dist(dimse,excitonvec,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,icol,eigvec,MPIError)
+
+#ifdef MPI
+	use mpi
+#endif
+	implicit none
+
+	integer :: dimse,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,icol,MPIError
+	integer :: li,lj,ig,jg
+	integer, external :: indxl2g
+	complex,dimension(lld,*) :: excitonvec
+	complex,dimension(dimse) :: eigvec
+
+#ifdef MPI
+	eigvec = cmplx(0.0,0.0)
+
+	do lj=1,locc
+		jg = indxl2g(lj,nb,mycol,0,npcol)
+		if (jg == icol) then
+			do li=1,locr
+				ig = indxl2g(li,mb,myrow,0,nprow)
+				if (ig <= dimse) eigvec(ig) = excitonvec(li,lj)
+			end do
+		end if
+	end do
+
+	call MPI_ALLREDUCE(MPI_IN_PLACE,eigvec,dimse,MPI_COMPLEX,MPI_SUM,MPI_COMM_WORLD,MPIError)
+#else
+	eigvec = cmplx(0.0,0.0)
+	stop "Distributed BSE postprocessing requires MPI"
+#endif
+
+end subroutine bse_eigenvector_column_dist
+
+
 subroutine exclft(sysdim,ngrid,rlat,fosc,enexc,lft) !tempo de vida exciton
 
 	implicit none
@@ -645,7 +765,6 @@ subroutine excwfi(outputfolder,ngkpt,kpt,qpt,nc,nv,nocp,stt,excenergy,excnum,qpt
 	close(800+excnum*qptnum)
 
 end subroutine excwfi
-
 
 
 

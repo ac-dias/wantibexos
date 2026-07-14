@@ -54,6 +54,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	!variaveis relacionadas a marcacao do tempo
 
 	real:: t0,tf
+	double precision :: task_start,task_elapsed,task_elapsed_max
 	integer,dimension(8) :: values,values2
 
 	integer,allocatable,dimension(:) :: nocpk
@@ -72,7 +73,8 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	real,parameter :: ABSTOL=1.0e-6
 	INTEGER  ::        INFO
 	real,allocatable,dimension(:) :: W,RWORK
-	COMPLEX,allocatable,dimension(:,:) :: hbse,hbse_dist
+		COMPLEX,allocatable,dimension(:,:) :: hbse,hbse_dist
+		COMPLEX,allocatable,dimension(:) :: eigvec_dist
 
         INTEGER :: LWMAX
    	INTEGER :: LWORK
@@ -540,9 +542,20 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	end if	
     endif
 
-	 ! $omp parallel default(shared) private(i,w90basis,rlat,rvec,hopmatrices,ihopmatrices)
-	
-	 !$omp parallel do 
+		if (Node == 0) then
+			write(300,*) 'IPA transitions: begin'
+			call flush(300)
+		end if
+#ifdef MPI
+		call MPI_BARRIER(MPI_COMM_WORLD,MPIError)
+		task_start = MPI_WTIME()
+#else
+		call cpu_time(task_start)
+#endif
+
+		 ! $omp parallel default(shared) private(i,w90basis,rlat,rvec,hopmatrices,ihopmatrices)
+
+		 !$omp parallel do
 	do i=1,dimbse
 
 		!ec = eigv(stt(i,4),stt(i,3))
@@ -581,9 +594,17 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 	 ! $omp end parallel
 	
-	call Bubblem(7,17,vecres, dimbse)
+		call Bubblem(7,17,vecres, dimbse)
 
-    if (Node == 0) then
+#ifdef MPI
+		task_elapsed = MPI_WTIME() - task_start
+		call MPI_REDUCE(task_elapsed,task_elapsed_max,1,MPI_DOUBLE_PRECISION,MPI_MAX,0,MPI_COMM_WORLD,MPIError)
+#else
+		call cpu_time(task_elapsed)
+		task_elapsed_max = task_elapsed - task_start
+#endif
+
+	    if (Node == 0) then
 	do i=1,dimbse
 	
 		write(401,"(7F15.6)") vecres(i,7),vecres(i,8),vecres(i,9),vecres(i,10),vecres(i,11),vecres(i,12),vecres(i,13)
@@ -604,7 +625,9 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	
 	end do	
 
-	write(300,*) 'IPA single particle optics finished'
+		write(300,*) 'IPA transitions: finished'
+		write(300,"(A,F12.3,A)") 'IPA transitions wall time: ',task_elapsed_max,' s'
+		write(300,*) 'IPA single particle optics finished'
 	call flush(300)
     endif
 
@@ -614,9 +637,15 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 
     if (Node == 0) then
-	 write(300,*) 'exciton Hamiltonian matrix start'
+	 write(300,*) 'BSE Hamiltonian construction: begin'
 	 call flush(300)
     endif
+#ifdef MPI
+	call MPI_BARRIER(MPI_COMM_WORLD,MPIError)
+	task_start = MPI_WTIME()
+#else
+	call cpu_time(task_start)
+#endif
 
 
     if (Nodes == 1) then
@@ -676,12 +705,32 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 #endif
     end if
 
+#ifdef MPI
+	task_elapsed = MPI_WTIME() - task_start
+	call MPI_REDUCE(task_elapsed,task_elapsed_max,1,MPI_DOUBLE_PRECISION,MPI_MAX,0,MPI_COMM_WORLD,MPIError)
+#else
+	call cpu_time(task_elapsed)
+	task_elapsed_max = task_elapsed - task_start
+#endif
+
     if (Node == 0) then
-	 write(300,*) 'exciton Hamiltonian matrix finished'
+	 write(300,*) 'BSE Hamiltonian construction: finished'
+	 write(300,"(A,F12.3,A)") 'BSE Hamiltonian construction wall time: ',task_elapsed_max,' s'
 	 call flush(300)
     endif
 
 	!call OMP_SET_NUM_THREADS(nthreads)
+
+	if (Node == 0) then
+		write(300,*) 'BSE diagonalization: begin'
+		call flush(300)
+	end if
+#ifdef MPI
+	call MPI_BARRIER(MPI_COMM_WORLD,MPIError)
+	task_start = MPI_WTIME()
+#else
+	call cpu_time(task_start)
+#endif
 
     if (Nodes == 1 ) then
 		select case (bsealgo)
@@ -787,20 +836,24 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 			write(*,*) 'ScaLAPACK PCHEEV failed with INFO = ', INFO
 			call MPI_ABORT(MPI_COMM_WORLD, INFO, MPIError)
 		end if
-		allocate(hbse(dimbse,dimbse))
-		hbse = 0.0
-		do lj=1,locc
-			jg = indxl2g(lj, nb, mycol, 0, npcol)
-			do li=1,locr
-				ig = indxl2g(li, mb, myrow, 0, nprow)
-				hbse(ig,jg) = hbse_dist(li,lj)
-			end do
-		end do
-		call MPI_ALLREDUCE(MPI_IN_PLACE, hbse, dimbse*dimbse, MPI_COMPLEX, MPI_SUM, MPI_COMM_WORLD, MPIError)
-		call BLACS_GRIDEXIT(blacs_ctxt)
-		deallocate(hbse_dist)
+			! Keep the PCHEEV eigenvectors in their 2D block-cyclic distribution.
+			! Reconstructing hbse here would allocate a full dimbse-by-dimbse copy
+			! on every MPI rank and defeats the ScaLAPACK memory distribution.
 #endif
 	endif
+
+#ifdef MPI
+	task_elapsed = MPI_WTIME() - task_start
+	call MPI_REDUCE(task_elapsed,task_elapsed_max,1,MPI_DOUBLE_PRECISION,MPI_MAX,0,MPI_COMM_WORLD,MPIError)
+#else
+	call cpu_time(task_elapsed)
+	task_elapsed_max = task_elapsed - task_start
+#endif
+	if (Node == 0) then
+		write(300,*) 'BSE diagonalization: finished'
+		write(300,"(A,F12.3,A)") 'BSE diagonalization wall time: ',task_elapsed_max,' s'
+		call flush(300)
+	end if
 
     !allocate(pinter(dimbse),pintra(dimbse))
 
@@ -850,114 +903,106 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 			deallocate(WORK,RWORK)
 		end if
 
-		if (Node == 0) then
-		if (bsewf) then
-	
-	      	do i=excwf0,excwff
-      	
-      			call excwf(outputfolder,ngkpt,kpt,nc,nv,nocpk,stt,W(i),i,hbse(:,i))
-      	
-      		end do
-	
-	else
-	
-	 continue
-	
-	end if
+		if (Nodes == 1) then
+			if (Node == 0) then
+				if (bsewf) then
+					do i=excwf0,excwff
+						call excwf(outputfolder,ngkpt,kpt,nc,nv,nocpk,stt,W(i),i,hbse(:,i))
+					end do
+				end if
 
-	write(300,*) 'exciton Hamiltonian diagonalized'
-	call flush(300)
-	write(300,*) "exciton ground state",W(1)
-		!deallocate (IWORK)
+				call dielbsev(nthreads,dimbse,hbse,hrx,actxx)
+				call dielbsev(nthreads,dimbse,hbse,hry,actyy)
+				call dielbsev(nthreads,dimbse,hbse,hrz,actzz)
 
-	!allocate(actxx(dimbse),actyy(dimbse),actzz(dimbse),actxy(dimbse))
-	!allocate(actxz(dimbse),actyz(dimbse))
-	
+				if (dtfull) then
+					call dielbsep(nthreads,dimbse,hbse,hrx,hry,actxy)
+					call dielbsep(nthreads,dimbse,hbse,hrx,hrz,actxz)
+					call dielbsep(nthreads,dimbse,hbse,hry,hrz,actyz)
+				else
+					actxy = 0.0
+					actxz = 0.0
+					actyz = 0.0
+				end if
 
-	
-	call dielbsev(nthreads,dimbse,hbse,hrx,actxx)
-	write(300,*) 'xx tensor component'
-	call flush(300)
-		
-	call dielbsev(nthreads,dimbse,hbse,hry,actyy)
-	write(300,*) 'yy tensor component'
-	call flush(300)
-		
-	call dielbsev(nthreads,dimbse,hbse,hrz,actzz)
-	write(300,*) 'zz tensor component'
-	call flush(300)
-	
-	if (dtfull) then
-	
-	call dielbsep(nthreads,dimbse,hbse,hrx,hry,actxy)
-	write(300,*) 'xy tensor component'
-	call flush(300)
-	
-	call dielbsep(nthreads,dimbse,hbse,hrx,hrz,actxz)
-	write(300,*) 'xz tensor component'
-	call flush(300)
-		
-	call dielbsep(nthreads,dimbse,hbse,hry,hrz,actyz)
-	write(300,*) 'yz tensor component'
-	call flush(300)
-	
-	else
-	
-	actxy = 0.0000
-	write(300,*) 'xy tensor component set to 0'
-	call flush(300)
-	
-	actxz = 0.0000
-	write(300,*) 'xz tensor component set to 0'
-	call flush(300)
-		
-	actyz = 0.0000
-	write(300,*) 'yz tensor component set to 0'
-	call flush(300)
-	
-	end if
-	
-	if (cpol) then
-	
-	call dielbsev(nthreads,dimbse,hbse,hrsp,actsp)
-	write(300,*) 'sp polarization'
-	call flush(300)
-		
-	call dielbsev(nthreads,dimbse,hbse,hrsm,actsm)
-	write(300,*) 'sm polarization'
-	call flush(300)
-	
-	else 
-	
-	actsp = 0.0000
-	write(300,*) 'sp polarization set to 0'
-	call flush(300)
-		
-	actsm = 0.0000
-	write(300,*) 'sm polarization set to 0'
-	call flush(300)
-	
-	end if	
+				if (cpol) then
+					call dielbsev(nthreads,dimbse,hbse,hrsp,actsp)
+					call dielbsev(nthreads,dimbse,hbse,hrsm,actsm)
+				else
+					actsp = 0.0
+					actsm = 0.0
+				end if
+			end if
+		else
+#ifdef MPI
+			if (bsewf) then
+				allocate(eigvec_dist(dimbse))
+				do i=excwf0,excwff
+					call bse_eigenvector_column_dist(dimbse,hbse_dist,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,i,eigvec_dist,MPIError)
+					if (Node == 0) call excwf(outputfolder,ngkpt,kpt,nc,nv,nocpk,stt,W(i),i,eigvec_dist)
+				end do
+				deallocate(eigvec_dist)
+			end if
 
+			call dielbsev_dist(dimbse,hbse_dist,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,hrx,actxx,MPIError)
+			call dielbsev_dist(dimbse,hbse_dist,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,hry,actyy,MPIError)
+			call dielbsev_dist(dimbse,hbse_dist,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,hrz,actzz,MPIError)
 
-	write(300,*) 'optics finished'
-	call flush(300)
+			if (dtfull) then
+				call dielbsep_dist(dimbse,hbse_dist,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,hrx,hry,actxy,MPIError)
+				call dielbsep_dist(dimbse,hbse_dist,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,hrx,hrz,actxz,MPIError)
+				call dielbsep_dist(dimbse,hbse_dist,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,hry,hrz,actyz,MPIError)
+			else
+				actxy = 0.0
+				actxz = 0.0
+				actyz = 0.0
+			end if
 
-	! $omp do ordered
-		do i=1,dimbse
-		! $omp ordered
-		write(301,"(7F15.6)") W(i),actxx(i),actyy(i),actzz(i),actxy(i),actxz(i),actyz(i)
-		call flush(301)
-		
-		if (cpol) then
-		write(302,"(6F15.6)") W(i),actxx(i),actyy(i),actzz(i),actsp(i),actsm(i)
-		call flush(302)		
+			if (cpol) then
+				call dielbsev_dist(dimbse,hbse_dist,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,hrsp,actsp,MPIError)
+				call dielbsev_dist(dimbse,hbse_dist,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,hrsm,actsm,MPIError)
+			else
+				actsp = 0.0
+				actsm = 0.0
+			end if
+#endif
 		end if
 
-		! $omp end ordered
-		end do
-			! $omp end do
+		if (Node == 0) then
+			write(300,*) 'exciton Hamiltonian diagonalized'
+			call flush(300)
+			write(300,*) "exciton ground state",W(1)
+			write(300,*) 'xx tensor component'
+			write(300,*) 'yy tensor component'
+			write(300,*) 'zz tensor component'
+			if (dtfull) then
+				write(300,*) 'xy tensor component'
+				write(300,*) 'xz tensor component'
+				write(300,*) 'yz tensor component'
+			else
+				write(300,*) 'xy tensor component set to 0'
+				write(300,*) 'xz tensor component set to 0'
+				write(300,*) 'yz tensor component set to 0'
 			end if
+			if (cpol) then
+				write(300,*) 'sp polarization'
+				write(300,*) 'sm polarization'
+			else
+				write(300,*) 'sp polarization set to 0'
+				write(300,*) 'sm polarization set to 0'
+			end if
+			write(300,*) 'optics finished'
+			call flush(300)
+
+			do i=1,dimbse
+				write(301,"(7F15.6)") W(i),actxx(i),actyy(i),actzz(i),actxy(i),actxz(i),actyz(i)
+				call flush(301)
+				if (cpol) then
+					write(302,"(6F15.6)") W(i),actxx(i),actyy(i),actzz(i),actsp(i),actsm(i)
+					call flush(302)
+				end if
+			end do
+		end if
 			
 		deallocate(eigv,vector)
 		deallocate(rvec,hopmatrices)
@@ -965,7 +1010,15 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		deallocate(hrx,hry,hrz,hrsp,hrsm)
 	deallocate(actxx,actxy,actxz,actyy,actyz,actzz)
 	deallocate(actsp,actsm)
-	deallocate(hbse,W,stt,nocpk)
+		if (Nodes == 1) then
+			deallocate(hbse)
+		else
+#ifdef MPI
+			call BLACS_GRIDEXIT(blacs_ctxt)
+			deallocate(hbse_dist)
+#endif
+		end if
+		deallocate(W,stt,nocpk)
 	deallocate(ovp)
 
 	deallocate(kpt)
