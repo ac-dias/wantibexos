@@ -108,7 +108,12 @@ subroutine bsebnds(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	real,dimension(3) :: ediel
 	real :: ez,w1,lc
 	logical :: bsewf
-	integer :: excwf0,excwff	
+	integer :: excwf0,excwff
+	
+	real,allocatable,dimension(:) :: gwcor
+	integer :: gwin
+	real :: gwaux
+	character(len=1) :: gwchar		
 	
 
 	!call input_read
@@ -118,6 +123,7 @@ subroutine bsebnds(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
     	if (erro/=0) stop "Error opening bse-kpath input file"
 	!OPEN(UNIT=201, FILE= diein,STATUS='old', IOSTAT=erro)
     	!if (erro/=0) stop "Erro na abertura do arquivo de entrada ambiente dieletrico"
+	OPEN(UNIT=304, FILE=trim(outputfolder)//"gw_qp_energy_cor_avg.dat",STATUS='old', IOSTAT=gwin)    	
 
 	!OUTPUT : criando arquivos de saida
 	OPEN(UNIT=300, FILE=trim(outputfolder)//"log_bse_kpath.dat",STATUS='unknown', IOSTAT=erro)
@@ -227,6 +233,27 @@ subroutine bsebnds(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 	allocate(nocpk(ngkpt))
 	allocate(nocpq(ngkpt))
+	
+    	if (gwin .eq. 0) then
+    	
+    		allocate(gwcor(w90basis))
+    		
+    			read(304,*) gwchar
+    		   		
+    		do i=1,w90basis
+    		
+    			read(304,*) gwcor(i),gwaux,gwaux,gwaux,gwaux
+    			
+    		
+    		end do
+    		
+    		write(2077,*) "G0W0 correction applied in BSE kpath"
+    	
+    	else
+    	
+    		continue
+    	
+    	end if  	
 
 	!$omp parallel do default(shared) private(i,eaux,vaux,j,l,h)
 	do i=1,ngkpt
@@ -263,8 +290,17 @@ subroutine bsebnds(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 #endif	
 
 			do j=1,nc+nv
+			
+				if (gwin .eq. 0) then
+				
+				energy(i,j)= eaux(nocpk(i)-nv+j)+gwcor(nocpk(i)-nv+j)
+				
+				else
 	
 				energy(i,j)= eaux(nocpk(i)-nv+j)
+
+				end if
+	
 
 			end do
 
@@ -374,8 +410,18 @@ subroutine bsebnds(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 #endif	
 			
 				do j=1,nc+nv
+				
+					if (gwin .eq. 0) then
+				
+					energyq(i2,j)= eaux(nocpq(i2)-nv+j)+gwcor(nocpq(i2)-nv+j)
+				
+					else
 	
 					energyq(i2,j)= eaux(nocpq(i2)-nv+j) 
+
+					end if				
+	
+					
 
 				end do
 
@@ -417,6 +463,8 @@ subroutine bsebnds(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		call quantumnumbers2(w90basis,ngkpt,nc,nv,nocpk,nocpq,stt)
 
 		deallocate(eaux,vaux)
+		
+	
 
 
 		allocate(hbse(dimbse,dimbse))
@@ -452,7 +500,7 @@ hbse(i2,j)= matrizelbsekq(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,q,rlat,
 	!$omp end parallel do
 
  
- 
+
 
 	
 	select case (bsealgo)
@@ -764,7 +812,10 @@ hbse(i2,j)= matrizelbsekq(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,q,rlat,
 
 	end do
 
-
+ 	if (gwin .eq. 0) then
+    	
+    		deallocate(gwcor)
+        end if	
 
 	do i2=1,dimbse
 
@@ -809,6 +860,8 @@ hbse(i2,j)= matrizelbsekq(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,q,rlat,
 	close(300)
 	close(400)
 	close(500)
+	
+	close(304)	
 
 
 

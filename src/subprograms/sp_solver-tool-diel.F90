@@ -77,6 +77,11 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 	real,dimension(3) :: ediel,mag
 	character(len=1) :: dft
 	logical :: tmcoef
+	
+	real,allocatable,dimension(:) :: gwcor
+	integer :: gwin
+	real :: gwaux
+	character(len=1) :: gwchar		
 
 	!fim modificacoes versao 2.1
 	!call input_read
@@ -84,7 +89,7 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 	! INPUT : lendo os parametros do modelo de tight-binding
 	!OPEN(UNIT=201, FILE= diein,STATUS='old', IOSTAT=erro)
     	!if (erro/=0) stop "Erro na abertura do arquivo de entrada ambiente dieletrico"
-
+	OPEN(UNIT=404, FILE=trim(outputfolder)//"gw_qp_energy_cor_avg.dat",STATUS='old', IOSTAT=gwin)
 
 	!OUTPUT
 	OPEN(UNIT=301, FILE=trim(outputfolder)//"ipa_oscf.dat",STATUS='unknown', IOSTAT=erro)
@@ -168,7 +173,28 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 
 	allocate(eaux(w90basis),vaux(w90basis,w90basis))
 	allocate(eigv(ngkpt,nc+nv),vector(ngkpt,nc+nv,w90basis))
-	
+
+
+    	if (gwin .eq. 0) then
+    	
+    		allocate(gwcor(w90basis))
+    		
+    			read(404,*) gwchar
+    		   		
+    		do i=1,w90basis
+    		
+    			read(404,*) gwcor(i),gwaux,gwaux,gwaux,gwaux
+    			
+    		
+    		end do
+    		
+    		write(2077,*) "G0W0 correction applied in IPA"
+    	
+    	else
+    	
+    		continue
+    	
+    	end if  	
 		
 
 
@@ -205,11 +231,21 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 		
 #endif
 
+
+			
 			do j=1,nc+nv
+			
+				if (gwin .eq. 0) then
+				
+				eigv(i,j)= eaux(nocpk(i)-nv+j)+gwcor(nocpk(i)-nv+j)
+				
+				else
 	
 				eigv(i,j)= eaux(nocpk(i)-nv+j)
 
-			end do
+				end if
+
+			end do			
 			
 
 
@@ -269,6 +305,11 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 	
 	 continue
 	end if
+	
+	if (gwin .eq. 0) then
+    	
+    		deallocate(gwcor)
+        end if	
 	
 	!$omp parallel do default(shared) private(i,ec,ev,hrsp,hrsm,hxsp,hysp,hzsp)
 
@@ -369,6 +410,8 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 	else
 	 continue
 	end if
+	
+	close(404)
 	
 
 	

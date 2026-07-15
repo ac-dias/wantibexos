@@ -62,6 +62,11 @@ subroutine berrycurv(nthreads,dft,outputfolder,params,kpaths,sme,nocpf,fermishif
 	
 	integer :: nocpf
 	real :: fermishift
+	
+	real,allocatable,dimension(:) :: gwcor
+	integer :: gwin
+	real :: gwaux
+	character(len=1) :: gwchar	
 
 	!fim modificacoes versao 2.1
 
@@ -70,6 +75,9 @@ subroutine berrycurv(nthreads,dft,outputfolder,params,kpaths,sme,nocpf,fermishif
 
 	OPEN(UNIT=202, FILE= kpaths,STATUS='old', IOSTAT=erro)
     	if (erro/=0) stop "Error opening kpath input file"
+
+	OPEN(UNIT=304, FILE=trim(outputfolder)//"gw_qp_energy_cor_avg.dat",STATUS='old', IOSTAT=gwin)
+    	
 
 	!OUTPUT : criando arquivos de saida
 	OPEN(UNIT=300, FILE=trim(outputfolder)//"berry_curv_kpath.dat",STATUS='unknown', IOSTAT=erro)
@@ -130,6 +138,27 @@ subroutine berrycurv(nthreads,dft,outputfolder,params,kpaths,sme,nocpf,fermishif
 	allocate(eigvf(nkpts*(nks-1),w90basis),vector(nkpts*(nks-1),w90basis,w90basis))
 
 
+    	if (gwin .eq. 0) then
+    	
+    		allocate(gwcor(w90basis))
+    		
+    			read(304,*) gwchar
+    		   		
+    		do i=1,w90basis
+    		
+    			read(304,*) gwcor(i),gwaux,gwaux,gwaux,gwaux
+    			
+    		
+    		end do
+    		
+    		write(2077,*) "G0W0 correction applied in kpath Berry curvature"
+    	
+    	else
+    	
+    		continue
+    	
+    	end if  
+
 	!$omp parallel do default(shared) private(i,k,eigv,autovetores)
 	!do i=1,nkpts*(nks-1)
 	do i=1,(nks/2)*nkpts
@@ -164,8 +193,15 @@ subroutine berrycurv(nthreads,dft,outputfolder,params,kpaths,sme,nocpf,fermishif
 		
 			do k=1,w90basis
 
+				if (gwin .eq. 0) then
 
-				eigvf(i,k)=eigv(k)
+				  eigvf(i,k)=eigv(k)+gwcor(k)
+				
+				else
+				
+				  eigvf(i,k)=eigv(k)
+
+				end if
 
 				do m=1,w90basis
 
@@ -183,6 +219,11 @@ subroutine berrycurv(nthreads,dft,outputfolder,params,kpaths,sme,nocpf,fermishif
 	!termino definicao kpath
 	
 	write(300,*) "kp yz xz xy"
+
+	if (gwin .eq. 0) then
+    	
+    		deallocate(gwcor)
+        end if	
 
 	
 	!do j=1,nkpts*(nks-1)
@@ -221,6 +262,7 @@ subroutine berrycurv(nthreads,dft,outputfolder,params,kpaths,sme,nocpf,fermishif
 	close(200)
 	close(202)
 	close(300)
+	close(304)
 
 
 end subroutine berrycurv

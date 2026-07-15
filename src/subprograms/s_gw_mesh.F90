@@ -846,25 +846,25 @@ end if
 
 	!estimating GW gap
 	
-	write(300,*)
-	write(300,*)"QP Eigenvalues and Eigenvectors in k-mesh calculated"	
-	write(300,*)
+	!write(300,*)
+	!write(300,*)"QP Eigenvalues and Eigenvectors in k-mesh calculated"	
+	!write(300,*)
 	
-	call gapfinder(w90basis,nkpt,nocpk,encor,nkc,nkv,nkgap,gap,cbm,vbm)
+	!call gapfinder(w90basis,nkpt,nocpk,encor,nkc,nkv,nkgap,gap,cbm,vbm)
 	
-	write(300,*) "G0W0 QP fundamental band gap (eV):",cbm-vbm
-	write(300,*) "G0W0 QP direct band gap (eV):",gap
-	write(300,*)
-	write(300,*)
-	write(300,*)"G0W0 QP kpoint cbm"
-	write(300,"(3E18.8)")kpt(nkc,1),kpt(nkc,2),kpt(nkc,3)
-	write(300,*)	
-	write(300,*)"G0W0 QP kpoint vbm"
-	write(300,"(3E18.8)")kpt(nkv,1),kpt(nkv,2),kpt(nkv,3)
-	write(300,*)		 
-	write(300,*)"G0W0 QP kpoint direct band gap"
-	write(300,"(3E18.8)")kpt(nkgap,1),kpt(nkgap,2),kpt(nkgap,3)	
-	call flush(300)	
+	!write(300,*) "G0W0 QP fundamental band gap (eV):",cbm-vbm
+	!write(300,*) "G0W0 QP direct band gap (eV):",gap
+	!write(300,*)
+	!write(300,*)
+	!write(300,*)"G0W0 QP kpoint cbm"
+	!write(300,"(3E18.8)")kpt(nkc,1),kpt(nkc,2),kpt(nkc,3)
+	!write(300,*)	
+	!write(300,*)"G0W0 QP kpoint vbm"
+	!write(300,"(3E18.8)")kpt(nkv,1),kpt(nkv,2),kpt(nkv,3)
+	!write(300,*)		 
+	!write(300,*)"G0W0 QP kpoint direct band gap"
+	!write(300,"(3E18.8)")kpt(nkgap,1),kpt(nkgap,2),kpt(nkgap,3)	
+	!call flush(300)	
 							
 	deallocate(encor)
 	

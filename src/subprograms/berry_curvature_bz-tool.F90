@@ -70,6 +70,11 @@ subroutine berrycurvbz(nthreads,dft,outputfolder,params,sme,ngrid,mshift,nocpf,f
 	
 	integer :: nocpf,ngkpt
 	real :: fermishift
+	
+	real,allocatable,dimension(:) :: gwcor
+	integer :: gwin
+	real :: gwaux
+	character(len=1) :: gwchar	
 
 	!fim modificacoes versao 2.1
 
@@ -78,6 +83,8 @@ subroutine berrycurvbz(nthreads,dft,outputfolder,params,sme,ngrid,mshift,nocpf,f
 
 	!OPEN(UNIT=202, FILE= kpaths,STATUS='old', IOSTAT=erro)
     	!if (erro/=0) stop "Erro na abertura do arquivo de entrada kpath"
+
+	OPEN(UNIT=304, FILE=trim(outputfolder)//"gw_qp_energy_cor_avg.dat",STATUS='old', IOSTAT=gwin)
 
 	!OUTPUT : criando arquivos de saida
 	OPEN(UNIT=300, FILE=trim(outputfolder)//"berry_curv_bz.dat",STATUS='unknown', IOSTAT=erro)
@@ -146,6 +153,29 @@ subroutine berrycurvbz(nthreads,dft,outputfolder,params,sme,ngrid,mshift,nocpf,f
 	allocate(eigvf(ngkpt,w90basis),vector(ngkpt,w90basis,w90basis))
 
 	allocate(nocpk(ngkpt))
+	
+	
+    	if (gwin .eq. 0) then
+    	
+    		allocate(gwcor(w90basis))
+    		
+    			read(304,*) gwchar
+    		   		
+    		do i=1,w90basis
+    		
+    			read(304,*) gwcor(i),gwaux,gwaux,gwaux,gwaux
+    			
+    		
+    		end do
+    		
+    		write(2077,*) "G0W0 correction applied in BZ Berry Curvature"
+    	
+    	else
+    	
+    		continue
+    	
+    	end if  
+    			
 
 	!$omp parallel do default(shared) private(i,k,autovetores,eigv)
 	do i=1,ngkpt
@@ -180,8 +210,15 @@ subroutine berrycurvbz(nthreads,dft,outputfolder,params,sme,ngrid,mshift,nocpf,f
 
 			do k=1,w90basis
 
+				if (gwin .eq. 0) then
 
-				eigvf(i,k)=eigv(k)
+				  eigvf(i,k)=eigv(k)+gwcor(k)
+				
+				else
+				
+				  eigvf(i,k)=eigv(k)
+
+				end if
 
 				do m=1,w90basis
 
@@ -200,6 +237,11 @@ subroutine berrycurvbz(nthreads,dft,outputfolder,params,sme,ngrid,mshift,nocpf,f
 	!termino definicao kpath
 
 	allocate(output(ngkpt,6))
+	
+	if (gwin .eq. 0) then
+    	
+    		deallocate(gwcor)
+        end if		
 	
 	output= 0.0	
 
@@ -256,6 +298,7 @@ subroutine berrycurvbz(nthreads,dft,outputfolder,params,sme,ngrid,mshift,nocpf,f
 	!close(202)
 
 	close(300)
+	close(304)
 
 
 end subroutine berrycurvbz

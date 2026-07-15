@@ -69,6 +69,11 @@ subroutine bandstool(nthreads,outputfolder,params,kpaths,orbw, &
 	real :: fermishift
 	complex,allocatable,dimension(:,:) :: ovptb
 	
+	real,allocatable,dimension(:) :: gwcor
+	integer :: gwin
+	real :: gwaux
+	character(len=1) :: gwchar
+	
 	!integer :: power
 	!logical :: lowdin
 
@@ -92,6 +97,12 @@ subroutine bandstool(nthreads,outputfolder,params,kpaths,orbw, &
 
 	!OPEN(UNIT=500, FILE=trim(outputfolder)//"nocp.dat",STATUS='unknown', IOSTAT=erro)
     	!if (erro/=0) stop "Erro na abertura do arquivo de saida nocp"
+    	
+	OPEN(UNIT=304, FILE=trim(outputfolder)//"gw_qp_energy_cor_avg.dat",STATUS='old', IOSTAT=gwin)
+    	!if (gwin/=0) stop "Error opening gwcor avg file"
+    	
+
+    	  	
 
 	call OMP_SET_NUM_THREADS(nthreads)
 	
@@ -141,6 +152,28 @@ subroutine bandstool(nthreads,outputfolder,params,kpaths,orbw, &
 
 	end if
 
+    	
+    	
+    	if (gwin .eq. 0) then
+    	
+    		allocate(gwcor(w90basis))
+    		
+    			read(304,*) gwchar
+    		   		
+    		do i=1,w90basis
+    		
+    			read(304,*) gwcor(i),gwaux,gwaux,gwaux,gwaux
+    			
+    		
+    		end do
+    		
+    		write(2077,*) "G0W0 correction applied in band structure"
+    	
+    	else
+    	
+    		continue
+    	
+    	end if  
 
 
 	!termino leitura parametros
@@ -217,11 +250,13 @@ subroutine bandstool(nthreads,outputfolder,params,kpaths,orbw, &
 		end if
 		
 		
+		
+		
 		do i=1,w90basis
 
 			call layercont(w90basis,dft,autovetores(i,:),orbweight,ovptb,lco)
 			call spinvl(w90basis,autovetores(i,:),dft,systype,ovptb,spx,spy,spz)
-
+			
 			
 			ebands(i,j,1) = kp
 			ebands(i,j,2) = eigv(i)
@@ -231,7 +266,13 @@ subroutine bandstool(nthreads,outputfolder,params,kpaths,orbw, &
 			ebands(i,j,6) = lco
 			ebands(i,j,7) = kx
 			ebands(i,j,8) = ky
-			ebands(i,j,9) = kz									
+			ebands(i,j,9) = kz
+			
+			if (gwin .eq. 0) then
+			
+				ebands(i,j,2) = eigv(i) + gwcor(i)
+			
+			end if									
 
 
 		end do		 
@@ -265,6 +306,11 @@ subroutine bandstool(nthreads,outputfolder,params,kpaths,orbw, &
 	end do
 	!$omp end parallel do
 	
+	if (gwin .eq. 0) then
+    	
+    		deallocate(gwcor)
+        end if
+	
 	
 	!write(*,*) "autovetores e autovalores"
 	
@@ -275,8 +321,8 @@ subroutine bandstool(nthreads,outputfolder,params,kpaths,orbw, &
 	
 	call gapfinder(w90basis,((nks/2)*nkpts),nocpj,ebands(:,:,2),nkc,nkv,nkgap,gap,cbm,vbm)
 
-	write(500,"(3E18.8,I7,1F18.8)") kpts(nkv,2),kpts(nkv,3),kpts(nkv,4),nocpj(nkv),vbm
-	write(500,"(3E18.8,I7,1F18.8)") kpts(nkc,2),kpts(nkc,3),kpts(nkc,4),nocpj(nkc)+1,cbm
+	write(500,"(3E18.8,I7,1F18.8)") kpts(nkv,2),kpts(nkv,3),kpts(nkv,4),nocpj(nkv),vbm-vbm
+	write(500,"(3E18.8,I7,1F18.8)") kpts(nkc,2),kpts(nkc,3),kpts(nkc,4),nocpj(nkc)+1,cbm-vbm
 	
 	
 	write(501,*) "fundamental band gap (eV):",cbm-vbm
@@ -304,11 +350,11 @@ subroutine bandstool(nthreads,outputfolder,params,kpaths,orbw, &
 		
 		do j=1,(nks/2)*nkpts
 
-	               write(300,"(1E20.8,1F20.8,4F20.6)") ebands(i,j,1),ebands(i,j,2),ebands(i,j,3),&
+	               write(300,"(1E20.8,1F20.8,4F20.6)") ebands(i,j,1),ebands(i,j,2)-vbm,ebands(i,j,3),&
 	                            ebands(i,j,4),ebands(i,j,5),ebands(i,j,6)
 	                            
 	               write(301,"(4E20.8,1F20.8)") ebands(i,j,7),ebands(i,j,8),ebands(i,j,9),&
-	                            ebands(i,j,1),ebands(i,j,2)	                            
+	                            ebands(i,j,1),ebands(i,j,2)-vbm	                            
 
 		end do
 
@@ -343,6 +389,7 @@ subroutine bandstool(nthreads,outputfolder,params,kpaths,orbw, &
 	close(203)
 	close(500)
 	close(501)
+	close(304)
 
 
 

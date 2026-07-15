@@ -1148,10 +1148,10 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	write(unitout,"(A10,L1)") "SPIN_TXT= ",spintxt
 	write(unitout,"(A7,L1)") "BOLTZ= ",boltz
 	write(unitout,"(A9,L1)") "GW_MESH= ",gwmesh
-	write(unitout,"(A13,L1)") "GW_MESH_USE= ",gwmeshuse
-	write(unitout,"(A8,L1)") "GW_BND= ",gwbnd
-	write(unitout,"(A12,L1)") "GW_BND_USE= ",gwbnduse
-	write(unitout,"(A16,L1)") "GW_BSE_BND_USE= ",gwbsebnd										
+	!write(unitout,"(A13,L1)") "GW_MESH_USE= ",gwmeshuse
+	!write(unitout,"(A8,L1)") "GW_BND= ",gwbnd
+	!write(unitout,"(A12,L1)") "GW_BND_USE= ",gwbnduse
+	!write(unitout,"(A16,L1)") "GW_BSE_BND_USE= ",gwbsebnd										
 	write(unitout,*)
 	write(unitout,*) "K-MESH"
 	write(unitout,*)

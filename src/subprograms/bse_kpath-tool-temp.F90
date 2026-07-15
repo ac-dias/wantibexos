@@ -114,7 +114,10 @@ subroutine bsebndstemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	real :: st,phavg,temp
 	real :: gapcortemp,gapcortemp2,tcor
 		
-	
+	real,allocatable,dimension(:) :: gwcor
+	integer :: gwin
+	real :: gwaux
+	character(len=1) :: gwchar	
 
 	!call input_read
 
@@ -123,6 +126,7 @@ subroutine bsebndstemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
     	if (erro/=0) stop "Error opening bse-kpath input file"
 	!OPEN(UNIT=201, FILE= diein,STATUS='old', IOSTAT=erro)
     	!if (erro/=0) stop "Erro na abertura do arquivo de entrada ambiente dieletrico"
+	OPEN(UNIT=304, FILE=trim(outputfolder)//"gw_qp_energy_cor_avg.dat",STATUS='old', IOSTAT=gwin) 
 
 	!OUTPUT : criando arquivos de saida
 	OPEN(UNIT=300, FILE=trim(outputfolder)//"log_bse_kpath.dat",STATUS='unknown', IOSTAT=erro)
@@ -254,6 +258,27 @@ subroutine bsebndstemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		tcor= 0.00
 	
 	end select
+	
+    	if (gwin .eq. 0) then
+    	
+    		allocate(gwcor(w90basis))
+    		
+    			read(304,*) gwchar
+    		   		
+    		do i=1,w90basis
+    		
+    			read(304,*) gwcor(i),gwaux,gwaux,gwaux,gwaux
+    			
+    		
+    		end do
+    		
+    		write(2077,*) "G0W0 correction applied in BSE kpath"
+    	
+    	else
+    	
+    		continue
+    	
+    	end if  	
 
 	!$omp parallel do default(shared) private(i,eaux,vaux,j,l,h)
 	do i=1,ngkpt
@@ -291,7 +316,15 @@ subroutine bsebndstemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 			do j=1,nc+nv
 	
+				if (gwin .eq. 0) then
+				
+				energy(i,j)= eaux(nocpk(i)-nv+j)+gwcor(nocpk(i)-nv+j)
+				
+				else
+	
 				energy(i,j)= eaux(nocpk(i)-nv+j)
+
+				end if
 
 			end do
 
@@ -407,7 +440,15 @@ subroutine bsebndstemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 			
 				do j=1,nc+nv
 	
+					if (gwin .eq. 0) then
+				
+					energyq(i2,j)= eaux(nocpq(i2)-nv+j)+gwcor(nocpq(i2)-nv+j)
+				
+					else
+	
 					energyq(i2,j)= eaux(nocpq(i2)-nv+j) 
+
+					end if	
 
 				end do
 
@@ -450,6 +491,7 @@ subroutine bsebndstemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		call quantumnumbers2(w90basis,ngkpt,nc,nv,nocpk,nocpq,stt)
 
 		deallocate(eaux,vaux)
+
 
 
 		allocate(hbse(dimbse,dimbse),W(dimbse))
@@ -793,6 +835,10 @@ hbse(i2,j)= matrizelbsekqtemp(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,q,r
 	end do
 
 
+	if (gwin .eq. 0) then
+    	
+    		deallocate(gwcor)
+        end if
 
 	do i2=1,dimbse
 
@@ -838,6 +884,6 @@ hbse(i2,j)= matrizelbsekqtemp(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,q,r
 	close(400)
 	close(500)
 
-
+	close(304)
 
 end subroutine bsebndstemp

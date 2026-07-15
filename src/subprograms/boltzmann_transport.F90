@@ -58,9 +58,16 @@ subroutine boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc
 	
 	character(len=200) :: file1,file2,file3,file4,file5,file6
 	
+	real,allocatable,dimension(:) :: gwcor
+	integer :: gwin
+	real :: gwaux
+	character(len=1) :: gwchar	
+	
 	!real,parameter :: a2m = 1.0E-10 !convert angstrom to meter
 	!real,parameter :: echarge = 1.602176620898E-19 !electron charge in coulomb
 
+	! INPUT : lendo correção G0W0
+	OPEN(UNIT=404, FILE=trim(outputfolder)//"gw_qp_energy_cor_avg.dat",STATUS='old', IOSTAT=gwin)
 	
 	!OUTPUT : criando arquivos de saida
 	OPEN(UNIT=400, FILE=trim(outputfolder)//"log_boltzmann_transport.dat",STATUS='unknown', IOSTAT=erro)
@@ -151,6 +158,26 @@ subroutine boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc
    	
    	allocate(vaux(w90basis,w90basis),eaux(w90basis))
    	
+    	if (gwin .eq. 0) then
+    	
+    		allocate(gwcor(w90basis))
+    		
+    			read(404,*) gwchar
+    		   		
+    		do i=1,w90basis
+    		
+    			read(404,*) gwcor(i),gwaux,gwaux,gwaux,gwaux
+    			
+    		
+    		end do
+    		
+    		write(2077,*) "G0W0 correction applied in Boltzmann Transport calculations"
+
+    	else
+    	
+    		continue
+    	
+    	end if  	
    	
    	e0= 0.0
    	ef= 0.0
@@ -192,7 +219,15 @@ subroutine boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc
 		
 		do i=1,w90basis
 		
-			autovalores(j,i) = eaux(i)
+			if (gwin .eq. 0) then
+
+			 autovalores(j,i) = eaux(i)+gwcor(i)
+			
+			else
+		
+			 autovalores(j,i) = eaux(i)
+		
+			end if
 		
 		end do
 		
@@ -224,6 +259,13 @@ subroutine boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc
 	call flush(400)   	
    	
    	deallocate(eaux,vaux)
+   	
+	if (gwin .eq. 0) then
+    	
+    		deallocate(gwcor)
+    		write(400,*)  "G0W0 correction applied in eigenvalues"
+    		
+        end if	   	
    	
    	allocate(elvel(w90basis,ngkpt,3))
    	
@@ -499,7 +541,8 @@ subroutine boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc
    	close(303)
    	close(304)
    	close(305)
-   	!close(306)   	
+   	!close(306) 
+   	close(404)  	
    	
    	
     		

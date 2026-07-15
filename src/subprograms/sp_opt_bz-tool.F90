@@ -74,6 +74,11 @@ subroutine spoptpolbz(nthreads,dft,outputfolder,ngrid,nc,nv, &
 	character(len=5) :: coultype
 	character(len=1) :: dft
 	real,dimension(3) :: ediel,mag
+	
+	real,allocatable,dimension(:) :: gwcor
+	integer :: gwin
+	real :: gwaux
+	character(len=1) :: gwchar	
 
 
 	!fim modificacoes versao 2.1
@@ -82,7 +87,7 @@ subroutine spoptpolbz(nthreads,dft,outputfolder,ngrid,nc,nv, &
 	! INPUT : lendo os parametros do modelo de tight-binding
 	!OPEN(UNIT=201, FILE= diein,STATUS='old', IOSTAT=erro)
     	!if (erro/=0) stop "Erro na abertura do arquivo de entrada ambiente dieletrico"
-
+	OPEN(UNIT=404, FILE=trim(outputfolder)//"gw_qp_energy_cor_avg.dat",STATUS='old', IOSTAT=gwin)
 
 	!OUTPUT
 	OPEN(UNIT=301, FILE=trim(outputfolder)//"bz_act_x.dat",STATUS='unknown', IOSTAT=erro)
@@ -172,6 +177,27 @@ subroutine spoptpolbz(nthreads,dft,outputfolder,ngrid,nc,nv, &
 	allocate(eigv(ngkpt,w90basis),vector(ngkpt,w90basis,w90basis))
 	allocate(nocpk(ngkpt))
 
+    	if (gwin .eq. 0) then
+    	
+    		allocate(gwcor(w90basis))
+    		
+    			read(404,*) gwchar
+    		   		
+    		do i=1,w90basis
+    		
+    			read(404,*) gwcor(i),gwaux,gwaux,gwaux,gwaux
+    			
+    		
+    		end do
+    		
+    		write(2077,*) "G0W0 correction applied in IPA OPT BZ"
+    	
+    	else
+    	
+    		continue
+    	
+    	end if  
+
 
 	!$omp parallel do default(shared) private(i,j,l,h,eaux,vaux)
 	do i=1,ngkpt
@@ -207,8 +233,17 @@ subroutine spoptpolbz(nthreads,dft,outputfolder,ngrid,nc,nv, &
 #endif		
 
 			do j=1,w90basis
+			
+				if (gwin .eq. 0) then
+
+				 eigv(i,j)= eaux(j)+gwcor(j)
+				
+				else
+				
 	
-				eigv(i,j)= eaux(j)
+				 eigv(i,j)= eaux(j)
+
+				end if
 
 			end do
 			
@@ -235,6 +270,10 @@ subroutine spoptpolbz(nthreads,dft,outputfolder,ngrid,nc,nv, &
 
 	deallocate(eaux,vaux)
 
+	if (gwin .eq. 0) then
+    	
+    		deallocate(gwcor)
+        end if	
 
 
 	!definindo os numeros quanticos dos estados
@@ -391,6 +430,8 @@ end do
 	close(305)
 	close(306)
 	close(307)
+	
+	close(404)
 
 	
 

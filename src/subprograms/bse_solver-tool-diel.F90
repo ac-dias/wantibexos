@@ -111,7 +111,12 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	real :: ez,w1,lc
 	
 	logical :: cpol,dtfull
-	logical :: tmcoef	
+	logical :: tmcoef
+	
+	real,allocatable,dimension(:) :: gwcor
+	integer :: gwin
+	real :: gwaux
+	character(len=1) :: gwchar		
 
 	!fim modificacoes versao 2.1
 
@@ -120,6 +125,8 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	! INPUT : lendo os parametros do modelo de tight-binding
 	!OPEN(UNIT=203, FILE= orbw,STATUS='old', IOSTAT=erro)
     	!if (erro/=0) stop "Erro na abertura do arquivo de entrada orb weight"
+
+	OPEN(UNIT=304, FILE=trim(outputfolder)//"gw_qp_energy_cor_avg.dat",STATUS='old', IOSTAT=gwin)
 
 	!OUTPUT
 
@@ -346,6 +353,27 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	!end do
 
 	!allocate(lcount(ngkpt,w90basis))
+	
+    	if (gwin .eq. 0) then
+    	
+    		allocate(gwcor(w90basis))
+    		
+    			read(304,*) gwchar
+    		   		
+    		do i=1,w90basis
+    		
+    			read(304,*) gwcor(i),gwaux,gwaux,gwaux,gwaux
+    			
+    		
+    		end do
+    		
+    		write(2077,*) "G0W0 correction applied in BSE"
+    	
+    	else
+    	
+    		continue
+    	
+    	end if  		
 
 	egap = 50.0
 
@@ -383,8 +411,16 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 #endif	
 
 			do j=1,nc+nv
+			
+				if (gwin .eq. 0) then
+				
+				eigv(i,j)= eaux(nocpk(i)-nv+j)+gwcor(nocpk(i)-nv+j)
+				
+				else
 	
 				eigv(i,j)= eaux(nocpk(i)-nv+j)
+
+				end if
 
 			end do
 			
@@ -497,6 +533,11 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	 continue
 	end if	
 
+
+	if (gwin .eq. 0) then
+    	
+    		deallocate(gwcor)
+        end if
 
 	 ! $omp parallel default(shared) private(i,w90basis,rlat,rvec,hopmatrices,ihopmatrices)
 	
@@ -896,7 +937,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	close(403)
 	close(404)
 	
-	!close(500)			
+	close(304)			
 
 
 	
