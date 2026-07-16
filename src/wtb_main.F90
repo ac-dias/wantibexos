@@ -136,7 +136,7 @@ program main
 
 
     if (Node == 0) then
-    OPEN(UNIT=2077, FILE= trim(calcparms)//"log.dat",STATUS='unknown', IOSTAT=erro)
+     OPEN(UNIT=2077, FILE= trim(calcparms)//"log.dat",STATUS='unknown', IOSTAT=erro)
      print*, trim(calcparms)//"log.dat"
     	if (erro/=0) stop "Error opening log output file "
 
@@ -278,9 +278,10 @@ program main
 	!calculo optica
 	
 	if (bse) then
-	 write(2077,*) "BSE and Single particle dielectric calculation finished"
-         call flush(2077)
-
+         if (Node==0) then
+	  write(2077,*) "BSE and Single particle dielectric calculation started"
+          call flush(2077)
+         endif
 		if (temp .eq. 0.0) then
 		
 		call bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
@@ -288,9 +289,11 @@ program main
 		     exc,mshift,coultype,ez,w,r0,lc,rk,meshtype,bsewf,excwf0,excwff,dtfull,cpol,tmcoef,&
 		     nocpf,fermishift,bsealgo,dft,mag)
 
-	 	write(2077,*) "BSE and Single particle dielectric calculation finished"
-     		call flush(2077)
-		
+                if (Node == 0) then
+	 	  write(2077,*) "BSE and Single particle dielectric calculation finished"
+     		  call flush(2077)
+		endif
+
 		else
             if (Nodes /= 1) then
              write(2077,*) "Not implemented in parallel yet"
@@ -301,10 +304,12 @@ program main
 		     ebse0,ebsef,numbse,cshift,ktol,params,kpaths,kpathsbse,orbw,ediel, &
 		     exc,mshift,coultype,ez,w,r0,lc,rk,meshtype,bsewf,excwf0,excwff,dtfull,&
 		     cpol,tmcoef,st,phavg,ta,temp,nocpf,fermishift,bsealgo,dft,mag)
-		     
-	 	write(2077,*) "BSE and Single particle dielectric calculation, with temperature, finished"	
-     		call flush(2077)	     	
 		
+                if (Node==0) then      
+	 	 write(2077,*) "BSE and Single particle dielectric calculation, with temperature, finished"	
+     		 call flush(2077)	     	
+		endif
+
 		end if
 	
 	end if
@@ -394,9 +399,11 @@ program main
 	
 	call emissionopt(nthreads,"BSE",outputfolder,numbse,ngrid,nc,nv,ctemp,cshift,egs)
 	
+        if (Node == 0) then
 	 write(2077,*) "BSE dielectric properties calculated"
 	 call flush(2077)
-	 
+	endif
+ 
 	 if (cpol) then
 	
 	 call bsedielrawpol(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebse0,ebsef,numbse,cshift) !calculate dielectric constants with BSE for 													different light polarization
@@ -406,10 +413,10 @@ program main
 	 
 	 call emissionopt(nthreads,"BSP",outputfolder,numbse,ngrid,nc,nv,ctemp,cshift,egs)
 	
-
+         if (Node == 0) then
 	  write(2077,*) "BSE absorption/PL spectrum with light polarization calculated"
-         call flush(2077)
-	
+          call flush(2077)
+	 endif
 
 	end if
 	

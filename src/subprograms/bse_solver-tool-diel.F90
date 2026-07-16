@@ -1,4 +1,10 @@
 
+#ifdef ELPA
+#ifndef ELPA_API_VERSION
+#define ELPA_API_VERSION 20211125
+#endif
+#endif
+
 subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		     ebse0,ebsef,numbse,sme,ktol,params,kpaths,kpathsbse,orbw,ediel, &
 		     exc,mshift,coultype,ez,w1,r0,lc,rk,meshtype,bsewf,excwf0,excwff,&
@@ -7,6 +13,9 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 #ifdef MPI
 	use mpi
 !include 'mpif.h'
+#endif
+#ifdef ELPA
+	use elpa
 #endif
 	use omp_lib
 	use hamiltonian_input_variables
@@ -81,6 +90,12 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	INTEGER :: LIWORK, LRWORK
 	INTEGER,allocatable,dimension(:) :: IWORK
         complex,allocatable,dimension (:) :: WORK
+
+#ifdef ELPA
+	class(elpa_t), pointer :: elpa_instance
+	complex,allocatable,dimension(:,:) :: elpa_eigenvectors
+	integer :: elpa_error
+#endif
 
         !zheevr definitions
         real :: VL,VU
@@ -353,6 +368,11 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		allocate(W(dimbse),WORK(2*dimbse + dimbse**2))
 		allocate (IWORK(3 + 5*dimbse))
 		allocate (RWORK(1 + 5*dimbse + 2*dimbse**2))
+
+		case ("elpa")
+
+		write(*,*) "BSE_ALGO=elpa requires an MPI run with at least two ranks"
+		stop
 		
 		case default
 		
@@ -690,7 +710,15 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 			jg = indxl2g(lj, nb, mycol, 0, npcol)
 			do li=1,locr
 				ig = indxl2g(li, mb, myrow, 0, nprow)
+
+#ifdef ELPA
+				! ELPA requires the complete Hermitian matrix.  PCHEEV only
+				! reads its upper triangle, so preserve the cheaper construction
+				! for every non-ELPA distributed run.
+				if (ig <= jg .or. trim(bsealgo) == "elpa") then
+#else
 				if (ig <= jg) then
+#endif
 					hbse_dist(li,lj)= matrizelbse(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,rlat,stt(ig,:),&
 					    eigv(stt(ig,4),stt(ig,3)),eigv(stt(ig,4),stt(ig,2)),vector(stt(ig,4),stt(ig,3),:),&
 					    vector(stt(ig,4),stt(ig,2),:),kpt(stt(ig,4),:),stt(jg,:),eigv(stt(jg,4),stt(jg,3)),&
@@ -810,10 +838,15 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
                 STOP
          	END IF  
 		
-         	IF( W(dimbse) .eq. 0 ) THEN
+		IF( W(dimbse) .eq. 0 ) THEN
                 WRITE(*,*)'The algorithm failed to compute eigenvalues. Change BSE_ALGO to cheev'
                 STOP
          	END IF  		
+
+		case ("elpa")
+
+		write(*,*) "BSE_ALGO=elpa requires an MPI run with at least two ranks"
+		stop
 		
 		case default
 		
@@ -823,6 +856,58 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		end select
 	else
 #ifdef MPI
+
+#ifdef ELPA
+		if (trim(bsealgo) == "elpa") then
+			allocate(elpa_eigenvectors(lld,max(1,locc)),stat=erro)
+			if (erro /= 0) then
+				write(*,*) 'Could not allocate ELPA eigenvector storage'
+				call MPI_ABORT(MPI_COMM_WORLD, 1, MPIError)
+			end if
+
+			elpa_error = elpa_init(ELPA_API_VERSION)
+			call elpa_check(elpa_error, 'elpa_init', MPI_COMM_WORLD)
+			elpa_instance => elpa_allocate(elpa_error)
+			call elpa_check(elpa_error, 'elpa_allocate', MPI_COMM_WORLD)
+
+			call elpa_instance%set('na', dimbse, elpa_error)
+			call elpa_check(elpa_error, 'set na', MPI_COMM_WORLD)
+			call elpa_instance%set('nev', dimbse, elpa_error)
+			call elpa_check(elpa_error, 'set nev', MPI_COMM_WORLD)
+			call elpa_instance%set('local_nrows', locr, elpa_error)
+			call elpa_check(elpa_error, 'set local_nrows', MPI_COMM_WORLD)
+			call elpa_instance%set('local_ncols', locc, elpa_error)
+			call elpa_check(elpa_error, 'set local_ncols', MPI_COMM_WORLD)
+			call elpa_instance%set('nblk', mb, elpa_error)
+			call elpa_check(elpa_error, 'set nblk', MPI_COMM_WORLD)
+			call elpa_instance%set('mpi_comm_parent', MPI_COMM_WORLD, elpa_error)
+			call elpa_check(elpa_error, 'set mpi_comm_parent', MPI_COMM_WORLD)
+			call elpa_instance%set('process_row', myrow, elpa_error)
+			call elpa_check(elpa_error, 'set process_row', MPI_COMM_WORLD)
+			call elpa_instance%set('process_col', mycol, elpa_error)
+			call elpa_check(elpa_error, 'set process_col', MPI_COMM_WORLD)
+			elpa_error = elpa_instance%setup()
+			call elpa_check(elpa_error, 'elpa setup', MPI_COMM_WORLD)
+			call elpa_instance%set('omp_threads', nthreads, elpa_error)
+			call elpa_check(elpa_error, 'set omp_threads', MPI_COMM_WORLD)
+			call elpa_instance%set('solver', ELPA_SOLVER_2STAGE, elpa_error)
+			call elpa_check(elpa_error, 'set ELPA 2-stage solver', MPI_COMM_WORLD)
+			call elpa_instance%eigenvectors(hbse_dist, W, elpa_eigenvectors, elpa_error)
+			call elpa_check(elpa_error, 'ELPA eigenvectors', MPI_COMM_WORLD)
+			call elpa_deallocate(elpa_instance, elpa_error)
+			call elpa_check(elpa_error, 'elpa_deallocate', MPI_COMM_WORLD)
+			call elpa_uninit(elpa_error)
+			call elpa_check(elpa_error, 'elpa_uninit', MPI_COMM_WORLD)
+
+			deallocate(hbse_dist)
+			call move_alloc(elpa_eigenvectors, hbse_dist)
+		else
+#else
+		if (trim(bsealgo) == "elpa") then
+			write(*,*) 'BSE_ALGO=elpa was requested, but this executable was built without ELPA support'
+			call MPI_ABORT(MPI_COMM_WORLD, 1, MPIError)
+		end if
+#endif
 		LWORK = -1
 		LRWORK = -1
 		allocate(WORK(1),RWORK(1))
@@ -839,6 +924,9 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 			! Keep the PCHEEV eigenvectors in their 2D block-cyclic distribution.
 			! Reconstructing hbse here would allocate a full dimbse-by-dimbse copy
 			! on every MPI rank and defeats the ScaLAPACK memory distribution.
+#ifdef ELPA
+		end if
+#endif
 #endif
 	endif
 
@@ -900,7 +988,8 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		 	
 		end select
 		else
-			deallocate(WORK,RWORK)
+			if (allocated(WORK)) deallocate(WORK)
+			if (allocated(RWORK)) deallocate(RWORK)
 		end if
 
 		if (Nodes == 1) then
@@ -1063,3 +1152,24 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 
 end subroutine bsesolver
+
+#ifdef MPI
+#ifdef ELPA
+subroutine elpa_check(status, operation, mpi_comm)
+	use mpi
+	use elpa
+
+	implicit none
+
+	integer, intent(in) :: status, mpi_comm
+	character(len=*), intent(in) :: operation
+	integer :: mpi_error
+
+	if (status /= ELPA_OK) then
+		write(*,*) 'ELPA failed during ', trim(operation), '; status = ', status
+		call MPI_ABORT(mpi_comm, 1, mpi_error)
+		stop
+	end if
+end subroutine elpa_check
+#endif
+#endif

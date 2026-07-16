@@ -90,7 +90,7 @@ main: $(MAIN_EXEC)
 $(MAIN_EXEC): $(LIB_FILE) $(MAIN_SRC) makefile.inc
 	@mkdir -p $(BIN_DIR)
 	@echo "--- Linking Main Executable: $@ ---"
-	$(FOR) $(MAIN_SRC) -o $@ $(L_FLAGS) -L$(BUILD_DIR) -lwtb
+	$(FOR) $(MAIN_SRC) -o $@ -L$(BUILD_DIR) -lwtb $(L_FLAGS)
 	@cp $@ ./build/wtb.x
 
 $(LIB_FILE): $(MODULE_OBJECTS)
@@ -151,6 +151,5 @@ clean:
 #$(BUILD_DIR)/subroutines/coulomb_pot.o: $(BUILD_DIR)/subroutines/ei_spec_funct.o
 
 .PHONY: all pp clean main
-
 
 
