@@ -1,0 +1,20 @@
+# Copy this file to makefile.inc after loading compatible Intel oneAPI MPI,
+# MKL, and ELPA modules.  ELPA and mpiifx must use the same MPI implementation.
+
+FOR=mpiifx
+OMP=-qopenmp -shared-intel
+
+# Set ELPA_ROOT to your installation, or override both variables with the
+# flags supplied by the cluster's ELPA module or pkg-config.
+ELPA_ROOT ?= /path/to/elpa
+ELPA_FCFLAGS ?= -I$(ELPA_ROOT)/include/elpa
+ELPA_LDFLAGS ?= -L$(ELPA_ROOT)/lib -lelpa
+
+# ELPA's current Fortran API uses 20211125.  Override this only if the ELPA
+# module supplied by the cluster reports a different supported API version.
+ELPA_API_VERSION ?= 20211125
+
+LIBS=$(ELPA_LDFLAGS) -qmkl=cluster
+EXTRA=-DMPI -DMKL -DELPA -DELPA_API_VERSION=$(ELPA_API_VERSION) $(ELPA_FCFLAGS)
+DIR=./bin/
+COND=-fpp -O2

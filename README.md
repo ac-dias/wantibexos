@@ -7,6 +7,30 @@ The online documentation is available in:
 For memory problems during parallel run, please export the following environment variable:
 export KMP_STACKSIZE=XXXmb, being XXX the amount of virtual RAM per thread, I suggest something around 300mb, but for some situations, more could be necessary.
 
+BSE Hamiltonian restart
+-----------------------
+
+The optical BSE solver can checkpoint the Hamiltonian before diagonalization and
+reuse it in a later run.  The feature is disabled by default.  To save the
+matrix, add the following to the input:
+
+```
+BSE_HAM_SAVE= T
+BSE_HAM_FILE= bse_hamiltonian.bin
+```
+
+`BSE_HAM_FILE` is relative to `OUTPUT=`.  For a restart, keep all physical BSE
+settings and the input Hamiltonian unchanged, set `BSE_HAM_READ= T`, and leave
+`BSE_HAM_SAVE` false.  The restart still evaluates the single-particle
+quantities needed for the optical spectrum, but skips construction of the BSE
+Hamiltonian.  Checkpoints are native binary files and should be reused with the
+same executable/platform.  Their header validates the matrix dimension and
+serial/distributed layout, but cannot detect changed physical inputs.
+
+For distributed MPI BSE runs, one file per rank is written using the suffix
+`.rank000000`, `.rank000001`, etc.  Restart with the same MPI rank count and
+process-grid layout.
+
 ELPA BSE diagonalization
 -------------------------
 

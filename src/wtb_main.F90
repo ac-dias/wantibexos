@@ -148,6 +148,7 @@ program main
 		     tmcoef,ez,w,lc,r0,sysdim,dtfull,cpol,cshift,dft,&
 		     st,phavg,temp,ta,pce,ses,ctemp,tmax,eg,egd,egs,ebgs,renorm,emt,emfile,&
 		     dk,nocpf,fermishift,bsealgo,spintxt,meshgen,exc,mag,boltz,nmu,nsteps,mu0,&
+		     bsehamwrite,bsehamread,bsehamfile,&
 		     muf,btemp,klat,elft,hlft,smeboltz,ni,ns,edielgw,r0gw,lcgw,ezgw,wgw,coultypegw,&
 		     nomega,omegamax,gwmesh,gwmeshuse,gwbnd,gwbnduse,gwbsebnd,ktolgw,smegw,selfxonly,ifactor)
 		     
@@ -287,7 +288,7 @@ program main
 		call bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		     ebse0,ebsef,numbse,cshift,ktol,params,kpaths,kpathsbse,orbw,ediel, &
 		     exc,mshift,coultype,ez,w,r0,lc,rk,meshtype,bsewf,excwf0,excwff,dtfull,cpol,tmcoef,&
-		     nocpf,fermishift,bsealgo,dft,mag)
+		     nocpf,fermishift,bsealgo,bsehamwrite,bsehamread,bsehamfile,dft,mag)
 
                 if (Node == 0) then
 	 	  write(2077,*) "BSE and Single particle dielectric calculation finished"
@@ -303,7 +304,7 @@ program main
 		call bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		     ebse0,ebsef,numbse,cshift,ktol,params,kpaths,kpathsbse,orbw,ediel, &
 		     exc,mshift,coultype,ez,w,r0,lc,rk,meshtype,bsewf,excwf0,excwff,dtfull,&
-		     cpol,tmcoef,st,phavg,ta,temp,nocpf,fermishift,bsealgo,dft,mag)
+		     cpol,tmcoef,st,phavg,ta,temp,nocpf,fermishift,bsealgo,bsehamwrite,bsehamread,bsehamfile,dft,mag)
 		
                 if (Node==0) then      
 	 	 write(2077,*) "BSE and Single particle dielectric calculation, with temperature, finished"	
@@ -492,7 +493,6 @@ program main
 #endif
 
 end program main
-
 
 
 

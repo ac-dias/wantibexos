@@ -21,6 +21,7 @@ L_FLAGS  := $(OMP) $(LIBS) $(COND) $(EXTRA) -I$(BUILD_DIR)
 SUBROUTINE_NAMES := \
     berry_curvature_subs \
     boltzmann_subs \
+    bse_hamiltonian_io \
     bse_subs \
     bse_subs_kpath \
     bse_subs_temp \
@@ -151,5 +152,3 @@ clean:
 #$(BUILD_DIR)/subroutines/coulomb_pot.o: $(BUILD_DIR)/subroutines/ei_spec_funct.o
 
 .PHONY: all pp clean main
-
-

@@ -8,7 +8,7 @@
 subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		     ebse0,ebsef,numbse,sme,ktol,params,kpaths,kpathsbse,orbw,ediel, &
 		     exc,mshift,coultype,ez,w1,r0,lc,rk,meshtype,bsewf,excwf0,excwff,&
-		     dtfull,cpol,tmcoef,nocpf,fermishift,bsealgo,dft,mag)
+		     dtfull,cpol,tmcoef,nocpf,fermishift,bsealgo,bsehamwrite,bsehamread,bsehamfile,dft,mag)
 
 #ifdef MPI
 	use mpi
@@ -71,6 +71,8 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	integer :: nocpf
 	real :: fermishift
 	character(len=12) :: bsealgo
+	character(len=70) :: bsehamfile
+	logical :: bsehamwrite,bsehamread,bseham_ok
 	character(len=1) :: dft
 	real,dimension(3) :: mag	
 	
@@ -138,6 +140,9 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	integer :: mb, nb, locr, locc, lld, ig, jg, li, lj
 	integer :: desca(9), descz(9)
 	integer :: numroc, indxl2g
+	integer,dimension(7) :: bseham_metadata
+	character(len=160) :: bseham_path
+	character(len=6) :: bseham_rank
 
 	!fim modificacoes versao 2.1
 
@@ -657,7 +662,11 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 
     if (Node == 0) then
-	 write(300,*) 'BSE Hamiltonian construction: begin'
+	 if (bsehamread) then
+		write(300,*) 'BSE Hamiltonian restart read: begin'
+	 else
+		write(300,*) 'BSE Hamiltonian construction: begin'
+	 end if
 	 call flush(300)
     endif
 #ifdef MPI
@@ -669,20 +678,37 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 
     if (Nodes == 1) then
+		bseham_metadata = (/ dimbse,1,1,1,0,0,1 /)
+		bseham_path = trim(outputfolder)//trim(bsehamfile)
 		allocate(hbse(dimbse,dimbse))
-		hbse=0.0
-		!$omp parallel do private(i,j) schedule(dynamic)
-		do j=1,dimbse
-			do i=1,j
-				hbse(i,j)= matrizelbse(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,rlat,stt(i,:),eigv(stt(i,4)&
-				    ,stt(i,3)),eigv(stt(i,4),stt(i,2)),vector(stt(i,4)&
-				    ,stt(i,3),:) ,vector(stt(i,4),stt(i,2),:),kpt(stt(i,4),:),stt(j,:),eigv(stt(j,4),stt(j,3))&
-				    ,eigv(stt(j,4),stt(j,2)) &
-				    ,vector(stt(j,4),stt(j,3),:),vector(stt(j,4),stt(j,2),:),kpt(stt(j,4),:),dft,nvec,rvec,&
-				    sk(stt(i,4),:,:),sk(stt(j,4),:,:))
+		if (bsehamread) then
+			call bse_hamiltonian_read(bseham_path,bseham_metadata,dimbse,dimbse,hbse,bseham_ok)
+			if (.not. bseham_ok) then
+				write(*,*) 'Unable to read a compatible BSE Hamiltonian: ',trim(bseham_path)
+				stop
+			end if
+		else
+			hbse=0.0
+			!$omp parallel do private(i,j) schedule(dynamic)
+			do j=1,dimbse
+				do i=1,j
+					hbse(i,j)= matrizelbse(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,rlat,stt(i,:),eigv(stt(i,4)&
+					    ,stt(i,3)),eigv(stt(i,4),stt(i,2)),vector(stt(i,4)&
+					    ,stt(i,3),:) ,vector(stt(i,4),stt(i,2),:),kpt(stt(i,4),:),stt(j,:),eigv(stt(j,4),stt(j,3))&
+					    ,eigv(stt(j,4),stt(j,2)) &
+					    ,vector(stt(j,4),stt(j,3),:),vector(stt(j,4),stt(j,2),:),kpt(stt(j,4),:),dft,nvec,rvec,&
+					    sk(stt(i,4),:,:),sk(stt(j,4),:,:))
+				end do
 			end do
-		end do
-		!$omp end parallel do
+			!$omp end parallel do
+			if (bsehamwrite) then
+				call bse_hamiltonian_write(bseham_path,bseham_metadata,dimbse,dimbse,hbse,bseham_ok)
+				if (.not. bseham_ok) then
+					write(*,*) 'Unable to save BSE Hamiltonian: ',trim(bseham_path)
+					stop
+				end if
+			end if
+		end if
     else
 #ifdef MPI
 		mb = 64
@@ -701,33 +727,52 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		locc = numroc(dimbse, nb, mycol, 0, npcol)
 		lld = max(1,locr)
 		allocate(hbse_dist(lld,max(1,locc)))
-		hbse_dist = 0.0
 		call DESCINIT(desca, dimbse, dimbse, mb, nb, 0, 0, blacs_ctxt, lld, INFO)
 		call DESCINIT(descz, dimbse, dimbse, mb, nb, 0, 0, blacs_ctxt, lld, INFO)
+		bseham_metadata = (/ dimbse,Nodes,nprow,npcol,myrow,mycol,1 /)
+		if (trim(bsealgo) == 'elpa') bseham_metadata(7) = 2
+		write(bseham_rank,"(I6.6)") Node
+		bseham_path = trim(outputfolder)//trim(bsehamfile)//'.rank'//bseham_rank
 
-		!$omp parallel do private(li,ig,lj,jg) schedule(dynamic)
-		do lj=1,locc
-			jg = indxl2g(lj, nb, mycol, 0, npcol)
-			do li=1,locr
-				ig = indxl2g(li, mb, myrow, 0, nprow)
+		if (bsehamread) then
+			call bse_hamiltonian_read(bseham_path,bseham_metadata,lld,max(1,locc),hbse_dist,bseham_ok)
+			if (.not. bseham_ok) then
+				write(*,*) 'Unable to read a compatible BSE Hamiltonian: ',trim(bseham_path)
+				call MPI_ABORT(MPI_COMM_WORLD, 1, MPIError)
+			end if
+		else
+			hbse_dist = 0.0
+			!$omp parallel do private(li,ig,lj,jg) schedule(dynamic)
+			do lj=1,locc
+				jg = indxl2g(lj, nb, mycol, 0, npcol)
+				do li=1,locr
+					ig = indxl2g(li, mb, myrow, 0, nprow)
 
 #ifdef ELPA
-				! ELPA requires the complete Hermitian matrix.  PCHEEV only
-				! reads its upper triangle, so preserve the cheaper construction
-				! for every non-ELPA distributed run.
-				if (ig <= jg .or. trim(bsealgo) == "elpa") then
+					! ELPA requires the complete Hermitian matrix.  PCHEEV only
+					! reads its upper triangle, so preserve the cheaper construction
+					! for every non-ELPA distributed run.
+					if (ig <= jg .or. trim(bsealgo) == "elpa") then
 #else
-				if (ig <= jg) then
+					if (ig <= jg) then
 #endif
-					hbse_dist(li,lj)= matrizelbse(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,rlat,stt(ig,:),&
-					    eigv(stt(ig,4),stt(ig,3)),eigv(stt(ig,4),stt(ig,2)),vector(stt(ig,4),stt(ig,3),:),&
-					    vector(stt(ig,4),stt(ig,2),:),kpt(stt(ig,4),:),stt(jg,:),eigv(stt(jg,4),stt(jg,3)),&
-					    eigv(stt(jg,4),stt(jg,2)),vector(stt(jg,4),stt(jg,3),:),vector(stt(jg,4),stt(jg,2),:),&
-					    kpt(stt(jg,4),:),dft,nvec,rvec,sk(stt(ig,4),:,:),sk(stt(jg,4),:,:))
-				end if
+						hbse_dist(li,lj)= matrizelbse(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,rlat,stt(ig,:),&
+						    eigv(stt(ig,4),stt(ig,3)),eigv(stt(ig,4),stt(ig,2)),vector(stt(ig,4),stt(ig,3),:),&
+						    vector(stt(ig,4),stt(ig,2),:),kpt(stt(ig,4),:),stt(jg,:),eigv(stt(jg,4),stt(jg,3)),&
+						    eigv(stt(jg,4),stt(jg,2)),vector(stt(jg,4),stt(jg,3),:),vector(stt(jg,4),stt(jg,2),:),&
+						    kpt(stt(jg,4),:),dft,nvec,rvec,sk(stt(ig,4),:,:),sk(stt(jg,4),:,:))
+					end if
+				end do
 			end do
-		end do
-		!$omp end parallel do
+			!$omp end parallel do
+			if (bsehamwrite) then
+				call bse_hamiltonian_write(bseham_path,bseham_metadata,lld,max(1,locc),hbse_dist,bseham_ok)
+				if (.not. bseham_ok) then
+					write(*,*) 'Unable to save BSE Hamiltonian: ',trim(bseham_path)
+					call MPI_ABORT(MPI_COMM_WORLD, 1, MPIError)
+				end if
+			end if
+		end if
 #else
 		stop "MPI/ScaLAPACK path requested without MPI support"
 #endif
@@ -741,9 +786,15 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	task_elapsed_max = task_elapsed - task_start
 #endif
 
+
     if (Node == 0) then
-	 write(300,*) 'BSE Hamiltonian construction: finished'
-	 write(300,"(A,F12.3,A)") 'BSE Hamiltonian construction wall time: ',task_elapsed_max,' s'
+	 if (bsehamread) then
+		write(300,*) 'BSE Hamiltonian restart read: finished'
+		write(300,"(A,F12.3,A)") 'BSE Hamiltonian restart read wall time: ',task_elapsed_max,' s'
+	 else
+		write(300,*) 'BSE Hamiltonian construction: finished'
+		write(300,"(A,F12.3,A)") 'BSE Hamiltonian construction wall time: ',task_elapsed_max,' s'
+	 end if
 	 call flush(300)
     endif
 

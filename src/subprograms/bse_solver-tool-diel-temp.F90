@@ -2,7 +2,7 @@
 subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		     ebse0,ebsef,numbse,sme,ktol,params,kpaths,kpathsbse,orbw,ediel, &
 		     exc,mshift,coultype,ez,w1,r0,lc,rk,meshtype,bsewf,excwf0,excwff,&
-		     dtfull,cpol,tmcoef,st,phavg,ta,temp,nocpf,fermishift,bsealgo,dft,mag)
+		     dtfull,cpol,tmcoef,st,phavg,ta,temp,nocpf,fermishift,bsealgo,bsehamwrite,bsehamread,bsehamfile,dft,mag)
 
 	use omp_lib
 	use hamiltonian_input_variables
@@ -58,6 +58,8 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	integer :: nocpf
 	real :: fermishift
 	character(len=12) :: bsealgo
+	character(len=70) :: bsehamfile
+	logical :: bsehamwrite,bsehamread,bseham_ok
 	character(len=1) :: dft
 	real,dimension(3) :: mag	
 	complex,allocatable,dimension(:,:,:) :: sk	
@@ -80,8 +82,10 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
         real :: VL,VU
         integer :: IL,IU,M
         complex,allocatable,dimension(:,:) :: Z
-        integer :: LDZ
-        integer,allocatable,dimension(:) :: ISUPPZ
+	integer :: LDZ
+	integer,allocatable,dimension(:) :: ISUPPZ
+	integer,dimension(7) :: bseham_metadata
+	character(len=160) :: bseham_path
 
 	!modificacoes versao 2.1
 
@@ -600,18 +604,25 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 	!allocate(hbse(dimbse,dimbse),W(dimbse))
 
-	hbse=0.0
+	! The second field identifies the temperature-dependent BSE Hamiltonian.
+	bseham_metadata = (/ dimbse,0,1,1,0,0,1 /)
+	bseham_path = trim(outputfolder)//trim(bsehamfile)
+	if (bsehamread) then
+		call bse_hamiltonian_read(bseham_path,bseham_metadata,dimbse,dimbse,hbse,bseham_ok)
+		if (.not. bseham_ok) then
+			write(*,*) 'Unable to read a compatible BSE Hamiltonian: ',trim(bseham_path)
+			stop
+		end if
+		write(300,*) 'BSE Hamiltonian restart read: finished'
+	else
+		hbse=0.0
 
-	!$omp parallel do 
+		!$omp parallel do
 !collapse(2)
 
-	do i=1,dimbse
+		do i=1,dimbse
 
-
-
-		do j=i,dimbse
-
-
+			do j=i,dimbse
 
   hbse(i,j)= matrizelbsetemp(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,rlat,stt(i,:),eigv(stt(i,4)&
   	    ,stt(i,3)),eigv(stt(i,4),stt(i,2)),vector(stt(i,4)&
@@ -620,19 +631,21 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
             ,vector(stt(j,4),stt(j,3),:),vector(stt(j,4),stt(j,2),:),kpt(stt(j,4),:),temp,dft,nvec,rvec,&
             sk(stt(i,4),:,:),sk(stt(j,4),:,:))
 
-		!write(500,*) "i",i,"/",dimbse,"        ","j",j,"/",dimbse
-		!call flush(500)
-
+			end do
 		end do
 
+		!$omp end parallel do
 
-
-	end do
-
-	!$omp end parallel do
-
-	write(300,*) 'exciton Hamiltonian matrix finished'
-	call flush(300)	
+		if (bsehamwrite) then
+			call bse_hamiltonian_write(bseham_path,bseham_metadata,dimbse,dimbse,hbse,bseham_ok)
+			if (.not. bseham_ok) then
+				write(*,*) 'Unable to save BSE Hamiltonian: ',trim(bseham_path)
+				stop
+			end if
+		end if
+		write(300,*) 'exciton Hamiltonian matrix finished'
+	end if
+	call flush(300)
 
 	select case (bsealgo)
 		

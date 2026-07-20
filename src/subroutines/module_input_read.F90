@@ -275,6 +275,7 @@ module input_variables
 	character(len=2) :: ta
 	character(len=6) :: ses
 	character(len=70) :: emfile
+	character(len=70) :: bsehamfile
 		
 
 	logical :: bandscalc,doscalc
@@ -284,6 +285,7 @@ module input_variables
 	logical :: berryk,berrybz
 	logical :: pponly
 	logical :: bsewf
+	logical :: bsehamwrite,bsehamread
 	logical :: tmcoef
 	logical :: dtfull,cpol
 	!logical :: bset,bsetbnd
@@ -437,6 +439,10 @@ subroutine input_read
 	pponly = .false.
 	
 	bsewf = .false.
+
+	bsehamwrite = .false.
+	bsehamread = .false.
+	bsehamfile = "bse_hamiltonian.bin"
 	
 	tmcoef = .false.
 	
@@ -583,6 +589,18 @@ subroutine input_read
 	case ("BSE_ALGO=")
 
 		read(b,*) bsealgo
+
+	case ("BSE_HAM_SAVE=")
+
+		read(b,*) bsehamwrite
+
+	case ("BSE_HAM_READ=")
+
+		read(b,*) bsehamread
+
+	case ("BSE_HAM_FILE=")
+
+		bsehamfile = b
 	
 	case ("dK=")
 
@@ -1027,6 +1045,7 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 		     tmcoef,ez,w,lc,r0,sysdim,dtfull,cpol,cshift,dft,&
 		     st,phavg,temp,ta,pce,ses,ctemp,tmax,eg,egd,egs,ebgs,renorm,emt,emfile,&
 		     dk,nocpf,fermishift,bsealgo,spintxt,meshgen,exc,mag,boltz,nmu,nsteps,mu0,&
+		     bsehamwrite,bsehamread,bsehamfile,&
 		     muf,btemp,klat,elft,hlft,smeboltz,ni,ns,edielgw,r0gw,lcgw,ezgw,wgw,coultypegw,&
 		     nomega,omegamax,gwmesh,gwmeshuse,gwbnd,gwbnduse,gwbsebnd,ktolgw,smegw,selfxonly,ifactor)
 
@@ -1069,6 +1088,7 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	character(len=2) :: ta	
 	character(len=6) :: ses
 	character(len=70) :: emfile
+	character(len=70) :: bsehamfile
 	character(len=12) :: bsealgo		
 
 	logical :: bandscalc,doscalc
@@ -1082,6 +1102,7 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	logical :: emt,spintxt	
 	!logical :: lowdin
 	logical :: boltz
+	logical :: bsehamwrite,bsehamread
 	
 	real :: fermishift
 	real :: ez,w,lc,r0
@@ -1151,6 +1172,9 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	write(unitout,"(A7,L1)")  "BERRY= ",berryk
 	write(unitout,"(A9,L1)")  "PP_ONLY= ",pponly
 	write(unitout,"(A8,L1)") "BSE_WF= ",bsewf	
+	write(unitout,"(A14,L1)") "BSE_HAM_SAVE= ",bsehamwrite
+	write(unitout,"(A14,L1)") "BSE_HAM_READ= ",bsehamread
+	write(unitout,"(A14,A70)") "BSE_HAM_FILE= ",bsehamfile
 	write(unitout,"(A8,L1)") "TMCOEF= ",tmcoef
 	write(unitout,"(A8,L1)") "DTDIAG= ",dtfull
 	write(unitout,"(A6,L1)") "CPOL= ",cpol
@@ -1288,5 +1312,4 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
     call flush(unitout)
 
 end subroutine param_out
-
 
