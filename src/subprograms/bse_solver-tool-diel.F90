@@ -140,9 +140,8 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	integer :: mb, nb, locr, locc, lld, ig, jg, li, lj
 	integer :: desca(9), descz(9)
 	integer :: numroc, indxl2g
-	integer,dimension(7) :: bseham_metadata
+	integer,dimension(3) :: bseham_metadata
 	character(len=160) :: bseham_path
-	character(len=6) :: bseham_rank
 
 	!fim modificacoes versao 2.1
 
@@ -678,7 +677,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 
     if (Nodes == 1) then
-		bseham_metadata = (/ dimbse,1,1,1,0,0,1 /)
+		bseham_metadata = (/ dimbse,1,1 /)
 		bseham_path = trim(outputfolder)//trim(bsehamfile)
 		allocate(hbse(dimbse,dimbse))
 		if (bsehamread) then
@@ -729,13 +728,13 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		allocate(hbse_dist(lld,max(1,locc)))
 		call DESCINIT(desca, dimbse, dimbse, mb, nb, 0, 0, blacs_ctxt, lld, INFO)
 		call DESCINIT(descz, dimbse, dimbse, mb, nb, 0, 0, blacs_ctxt, lld, INFO)
-		bseham_metadata = (/ dimbse,Nodes,nprow,npcol,myrow,mycol,1 /)
-		if (trim(bsealgo) == 'elpa') bseham_metadata(7) = 2
-		write(bseham_rank,"(I6.6)") Node
-		bseham_path = trim(outputfolder)//trim(bsehamfile)//'.rank'//bseham_rank
+		bseham_metadata = (/ dimbse,1,1 /)
+		if (trim(bsealgo) == 'elpa') bseham_metadata(3) = 2
+		bseham_path = trim(outputfolder)//trim(bsehamfile)
 
 		if (bsehamread) then
-			call bse_hamiltonian_read(bseham_path,bseham_metadata,lld,max(1,locc),hbse_dist,bseham_ok)
+			call bse_hamiltonian_read_parallel(bseham_path,bseham_metadata,dimbse,hbse_dist,locr,locc,lld, &
+										  mb,nb,nprow,npcol,myrow,mycol,MPI_COMM_WORLD,bseham_ok)
 			if (.not. bseham_ok) then
 				write(*,*) 'Unable to read a compatible BSE Hamiltonian: ',trim(bseham_path)
 				call MPI_ABORT(MPI_COMM_WORLD, 1, MPIError)
@@ -766,7 +765,8 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 			end do
 			!$omp end parallel do
 			if (bsehamwrite) then
-				call bse_hamiltonian_write(bseham_path,bseham_metadata,lld,max(1,locc),hbse_dist,bseham_ok)
+				call bse_hamiltonian_write_parallel(bseham_path,bseham_metadata,dimbse,hbse_dist,locr,locc,lld, &
+										   mb,nb,nprow,npcol,myrow,mycol,MPI_COMM_WORLD,bseham_ok)
 				if (.not. bseham_ok) then
 					write(*,*) 'Unable to save BSE Hamiltonian: ',trim(bseham_path)
 					call MPI_ABORT(MPI_COMM_WORLD, 1, MPIError)

@@ -84,7 +84,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
         complex,allocatable,dimension(:,:) :: Z
 	integer :: LDZ
 	integer,allocatable,dimension(:) :: ISUPPZ
-	integer,dimension(7) :: bseham_metadata
+	integer,dimension(3) :: bseham_metadata
 	character(len=160) :: bseham_path
 
 	!modificacoes versao 2.1
@@ -605,7 +605,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	!allocate(hbse(dimbse,dimbse),W(dimbse))
 
 	! The second field identifies the temperature-dependent BSE Hamiltonian.
-	bseham_metadata = (/ dimbse,0,1,1,0,0,1 /)
+	bseham_metadata = (/ dimbse,2,1 /)
 	bseham_path = trim(outputfolder)//trim(bsehamfile)
 	if (bsehamread) then
 		call bse_hamiltonian_read(bseham_path,bseham_metadata,dimbse,dimbse,hbse,bseham_ok)

@@ -25,11 +25,11 @@ settings and the input Hamiltonian unchanged, set `BSE_HAM_READ= T`, and leave
 quantities needed for the optical spectrum, but skips construction of the BSE
 Hamiltonian.  Checkpoints are native binary files and should be reused with the
 same executable/platform.  Their header validates the matrix dimension and
-serial/distributed layout, but cannot detect changed physical inputs.
+matrix layout, but cannot detect changed physical inputs.
 
-For distributed MPI BSE runs, one file per rank is written using the suffix
-`.rank000000`, `.rank000001`, etc.  Restart with the same MPI rank count and
-process-grid layout.
+For distributed MPI BSE runs, the checkpoint is a single global matrix written
+with MPI-IO.  It can be restarted with a different MPI rank count or
+process-grid layout; each rank reads its own block-cyclic part of the matrix.
 
 ELPA BSE diagonalization
 -------------------------
