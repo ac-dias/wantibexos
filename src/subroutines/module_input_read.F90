@@ -1253,19 +1253,19 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	write(unitout,"(A10,F8.4)") "OMEGAMAX= ",omegamax
 	write(unitout,"(A8,F8.4)") "KTOL_GW= ", ktolgw
 	write(unitout,"(A9,F8.4)") "SIGMA_GW= ", smegw	
-	write(unitout,"(A16,A5)") "COULOMB_POT_GW= ",coultypegw
+	!write(unitout,"(A16,A5)") "COULOMB_POT_GW= ",coultypegw
 	write(unitout,"(A13,L1)") "SELF_X_ONLY= ",selfxonly
 	write(unitout,"(A9,F8.4)") "IFACTOR= ",ifactor					
 	write(unitout,*)
-	write(unitout,*) "PARAMETERS FOR GW COULOMB POTENTIALS"
-	write(unitout,*)
-	write(unitout,"(A12,F8.4)") "EDIEL_Z_GW= ",ezgw
-	write(unitout,"(A11,F8.4)") "W_COUL_GW= ",wgw
-	write(unitout,"(A7,F8.4)") "LC_GW= ",lcgw
-	write(unitout,"(A8,F8.4)") "R_0_GW= ",r0gw
-	write(unitout,"(A12,F8.4)") "EDIEL_T_GW= ", edielgw(1)
-	write(unitout,"(A12,F8.4)") "EDIEL_B_GW= ", edielgw(3)
-	write(unitout,"(A10,F8.4)") "EDIEL_GW= ", edielgw(2)			
+	!write(unitout,*) "PARAMETERS FOR GW COULOMB POTENTIALS"
+	!write(unitout,*)
+	!write(unitout,"(A12,F8.4)") "EDIEL_Z_GW= ",ezgw
+	!write(unitout,"(A11,F8.4)") "W_COUL_GW= ",wgw
+	!write(unitout,"(A7,F8.4)") "LC_GW= ",lcgw
+	!write(unitout,"(A8,F8.4)") "R_0_GW= ",r0gw
+	!write(unitout,"(A12,F8.4)") "EDIEL_T_GW= ", edielgw(1)
+	!write(unitout,"(A12,F8.4)") "EDIEL_B_GW= ", edielgw(3)
+	!write(unitout,"(A10,F8.4)") "EDIEL_GW= ", edielgw(2)			
 	!write(unitout,*) "LOWDIN ORBITALS"
 	!write(unitout,*)
 	!write(unitout,"(A8,L1)") "LOWDIN= ", lowdin

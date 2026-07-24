@@ -151,7 +151,7 @@ function v2d(kpt1,kpt2,rlat,ngrid,tolr)
 		v2d = 0.0
 	else 
 
-		v2d = vbz*(cic/ed)*(1.0/(modk))
+		v2d = vbz*(cic/ed)*(1.0/(modk))*0.5
 	end if
 
 end function 
@@ -188,7 +188,7 @@ function v2diel(kpt1,kpt2,ediel,rlat,ngrid,tolr)
 		v2diel = 0.0
 	else 
 
-		v2diel = vbz*(cic/ed)*(1.0/(modk))
+		v2diel = vbz*(cic/ed)*(1.0/(modk))*0.5
 	end if
 
 

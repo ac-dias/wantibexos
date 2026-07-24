@@ -194,7 +194,7 @@ function v2dgw(kpt1,kpt2,rlat,ngrid,tolr)
 		v2dgw = 0.0
 	else 
 
-		v2dgw = vbz*(cic/ed)*(1.0/(modk))
+		v2dgw = vbz*(cic/ed)*(1.0/(modk))*0.5
 		!v2dgw = modk
 	end if
 
@@ -231,7 +231,7 @@ function v2dielgw(kpt1,kpt2,ediel,rlat,ngrid,tolr)
 		v2dielgw = 0.0
 	else 
 
-		v2dielgw = vbz*(cic/ed)*(1.0/(modk))
+		v2dielgw = vbz*(cic/ed)*(1.0/(modk))*0.5
 	end if
 
 
