@@ -619,7 +619,7 @@ else
 	write(303,*) ngrid(1),ngrid(2),ngrid(3)
 	write(303,*) 
 	
-	do i=1,ngqpt
+	do i=1,nkpt
 	
 		write(303,*) '#kpt n:',i,kpt(i,1),kpt(i,2),kpt(i,3)
 		write(303,*) '#Omega Re(Pi0(q,omega)) Im(Pi0(q,omega)) V(q) Re(W0(q,omega)) Im(W0(q,omega))'
@@ -646,7 +646,7 @@ else
 	
 
 
-	  call self_c_znk(w90basis,sysdim,rlat,ngrid,ngqpt,fermishift,j,&
+	  call self_c_znk(w90basis,sysdim,rlat,ngrid,nkpt,fermishift,j,&
 	                  keigv(i,j),kmqeigv(i,:,:),kpt(i,:),omega,nomega,w0,mmnkq(:,:,i,:),smegw,selfc(j,i),znk(j,i))
 	
 	 end do
