@@ -335,6 +335,7 @@ module input_variables
 	real :: ezgw,wgw,lcgw,r0gw
 	real,dimension(3) :: edielgw
 	real :: ktolgw,smegw,ifactor
+	real :: rnmgw
 	
 	
 
@@ -530,7 +531,8 @@ subroutine input_read
 	lcgw = 1.0
 	r0gw = 1.0
 	ktolgw = 0.001
-	ifactor = 1.0	
+	ifactor = 1.0
+	rnmgw = 0.1	
 
 	do 
 
@@ -1005,7 +1007,11 @@ subroutine input_read
 		
 	case ("IFACTOR=")
 
-		read(b,*) ifactor																
+		read(b,*) ifactor
+		
+	case ("RNM_GW=")
+
+		read(b,*) smegw																		
 
 	case default
 	 continue
@@ -1028,7 +1034,8 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 		     st,phavg,temp,ta,pce,ses,ctemp,tmax,eg,egd,egs,ebgs,renorm,emt,emfile,&
 		     dk,nocpf,fermishift,bsealgo,spintxt,meshgen,exc,mag,boltz,nmu,nsteps,mu0,&
 		     muf,btemp,klat,elft,hlft,smeboltz,ni,ns,edielgw,r0gw,lcgw,ezgw,wgw,coultypegw,&
-		     nomega,omegamax,gwmesh,gwmeshuse,gwbnd,gwbnduse,gwbsebnd,ktolgw,smegw,selfxonly,ifactor)
+		     nomega,omegamax,gwmesh,gwmeshuse,gwbnd,gwbnduse,gwbsebnd,ktolgw,smegw,selfxonly,ifactor,&
+		     rnmgw)
 
 	implicit none
 	integer :: unitout
@@ -1109,6 +1116,7 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	real,dimension(3) :: edielgw
 	real :: ktolgw,smegw	
 	real :: ifactor
+	real :: rnmgw
 				
 
 	write(unitout,"(A10,I0)") "NTHREADS= ",nthreads
@@ -1252,10 +1260,11 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	write(unitout,"(A8,I0)") "NOMEGA= ",nomega
 	write(unitout,"(A10,F8.4)") "OMEGAMAX= ",omegamax
 	write(unitout,"(A8,F8.4)") "KTOL_GW= ", ktolgw
+	write(unitout,"(A7,F8.4)") "RNM_GW= ", rnmgw
 	write(unitout,"(A9,F8.4)") "SIGMA_GW= ", smegw	
 	!write(unitout,"(A16,A5)") "COULOMB_POT_GW= ",coultypegw
 	write(unitout,"(A13,L1)") "SELF_X_ONLY= ",selfxonly
-	write(unitout,"(A9,F8.4)") "IFACTOR= ",ifactor					
+	!write(unitout,"(A9,F8.4)") "IFACTOR= ",ifactor					
 	write(unitout,*)
 	!write(unitout,*) "PARAMETERS FOR GW COULOMB POTENTIALS"
 	!write(unitout,*)

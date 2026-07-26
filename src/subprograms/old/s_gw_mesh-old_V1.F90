@@ -127,7 +127,34 @@ subroutine sgw_mesh(nthreads,outputfolder,ngrid,ifactor,smegw,ktolgw,params,edie
 
 	end select
 	
-
+	!ifactor = 1.0
+	
+	select case (sysdim)
+	
+	case("3D")
+	
+	 ngridint(1) = ngrid(1)*ifactor
+	 ngridint(2) = ngrid(2)*ifactor
+	 ngridint(3) = ngrid(3)*ifactor
+	
+	case("2D")
+	
+	 ngridint(1) = ngrid(1)*ifactor
+	 ngridint(2) = ngrid(2)*ifactor
+	 ngridint(3) = ngrid(3)
+	
+	case("1D")
+	
+	 ngridint(1) = ngrid(1)*ifactor
+	 ngridint(2) = ngrid(2)
+	 ngridint(3) = ngrid(3)
+	
+	case default
+	
+		write(*,*) "Wrong value for system dimension"
+		STOP
+	
+	end select
 
 	write(300,*)
 	write(300,*)
@@ -136,9 +163,9 @@ subroutine sgw_mesh(nthreads,outputfolder,ngrid,ifactor,smegw,ktolgw,params,edie
 	write(300,*)
 	write(300,*) 'grid:',ngrid(1),ngrid(2),ngrid(3)
 	write(300,*)
-	!write(300,*) 'integration grid:',ngridint(1),ngridint(2),ngridint(3)		
+	write(300,*) 'integration grid:',ngridint(1),ngridint(2),ngridint(3)		
 	write(300,*)
-	!write(300,"(A14,1E15.4)") 'ktol-coulomb:', ktolgw
+	write(300,"(A14,1E15.4)") 'ktol-coulomb:', ktolgw
 	write(300,*)
 	write(300,"(A13,3F15.4)") 'kmesh shift:',mshift(1),mshift(2),mshift(3)
 	write(300,*)
@@ -167,7 +194,20 @@ subroutine sgw_mesh(nthreads,outputfolder,ngrid,ifactor,smegw,ktolgw,params,edie
 	write(300,*)	"k-mesh points calculated"
 	call flush(300)
 
+	!calculate kmesh (q)
+	
+	ngqpt = ngridint(1)*ngridint(2)*ngridint(3)
+	
+	allocate(qpt(ngqpt,3))
+	
+	
+	call monhkhorst_pack(ngridint(1),ngridint(2),ngridint(3),mshift,rlat(1,:),rlat(2,:),rlat(3,:),qpt)
+	
+	!call monhkhorst_pack_adp(ngridint(1),ngridint(2),ngridint(3),mshift,rlat(1,:),rlat(2,:),rlat(3,:),qpt)	
 
+
+	write(300,*)	"q-mesh points calculated"
+	call flush(300)
 	
 	!define omega values
 	
@@ -282,20 +322,97 @@ subroutine sgw_mesh(nthreads,outputfolder,ngrid,ifactor,smegw,ktolgw,params,edie
 	write(300,"(3E18.8)")kpt(nkgap,1),kpt(nkgap,2),kpt(nkgap,3)
 	call flush(300)
 	
+	!calculate eigenvalues and eigenvectors in kmesh (q)	
+	
+	allocate(qeigv(ngqpt,w90basis),qvector(ngqpt,w90basis,w90basis))
+	allocate(nocpq(ngqpt))
 
-										
+
+	if (dft .eq. "S") then
+		 allocate(qovp(ngqpt,w90basis,w90basis))
+	else
+	 continue
+	end if	
+	
+	!$omp parallel do default(shared) private(i,j,l,h,eaux,vaux)
+	do i=1,ngqpt
+
+#ifdef MKL
+		call MKL_SET_NUM_THREADS(1)
+#endif		
+
+
+#ifdef AOCL		
+		call bli_thread_set_num_threads(1)
+#endif
+
+#ifdef OPENBLAS
+		call OPENBLAS_SET_NUM_THREADS(1)
+		
+#endif
+	
+		call eigsys(nthreads,dft,systype,scs,exc,nocpq(i),ffactor,qpt(i,1),qpt(i,2),qpt(i,3),w90basis,nvec,&
+			    rlat,rvec,hopmatrices,&
+		             ihopmatrices,ovp,efermi,eaux,vaux,nocpf,fermishift,mag)
+#ifdef MKL
+		call MKL_SET_NUM_THREADS(nthreads)
+#endif		
+
+#ifdef AOCL		
+		call bli_thread_set_num_threads(nthreads)
+#endif
+
+#ifdef OPENBLAS
+		call OPENBLAS_SET_NUM_THREADS(nthreads)
+		
+#endif	
+
+			
+		do j=1,w90basis
+				qeigv(i,j)= eaux(j)
+				!ebands(j,i) = qeigv(i,j)
+
+		end do	
+		
+		do l=1,w90basis
+
+
+			do h=1,w90basis
+
+				qvector(i,l,h)=vaux(l,h)
+
+
+			end do
+			
+
+		end do		
+			
+
+		if (dft .eq. "S") then
+		 call overlap(w90basis,nvec,rvec,ovp,qpt(i,1),qpt(i,2),qpt(i,3),qovp(i,:,:))
+		else
+		 continue
+		end if
+	
+	end do
+	!$omp end parallel do	
+	
+	
+	write(300,*)
+	write(300,*)"Eigenvalues and Eigenvectors in q-mesh calculated"	
+	write(300,*)												
 
 	!calculate Mmn(k,q)
 	
-	allocate(mmnkq(w90basis,w90basis,nkpt,nkpt))
+	allocate(mmnkq(w90basis,w90basis,nkpt,ngqpt))
 	
 	!$omp parallel do collapse(4) default(shared) private(i,j,k,l)
 	do i=1,nkpt
 	 do j=1,w90basis
-	  do k=1,nkpt
+	  do k=1,ngqpt
 	   do l=1,w90basis
 	
-		call ovpsqr(dft,w90basis,kvector(i,j,:),kovp(i,:,:),kvector(k,l,:),kovp(k,:,:),mmnkq(j,l,i,k))
+		call ovpsqr(dft,w90basis,kvector(i,j,:),kovp(i,:,:),qvector(k,l,:),qovp(k,:,:),mmnkq(j,l,i,k))
 	
 	   end do
 	  end do
@@ -303,13 +420,13 @@ subroutine sgw_mesh(nthreads,outputfolder,ngrid,ifactor,smegw,ktolgw,params,edie
 	end do	
 	!$omp end parallel do
 		
-	!if (dft .eq. "S") then
-	!	 deallocate(kovp)
-	!else
-	! continue
-	!end if	
+	if (dft .eq. "S") then
+		 deallocate(kovp)
+	else
+	 continue
+	end if	
 	
-	!deallocate(kvector)	
+	deallocate(kvector)	
 	
 	write(300,*)
 	write(300,*)"Mmn(k,q) calculated"	
@@ -324,7 +441,7 @@ subroutine sgw_mesh(nthreads,outputfolder,ngrid,ifactor,smegw,ktolgw,params,edie
 	do i=1,nkpt
 	 do j=1,w90basis
 	
-	  call self_en_x(w90basis,sysdim,rlat,j,kpt(i,:),ngrid,nkpt,kpt,nocpk,coultypegw,edielgw,&
+	  call self_en_x(w90basis,sysdim,rlat,j,kpt(i,:),ngridint,ngqpt,qpt,nocpq,coultypegw,edielgw,&
 	               lcgw,ezgw,wgw,r0gw,ktolgw,mmnkq(:,:,i,:),selfx(j,i))
 	
 	 end do
@@ -339,13 +456,13 @@ subroutine sgw_mesh(nthreads,outputfolder,ngrid,ifactor,smegw,ktolgw,params,edie
 	
 if (selfxonly) then
 
-	!if (dft .eq. "S") then
-	!	 deallocate(qovp)
-	!else
-	! continue
-	!end if	
+	if (dft .eq. "S") then
+		 deallocate(qovp)
+	else
+	 continue
+	end if	
 	
-	!deallocate(qvector)
+	deallocate(qvector)
 	
 	 allocate(selfc(w90basis,nkpt),znk(w90basis,nkpt))
 	 
@@ -353,24 +470,24 @@ if (selfxonly) then
 	 
 	 znk = 1.0
 	 
-	 allocate(pol(nkpt,nomega))
+	 allocate(pol(ngqpt,nomega))
 	 
-	 allocate(w0(nkpt,nomega),vqa(nkpt,nomega))	
+	 allocate(w0(ngqpt,nomega),vqa(ngqpt,nomega))	
 
 
 else
 
 	!calculate Mmn(q,q')
 	
-	allocate(mmnqq(w90basis,w90basis,nkpt,nkpt))
+	allocate(mmnqq(w90basis,w90basis,ngqpt,ngqpt))
 	
 	!$omp parallel do collapse(4) default(shared) private(i,j,k,l)
-	do i=1,nkpt
+	do i=1,ngqpt
 	 do j=1,w90basis
-	  do k=1,nkpt
+	  do k=1,ngqpt
 	   do l=1,w90basis
 	
-		call ovpsqr(dft,w90basis,kvector(i,j,:),kovp(i,:,:),kvector(k,l,:),kovp(k,:,:),mmnqq(j,l,i,k))
+		call ovpsqr(dft,w90basis,qvector(i,j,:),qovp(i,:,:),qvector(k,l,:),qovp(k,:,:),mmnqq(j,l,i,k))
 	
 	   end do
 	  end do
@@ -386,32 +503,32 @@ else
 	call flush(300)
 	
 	if (dft .eq. "S") then
-		 deallocate(kovp)
+		 deallocate(qovp)
 	else
 	 continue
 	end if	
 	
-	deallocate(kvector)
+	deallocate(qvector)
 	
 	!calculate kmesh (q+q')
 	
-	allocate(qptpq(nkpt,nkpt,3))
+	allocate(qptpq(ngqpt,ngqpt,3))
 	
-	do i=1,nkpt
-	 do j=1,nkpt
+	do i=1,ngqpt
+	 do j=1,ngqpt
 	 
-	 	qptpq(i,j,:) = kpt(i,:) + kpt(j,:)
+	 	qptpq(i,j,:) = qpt(i,:) + qpt(j,:)
 	 
 	 end do
 	end do							
 
 	!calculate eigenvalues and eigenvectors in kmesh (q+q')
 	
-	allocate(qpqeigv(nkpt,nkpt,w90basis))
+	allocate(qpqeigv(ngqpt,ngqpt,w90basis))
 	
 	!$omp parallel do default(shared) private(i,j,k,l,h,eaux,vaux)
-	do i=1,nkpt
-	 do j=1,nkpt		
+	do i=1,ngqpt
+	 do j=1,ngqpt		
 
 #ifdef MKL
 		call MKL_SET_NUM_THREADS(1)
@@ -481,25 +598,25 @@ else
 	
 	!calculate kmesh (k-q)
 	
-	allocate(kptmq(nkpt,nkpt,3))
+	allocate(kptmq(nkpt,ngqpt,3))
 	
 	do i=1,nkpt
-	 do j=1,nkpt
+	 do j=1,ngqpt
 	 
-	 	kptmq(i,j,:) = kpt(i,:) - kpt(j,:)
+	 	kptmq(i,j,:) = kpt(i,:) - qpt(j,:)
 	 
 	 end do
 	end do				
 
 	!calculate eigenvalues and eigenvectors in kmesh (k-q)
 	
-	allocate(kmqeigv(nkpt,nkpt,w90basis))	
+	allocate(kmqeigv(nkpt,ngqpt,w90basis))	
 	
 
 	
 	!$omp parallel do default(shared) private(i,j,k,l,h,eaux,vaux)
 	do i=1,nkpt
-	 do j=1,nkpt		
+	 do j=1,ngqpt		
 
 #ifdef MKL
 		call MKL_SET_NUM_THREADS(1)
@@ -569,14 +686,14 @@ else
 	
 	!calculate Pi0(q,w) and W0(q,w)
 	
-	allocate(pol(nkpt,nomega))	
+	allocate(pol(ngqpt,nomega))	
 	
 	!$omp parallel do default(shared) private(i)
-	do i=1,nkpt
+	do i=1,ngqpt
 	 do j=1,nomega
 	
-		call polarization(fermishift,sysdim,ngrid,nkpt,rlat,omega(j),w90basis,systype,&
-		                   smegw,keigv,qpqeigv(i,:,:),mmnqq(:,:,i,:),pol(i,j))
+		call polarization(fermishift,sysdim,ngridint,ngqpt,rlat,omega(j),w90basis,systype,&
+		                   smegw,qeigv,qpqeigv(i,:,:),mmnqq(:,:,i,:),pol(i,j))
 	
 	
 	 	!pol(i,:) = 0.0
@@ -591,12 +708,12 @@ else
 	write(300,*)	
 	call flush(300)
 	
-	allocate(w0(nkpt,nomega),vqa(nkpt,nomega))	
+	allocate(w0(ngqpt,nomega),vqa(ngqpt,nomega))	
 	
 	!$omp parallel do default(shared) private(i)
-	do i=1,nkpt
+	do i=1,ngqpt
 	
-		call w0coul(kpt(i,:),nomega,rlat,ngrid,nkpt,coultypegw,edielgw,lcgw,ezgw,wgw,r0gw,ktolgw,pol(i,:),vqa(i,:),w0(i,:))
+		call w0coul(qpt(i,:),nomega,rlat,ngridint,ngqpt,coultypegw,edielgw,lcgw,ezgw,wgw,r0gw,ktolgw,pol(i,:),vqa(i,:),w0(i,:))
 	
 
 	
@@ -646,7 +763,7 @@ else
 	
 
 
-	  call self_c_znk(w90basis,sysdim,rlat,ngrid,ngqpt,fermishift,j,&
+	  call self_c_znk(w90basis,sysdim,rlat,ngridint,ngqpt,fermishift,j,&
 	                  keigv(i,j),kmqeigv(i,:,:),kpt(i,:),omega,nomega,w0,mmnkq(:,:,i,:),smegw,selfc(j,i),znk(j,i))
 	
 	 end do
@@ -659,8 +776,6 @@ else
 	call flush(300)			
 
 end if	
-
-	
 
 	deallocate(ovp)
 	
@@ -814,7 +929,7 @@ end if
 	
 	deallocate(selfcavg,selfxavg,znkavg,encoravg,ebands)
 	deallocate(rvec,hopmatrices,ihopmatrices,ffactor)
-	deallocate(kpt)
+	deallocate(kpt,qpt)
 	
 	call cpu_time(tf)
 	call date_and_time(VALUES=values2)

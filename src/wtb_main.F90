@@ -124,7 +124,8 @@ program main
 		     st,phavg,temp,ta,pce,ses,ctemp,tmax,eg,egd,egs,ebgs,renorm,emt,emfile,&
 		     dk,nocpf,fermishift,bsealgo,spintxt,meshgen,exc,mag,boltz,nmu,nsteps,mu0,&
 		     muf,btemp,klat,elft,hlft,smeboltz,ni,ns,edielgw,r0gw,lcgw,ezgw,wgw,coultypegw,&
-		     nomega,omegamax,gwmesh,gwmeshuse,gwbnd,gwbnduse,gwbsebnd,ktolgw,smegw,selfxonly,ifactor)
+		     nomega,omegamax,gwmesh,gwmeshuse,gwbnd,gwbnduse,gwbsebnd,ktolgw,smegw,selfxonly,ifactor,&
+		     rnmgw)
 		     
    
 
@@ -156,7 +157,7 @@ program main
                        
 	 call sgw_mesh(nthreads,outputfolder,ngrid,ifactor,smegw,ktolgw,params,edielgw,&
                        exc,mshift,coultypegw,ezgw,wgw,r0gw,lcgw,rk,meshtype,nocpf,fermishift,dft,mag,&
-                       nomega,omegamax,sysdim,selfxonly)                                               
+                       nomega,omegamax,sysdim,selfxonly,rnmgw)                                               
 	
 	 write(2077,*) "G0W0 k-mesh finished"
          call flush(2077)

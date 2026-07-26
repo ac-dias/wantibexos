@@ -110,17 +110,23 @@ function vcoulgw(kpt1,kpt2,rlat,ngrid,tolr)
 
 	real :: modk,ed,tolr,vbz,vc
 	real :: vcoulgw
+	real :: vbz2,qc,nq
 
 	call modvec(kpt1,kpt2,modk)
-	!call vcell3D(rlat,vc)
+	call vcell3D(rlat,vc)
 
 	ed = 1.0
 
 	!vbz= 1./((ngrid(1)*ngrid(2)*ngrid(3))*(vc))
 	 vbz = 1.0
+	 
+	 nq = real(ngrid(1)*ngrid(2)*ngrid(3))
+	 qc = ((6.0*pi*pi)/(vc*nq))**(2/3)
+	 
+	 
 	if (modk .lt. tolr) then
 
-		vcoulgw = 0.0
+		vcoulgw = 0.0 !vbz*(cic/ed)*(1.0/(qc))
 	else 
 
 		vcoulgw = vbz*(cic/ed)*(1.0/(modk*modk))
@@ -164,6 +170,73 @@ function v3dielgw(kpt1,kpt2,ediel,rlat,ngrid,tolr)
 
 
 end function 
+
+!potencial 3D truncado
+
+function vcoulgwt(kpt1, kpt2, rlat, ngrid, tolr)
+
+    implicit none
+
+    real, parameter :: cic = 0.0904756e3
+    real, parameter :: pi  = acos(-1.0)
+
+    real, parameter :: alpha_core = 1.50
+
+    integer, dimension(3) :: ngrid
+
+    real, dimension(3)   :: kpt1, kpt2
+    real, dimension(3,3) :: rlat
+
+    real :: modk
+    real :: ed
+    real :: tolr
+    real :: vc
+    real :: nq
+
+    real :: qc
+    real :: qc2
+    real :: qreg
+    real :: qreg2
+
+    real :: x
+    real :: x2
+    real :: shape
+
+    real :: vcoulgwt
+
+    call modvec(kpt1, kpt2, modk)
+    call vcell3D(rlat, vc)
+
+    ed = 1.0
+
+    nq = real(ngrid(1)) * real(ngrid(2)) * real(ngrid(3))
+
+    qc2 = ((6.0*pi*pi)/(vc*nq))**(2.0/3.0)
+    qc  = sqrt(qc2)
+
+    qreg  = alpha_core * qc
+    qreg2 = qreg * qreg
+
+    if (modk < qreg) then
+
+        x  = modk / qreg
+        x2 = x * x
+
+
+        shape = 12.0                             &
+              - 30.0 * x2                       &
+              + 28.0 * x2 * x2                  &
+              -  9.0 * x2 * x2 * x2
+
+        vcoulgwt = (cic/ed) * shape / qreg2
+
+    else
+
+        vcoulgwt = (cic/ed) / (modk * modk)
+
+    end if
+
+end function vcoulgwt
 
 !potencial 2D tradicional
 

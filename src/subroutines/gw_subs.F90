@@ -136,7 +136,7 @@ subroutine w0coul(qpt,nomega,rlat,ngrid,nk,coultype,ediel,lc,ez,w,r0,tolr,pol,vq
 	real,dimension(3) :: ediel
 	real :: lc,ez,w,r0
 	
-	real :: v2dkgw,vcoulgw,v3dielgw,v2dgw,v2dielgw,v2dtgw
+	real :: v2dkgw,vcoulgw,v3dielgw,v2dgw,v2dielgw,v2dtgw,vcoulgwt
 	real :: v0dtgw,v2dt2gw,v2drkgw,v2dohonogw,v1dtgw,v1dgw,v1dielgw
 	
 	v0 = 0.0
@@ -150,6 +150,10 @@ subroutine w0coul(qpt,nomega,rlat,ngrid,nk,coultype,ediel,lc,ez,w,r0,tolr,pol,vq
 	case("V3D")
 
 		vq= vcoulgw(qpt,v0,rlat,ngrid,tolr)
+		
+	case("V3DT")
+
+		vq= vcoulgwt(qpt,v0,rlat,ngrid,tolr)		
 
 	case("V3DL")
 
@@ -237,7 +241,7 @@ subroutine self_en_x(w90basis,sysdim,rlat,n,kpt,ngrid,nq,qpt,nocpq,coultype,edie
 	real,dimension(3) :: ediel
 	real :: lc,ez,w,r0,tolr
 	
-	real :: v2dkgw,vcoulgw,v3dielgw,v2dgw,v2dielgw,v2dtgw
+	real :: v2dkgw,vcoulgw,v3dielgw,v2dgw,v2dielgw,v2dtgw,vcoulgwt
 	real :: v0dtgw,v2dt2gw,v2drkgw,v2dohonogw,v1dtgw,v1dgw,v1dielgw
 	real :: vq
 	
@@ -259,6 +263,10 @@ subroutine self_en_x(w90basis,sysdim,rlat,n,kpt,ngrid,nq,qpt,nocpq,coultype,edie
 	case("V3D")
 
 		vq= vcoulgw(kpt,qpt(i,:),rlat,ngrid,tolr)
+
+	case("V3DT")
+
+		vq= vcoulgwt(kpt,qpt(i,:),rlat,ngrid,tolr)	
 
 	case("V3DL")
 
