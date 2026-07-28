@@ -37,7 +37,8 @@ SUBROUTINE_NAMES := \
     spin_txt_subs \
     emission_subs \
     coulomb_pot_gw \
-    gw_subs
+    gw_subs \
+    fourier_interpolation_sub
 
 SUBPROGRAM_NAMES := \
     bands-kpath-tool \
@@ -75,6 +76,7 @@ LIB_FILE  := $(BUILD_DIR)/libwtb.a
 PCE_SOURCES    := $(UTILS_DIR)/slme/pce-code.f90 $(UTILS_DIR)/slme/pce-subs.f90
 HUCKEL_SOURCES := $(UTILS_DIR)/huckel2wtb/src/overlaps_jc.f90 $(UTILS_DIR)/huckel2wtb/src/diagonalize.f90 $(UTILS_DIR)/huckel2wtb/src/Huckel_TB.f90
 SQ_SOURCES    := $(UTILS_DIR)/slme/sq-curve.f90 $(UTILS_DIR)/slme/pce-subs.f90
+INTERP_SOURCES := $(UTILS_DIR)/bands_gw_interpolation/bands_interp.F90 $(UTILS_DIR)/bands_gw_interpolation/bands_interp_subs.F90
 
 all: $(MAIN_EXEC) pp
 	@echo "--- Build Complete ---"
@@ -111,6 +113,7 @@ UTILS_EXECS := $(BIN_DIR)/nc_nv_finder.x \
                $(BIN_DIR)/pce.x \
                $(BIN_DIR)/huckel2wtb.x \
                $(BIN_DIR)/sq_curve.x \
+               $(BIN_DIR)/bands_interp.x \
                
 pp: $(UTILS_EXECS)
 	@echo "--- Copying Python Scripts ---"
@@ -137,6 +140,9 @@ $(BIN_DIR)/sq_curve.x: $(PCE_SOURCES) makefile.inc
 
 $(BIN_DIR)/huckel2wtb.x: $(HUCKEL_SOURCES) makefile.inc
 	$(FOR) $(HUCKEL_SOURCES) -o $@ $(L_FLAGS) $(MOD_OUT_FLAG)
+	
+$(BIN_DIR)/bands_interp.x: $(INTERP_SOURCES) makefile.inc
+	$(FOR) $(INTERP_SOURCES) -o $@ $(L_FLAGS) $(MOD_OUT_FLAG)	
 
 clean:
 	@echo "--- Cleaning build, bin, and .mod files ---"

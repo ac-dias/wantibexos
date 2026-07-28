@@ -532,7 +532,7 @@ subroutine input_read
 	r0gw = 1.0
 	ktolgw = 0.001
 	ifactor = 1.0
-	rnmgw = 0.1	
+	rnmgw = 0.04	
 
 	do 
 
@@ -1011,7 +1011,7 @@ subroutine input_read
 		
 	case ("RNM_GW=")
 
-		read(b,*) smegw																		
+		read(b,*) rnmgw																		
 
 	case default
 	 continue
