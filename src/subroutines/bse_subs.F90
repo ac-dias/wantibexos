@@ -339,8 +339,12 @@ subroutine dielbsep(nthread,dimse,excitonvec,hopt1,hopt2,activity)
 	!actaux=0.0
 
 
-	! $OMP DO PRIVATE(actaux)
-	! $OMP PARALLEL DO PRIVATE(actaux,actaux2)
+	! Each exciton state is independent.  This is one of the dominant
+	! post-processing costs after the BSE diagonalization, so parallelize over
+	! the output-state index rather than leaving the OpenMP directives commented.
+	!$OMP PARALLEL DO DEFAULT(NONE) &
+	!$OMP& SHARED(dimse, excitonvec, hopt1, hopt2, activity) &
+	!$OMP& PRIVATE(i, j, actaux, actaux2) SCHEDULE(STATIC)
 	do i=1,dimse
 
 
@@ -367,7 +371,7 @@ subroutine dielbsep(nthread,dimse,excitonvec,hopt1,hopt2,activity)
 
 
 	end do
-	! $OMP END PARALLEL DO
+	!$OMP END PARALLEL DO
 
 
 
@@ -377,6 +381,7 @@ end subroutine dielbsep
 
 subroutine dielbsev(nthread,dimse,excitonvec,hopt,activity)
 
+	use omp_lib
 	implicit none
 
 
@@ -393,7 +398,9 @@ subroutine dielbsev(nthread,dimse,excitonvec,hopt,activity)
 	activity=0.0
 	actaux=0.0
 
-	! $OMP PARALLEL DO PRIVATE(actaux)
+	!$OMP PARALLEL DO DEFAULT(NONE) &
+	!$OMP& SHARED(dimse, excitonvec, hopt, activity) &
+	!$OMP& PRIVATE(i, j, actaux) SCHEDULE(STATIC)
 	do i=1,dimse
 
 		actaux=0.0
@@ -414,7 +421,7 @@ subroutine dielbsev(nthread,dimse,excitonvec,hopt,activity)
 
 
 	end do
-	! $OMP END PARALLEL DO
+	!$OMP END PARALLEL DO
 
 
 end subroutine dielbsev
@@ -765,7 +772,6 @@ subroutine excwfi(outputfolder,ngkpt,kpt,qpt,nc,nv,nocp,stt,excenergy,excnum,qpt
 	close(800+excnum*qptnum)
 
 end subroutine excwfi
-
 
 
 

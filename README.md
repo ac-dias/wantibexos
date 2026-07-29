@@ -4,6 +4,20 @@ WanTiBEXOS DEV Repository
 The online documentation is available in:
 [https://wantibexos.readthedocs.io/en/latest/](https://wantibexos.readthedocs.io/)
 
+Performance build
+-----------------
+
+The checked-in `makefile.inc` is a diagnostic configuration (`-O0` with
+runtime checks).  For production runs on the MacPorts MPI/OpenBLAS setup used
+by this repository, copy `makefiles/makefile-osx-mpich+openblas-release` to
+`makefile.inc` before building.  It enables `-O3 -march=native` but does not
+enable unsafe floating-point transformations.  Use a parallel build to reduce
+compilation time, for example `make -j 8`.
+
+The BSE dielectric post-processing routines use OpenMP and take their thread
+count from the `NTHREADS=` input setting.  Choose a value that matches the CPU
+cores allocated to the calculation.
+
 For memory problems during parallel run, please export the following environment variable:
 export KMP_STACKSIZE=XXXmb, being XXX the amount of virtual RAM per thread, I suggest something around 300mb, but for some situations, more could be necessary.
 
