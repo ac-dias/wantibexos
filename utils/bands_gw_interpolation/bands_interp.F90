@@ -23,7 +23,7 @@ program main
 	real,dimension(3,3) :: rlat,rvec
 	
 	real,allocatable,dimension(:,:) :: kptmesh,kptmeshd
-	real,allocatable,dimension(:,:,:) :: engw
+	real,allocatable,dimension(:,:,:) :: engw,engw2
 	real,allocatable,dimension(:) :: corgwavg
 	
 	integer :: nks
@@ -32,7 +32,7 @@ program main
 	real,allocatable,dimension(:,:) :: ks
 	real,allocatable,dimension(:,:) :: kpathpts,kpathptsd
 	
-	real,allocatable,dimension(:,:) :: eninterp,gwcorinterp
+	real,allocatable,dimension(:,:) :: eninterp,gwcorinterp,gwcorinterp2
 	
 	
 
@@ -75,6 +75,8 @@ program main
     	if (erro/=0) stop "Error opening gw_qp_energy_cor_mesh_renorm input file"    		
 	OPEN(UNIT=305, FILE=trim(outputfolder)//"gw_qp_energy_cor_mesh_renorm.dat",STATUS='old', IOSTAT=erro)
     	if (erro/=0) stop "Error opening gw_qp_energy_cor_mesh_renorm input file" 
+	OPEN(UNIT=405, FILE=trim(outputfolder)//"gw_qp_energy_cor_mesh.dat",STATUS='old', IOSTAT=erro)
+    	if (erro/=0) stop "Error opening gw_qp_energy_cor_mesh input file"     	
 	OPEN(UNIT=202, FILE= kpaths,STATUS='old', IOSTAT=erro)
     	if (erro/=0) stop "Error opening kpath input file"   
     	
@@ -117,6 +119,30 @@ program main
 	
 	
 	end do  
+	
+
+	allocate(engw2(nkpt,w90basis,2))
+	
+	read(405,*) w90basis 
+	read(405,*) nkpt
+	read(405,*) ngrid(1),ngrid(2),ngrid(3) 
+	
+	do i=1,nkpt
+	
+		read(405,*) charflag,charflag,iflag,rflag,rflag,rflag
+		read(405,*) charflag
+		
+		do j=1,w90basis
+		
+			read(405,*) engw2(i,j,1),engw2(i,j,2),rflag,rflag,rflag,rflag
+			
+			engw2(i,j,2) = engw2(i,j,2) + engw2(i,j,1) 
+		
+		
+		end do
+	
+	
+	end do  	
 	
 	allocate(corgwavg(w90basis))
 	
@@ -166,6 +192,7 @@ program main
 	!interpolation of energies and G0W0 corrections
 
 	allocate(eninterp(nkpathpts,w90basis),gwcorinterp(nkpathpts,w90basis))
+	allocate(gwcorinterp2(nkpathpts,w90basis))
 
 
 	do i=1,nkpathpts
@@ -173,20 +200,21 @@ program main
 	 do j=1,w90basis
 
 		call interpolate_real(kpathptsd(i,2:4),ngrid,nkpt,engw(:,j,1),kptmeshd,eninterp(i,j))	
-		call interpolate_real(kpathptsd(i,2:4),ngrid,nkpt,engw(:,j,2),kptmeshd,gwcorinterp(i,j))		 
+		call interpolate_real(kpathptsd(i,2:4),ngrid,nkpt,engw(:,j,2),kptmeshd,gwcorinterp(i,j))
+		call interpolate_real(kpathptsd(i,2:4),ngrid,nkpt,engw2(:,j,2),kptmeshd,gwcorinterp2(i,j))		 
 	 
 	 end do
 	
 	end do
 	
 
-	write(306,*)"#kpt EnTB EnG0W0 EnG0W0avg"
+	write(306,*)"#kpt EnTB EnG0W0 EnG0W0renorm EnG0W0avg"
 
 	do i=1,w90basis
 	
 	 do j=1,nkpathpts
 		
-		write(306,"(1E18.8,4E18.4)")  kpathpts(j,1),eninterp(j,i),gwcorinterp(j,i),eninterp(j,i)+corgwavg(i)
+		write(306,"(1E18.8,4E18.4)")  kpathpts(j,1),eninterp(j,i),gwcorinterp2(j,i),gwcorinterp(j,i),eninterp(j,i)+corgwavg(i)
 	 
 	 end do
 		write(306,*)
@@ -198,11 +226,13 @@ program main
 	deallocate(engw)
 	deallocate(ks,kpathpts,kpathptsd)
 	deallocate(eninterp,gwcorinterp)
+	deallocate(engw2,gwcorinterp2)
 	deallocate(corgwavg)
 	
 	close(300)
 	close(304)
 	close(305)
+	close(405)
 	close(202)
 	close(306)
 	

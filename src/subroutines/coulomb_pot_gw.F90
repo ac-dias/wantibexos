@@ -238,6 +238,96 @@ function vcoulgwt(kpt1, kpt2, rlat, ngrid, tolr)
 
 end function vcoulgwt
 
+function vcoulgwt2(kpt1, kpt2, rlat, ngrid, tolr)
+
+    implicit none
+
+    real, parameter :: cic = 0.0904756e3
+    real, parameter :: pi  = acos(-1.0)
+
+    integer, dimension(3) :: ngrid
+
+    real, dimension(3)   :: kpt1, kpt2
+    real, dimension(3,3) :: rlat
+
+    real :: modk
+    real :: ed
+    real :: tolr
+    real :: vc
+    real :: vbz
+    real :: nq
+
+    real :: qc
+    real :: qc2
+    real :: x
+    real :: x2
+    real :: invx2
+    real :: logterm
+    real :: gfun
+
+    real :: vcoulgwt2
+
+    call modvec(kpt1, kpt2, modk)
+    call vcell3D(rlat, vc)
+
+    ed  = 1.0
+    vbz = 1.0
+
+    nq = real(ngrid(1)) * real(ngrid(2)) * real(ngrid(3))
+
+    qc2 = ((6.0*pi*pi)/(vc*nq))**(2.0/3.0)
+    qc  = sqrt(qc2)
+
+    if (modk <= tolr) then
+
+        gfun = 3.0
+
+    else
+
+        x = modk / qc
+
+        if (x < 1.0e-3) then
+
+            ! Small-x expansion:
+            !
+            ! g(x) = 3 - x^2 - x^4/5 - 3*x^6/35 + ...
+            x2 = x*x
+
+            gfun = 3.0                          &
+                 - x2                           &
+                 - (1.0/5.0)*x2*x2              &
+                 - (3.0/35.0)*x2*x2*x2
+
+        else if (abs(x - 1.0) < 1.0e-5) then
+
+            gfun = 1.5
+
+        else if (x > 3.0) then
+
+            invx2 = 1.0/(x*x)
+
+            gfun = invx2 * (                         &
+                     1.0                             &
+                   + (1.0/5.0)*invx2                &
+                   + (3.0/35.0)*invx2*invx2          &
+                   + (1.0/21.0)*invx2*invx2*invx2 )
+
+        else
+
+            logterm = log(abs((1.0 + x)/(1.0 - x)))
+
+            gfun = 1.5 * (                           &
+                     1.0                             &
+                   + ((1.0 - x*x)/(2.0*x))*logterm )
+
+        end if
+
+    end if
+
+    vcoulgwt2 = vbz * (cic/ed) * gfun / qc2
+
+end function vcoulgwt2
+
 !potencial 2D tradicional
 
 function v2dgw(kpt1,kpt2,rlat,ngrid,tolr)

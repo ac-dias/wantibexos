@@ -241,7 +241,7 @@ subroutine self_en_x(w90basis,sysdim,rlat,n,kpt,ngrid,nq,qpt,nocpq,coultype,edie
 	real,dimension(3) :: ediel
 	real :: lc,ez,w,r0,tolr
 	
-	real :: v2dkgw,vcoulgw,v3dielgw,v2dgw,v2dielgw,v2dtgw,vcoulgwt
+	real :: v2dkgw,vcoulgw,v3dielgw,v2dgw,v2dielgw,v2dtgw,vcoulgwt,vcoulgwt2
 	real :: v0dtgw,v2dt2gw,v2drkgw,v2dohonogw,v1dtgw,v1dgw,v1dielgw
 	real :: vq
 	
@@ -266,7 +266,11 @@ subroutine self_en_x(w90basis,sysdim,rlat,n,kpt,ngrid,nq,qpt,nocpq,coultype,edie
 
 	case("V3DT")
 
-		vq= vcoulgwt(kpt,qpt(i,:),rlat,ngrid,tolr)	
+		vq= vcoulgwt(kpt,qpt(i,:),rlat,ngrid,tolr)
+		
+	case("V3DT2")
+
+		vq= vcoulgwt2(kpt,qpt(i,:),rlat,ngrid,tolr)			
 
 	case("V3DL")
 
