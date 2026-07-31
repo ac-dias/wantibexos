@@ -378,39 +378,26 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	end select
 
 
+#ifdef MKL
+        call MKL_SET_NUM_THREADS(1)
+#endif
+
+
+#ifdef AOCL
+        call bli_thread_set_num_threads(1)
+#endif
+
+#ifdef OPENBLAS
+        call OPENBLAS_SET_NUM_THREADS(1)
+        
+#endif
 
 	!$omp parallel do default(shared) private(i,j,l,h,eaux,vaux)
 	do i=1,ngkpt
 
-#ifdef MKL
-		call MKL_SET_NUM_THREADS(1)
-#endif		
-
-
-#ifdef AOCL		
-		call bli_thread_set_num_threads(1)
-#endif	
-
-#ifdef OPENBLAS
-		call OPENBLAS_SET_NUM_THREADS(1)
-		
-#endif
-
 		call eigsys(nthreads,dft,systype,scs+tcor,exc,nocpk(i),ffactor,kpt(i,1),kpt(i,2),kpt(i,3),w90basis,nvec,&
 			    rlat,rvec,hopmatrices,&
 		             ihopmatrices,ovp,efermi,eaux,vaux,nocpf,fermishift,mag)
-#ifdef MKL
-		call MKL_SET_NUM_THREADS(nthreads)
-#endif		
-
-#ifdef AOCL		
-		call bli_thread_set_num_threads(nthreads)
-#endif
-
-#ifdef OPENBLAS
-		call OPENBLAS_SET_NUM_THREADS(nthreads)
-		
-#endif
 
 			do j=1,nc+nv
 	
@@ -462,6 +449,19 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	
 	end do
 	!$omp end parallel do
+
+#ifdef MKL
+        call MKL_SET_NUM_THREADS(nthreads)
+#endif
+
+#ifdef AOCL
+        call bli_thread_set_num_threads(nthreads)
+#endif
+
+#ifdef OPENBLAS
+        call OPENBLAS_SET_NUM_THREADS(nthreads)
+        
+#endif
 
 	deallocate(eaux,vaux)
 	write(300,*) 'direct gap:', egap
