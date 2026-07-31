@@ -125,7 +125,7 @@ program main
 		     dk,nocpf,fermishift,bsealgo,spintxt,meshgen,exc,mag,boltz,nmu,nsteps,mu0,&
 		     muf,btemp,klat,elft,hlft,smeboltz,ni,ns,edielgw,r0gw,lcgw,ezgw,wgw,coultypegw,&
 		     nomega,omegamax,gwmesh,gwmeshuse,gwbnd,gwbnduse,gwbsebnd,ktolgw,smegw,selfxonly,ifactor,&
-		     rnmgw)
+		     rnmgw,gwalgo)
 		     
    
 
@@ -154,10 +154,23 @@ program main
 	 !call sgw(nthreads,outputfolder,ngrid,smegw,ktolgw,params,edielgw,&
           !             exc,mshift,coultypegw,ezgw,wgw,r0gw,lcgw,rk,meshtype,nocpf,fermishift,dft,mag,&
            !            nomega,omegamax,sysdim,selfxonly) 
-                       
-	 call sgw_mesh(nthreads,outputfolder,ngrid,ifactor,smegw,ktolgw,params,edielgw,&
+
+	select case(gwalgo)
+	
+	case("normal")
+	
+	 call sgw_mesh_normal(nthreads,outputfolder,ngrid,ifactor,smegw,ktolgw,params,edielgw,&
                        exc,mshift,coultypegw,ezgw,wgw,r0gw,lcgw,rk,meshtype,nocpf,fermishift,dft,mag,&
-                       nomega,omegamax,sysdim,selfxonly,rnmgw)                                               
+                       nomega,omegamax,sysdim,selfxonly,rnmgw)
+	
+	case default
+
+                       
+	 call sgw_mesh_fast(nthreads,outputfolder,ngrid,ifactor,smegw,ktolgw,params,edielgw,&
+                       exc,mshift,coultypegw,ezgw,wgw,r0gw,lcgw,rk,meshtype,nocpf,fermishift,dft,mag,&
+                       nomega,omegamax,sysdim,selfxonly,rnmgw)   
+                       
+       end select                                                            
 	
 	 write(2077,*) "G0W0 k-mesh finished"
          call flush(2077)

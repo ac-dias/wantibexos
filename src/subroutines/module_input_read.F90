@@ -336,6 +336,7 @@ module input_variables
 	real,dimension(3) :: edielgw
 	real :: ktolgw,smegw,ifactor
 	real :: rnmgw
+	character(len=6) :: gwalgo
 	
 	
 
@@ -532,7 +533,8 @@ subroutine input_read
 	r0gw = 1.0
 	ktolgw = 0.001
 	ifactor = 1.0
-	rnmgw = 0.04	
+	rnmgw = 0.04
+	gwalgo = "fast"	
 
 	do 
 
@@ -1011,7 +1013,11 @@ subroutine input_read
 		
 	case ("RNM_GW=")
 
-		read(b,*) rnmgw																		
+		read(b,*) rnmgw
+		
+	case ("G0W0_ALGO=")
+
+		read(b,*) gwalgo																				
 
 	case default
 	 continue
@@ -1035,7 +1041,7 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 		     dk,nocpf,fermishift,bsealgo,spintxt,meshgen,exc,mag,boltz,nmu,nsteps,mu0,&
 		     muf,btemp,klat,elft,hlft,smeboltz,ni,ns,edielgw,r0gw,lcgw,ezgw,wgw,coultypegw,&
 		     nomega,omegamax,gwmesh,gwmeshuse,gwbnd,gwbnduse,gwbsebnd,ktolgw,smegw,selfxonly,ifactor,&
-		     rnmgw)
+		     rnmgw,gwalgo)
 
 	implicit none
 	integer :: unitout
@@ -1112,6 +1118,7 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	real :: omegamax
 	
 	character(len=5) :: coultypegw
+	character(len=6) :: gwalgo
 	real :: ezgw,wgw,lcgw,r0gw
 	real,dimension(3) :: edielgw
 	real :: ktolgw,smegw	
@@ -1257,9 +1264,10 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	write(unitout,"(A7,F8.4)") "MAG_Z= ", mag(3)
 	write(unitout,*)
 	write(unitout,*) "PARAMETERS FOR GW CALCULATION"
+	write(unitout,"(A11,A12)") "G0W0_ALGO= ", gwalgo	
 	write(unitout,"(A8,I0)") "NOMEGA= ",nomega
 	write(unitout,"(A10,F8.4)") "OMEGAMAX= ",omegamax
-	write(unitout,"(A8,F8.4)") "KTOL_GW= ", ktolgw
+	write(unitout,"(A8,E15.4)") "KTOL_GW= ", ktolgw
 	write(unitout,"(A7,F8.4)") "RNM_GW= ", rnmgw
 	write(unitout,"(A9,F8.4)") "SIGMA_GW= ", smegw	
 	!write(unitout,"(A16,A5)") "COULOMB_POT_GW= ",coultypegw

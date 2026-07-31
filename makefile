@@ -63,7 +63,8 @@ SUBPROGRAM_NAMES := \
     sp_solver-tool-diel \
     boltzmann_transport \
     emission_PL \
-    s_gw_mesh 
+    s_gw_mesh_fast \
+    s_gw_mesh_normal \
 
 SUBROUTINE_OBJS := $(foreach name,$(SUBROUTINE_NAMES),$(BUILD_DIR)/subroutines/$(name).o)
 SUBPROGRAM_OBJS := $(foreach name,$(SUBPROGRAM_NAMES),$(BUILD_DIR)/subprograms/$(name).o)

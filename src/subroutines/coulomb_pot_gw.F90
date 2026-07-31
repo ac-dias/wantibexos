@@ -126,7 +126,7 @@ function vcoulgw(kpt1,kpt2,rlat,ngrid,tolr)
 	 
 	if (modk .lt. tolr) then
 
-		vcoulgw = 0.0 !vbz*(cic/ed)*(1.0/(qc))
+		vcoulgw = 0.0
 	else 
 
 		vcoulgw = vbz*(cic/ed)*(1.0/(modk*modk))
