@@ -4,19 +4,20 @@ function wk(sysdim,ngrid,rlat)
 	character(len=5) :: sysdim
 	integer,dimension(3) :: ngrid
 	real,parameter:: pi=acos(-1.)
-	real,dimension(3,3) :: rlat
+	real,dimension(3,3) :: rlat,blat
 	real :: nk,wk
 	real :: vbz
 	real :: aux
 	
 	nk = ngrid(1)*ngrid(2)*ngrid(3)
+	!call recvec(rlat(1,:),rlat(2,:),rlat(3,:),blat(1,:),blat(2,:),blat(3,:))
 	
 	select case (sysdim)
 	
 	case("3D")
 	
 	 call vcell3D(rlat,vbz)
-	 aux = (2.0*pi)*(2.0*pi)*(2.0*pi)
+	 aux = pi!(2.0*pi)*(2.0*pi)*(2.0*pi)  
 	 wk = 1.0/(nk*vbz*aux)	
 	
 	case("2D")
@@ -32,9 +33,13 @@ function wk(sysdim,ngrid,rlat)
 	 wk = 1.0/(nk*vbz*aux)	
 	
 	case default
-	
-		write(*,*) "Wrong value for system dimension"
-		STOP
+
+	 call vcell3D(rlat,vbz)	
+	 aux = pi
+	 wk = 1.0/(nk*vbz*aux)	
+	 
+		!write(*,*) "Wrong value for system dimension"
+		!STOP
 	
 	end select
 
