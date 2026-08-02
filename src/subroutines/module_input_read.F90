@@ -1063,7 +1063,7 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	integer :: nocpf
 
 #ifdef MPI
-        integer Nodes
+        integer Nodes,MPIError
 #endif
 	!integer :: power
 	!integer :: ncrpa,nvrpa
@@ -1141,7 +1141,7 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 
 	write(unitout,"(A10,I0)") "NTHREADS= ",nthreads
 #ifdef MPI
-        call MPI_Comm_Size( MPI_Comm_World, Nodes, MPI_SUCCESS )
+        call MPI_Comm_Size( MPI_Comm_World, Nodes, MPIError )
         write(unitout,"(A10,I0)") "MPI THREDS= ",Nodes
 #endif
 	write(unitout,"(A8,A2)") "SYSDIM= ",sysdim

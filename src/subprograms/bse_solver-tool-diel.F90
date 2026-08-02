@@ -96,7 +96,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 #ifdef ELPA
 	class(elpa_t), pointer :: elpa_instance
 	complex,allocatable,dimension(:,:) :: elpa_eigenvectors
-	integer :: elpa_error
+	integer :: elpa_status
 #endif
 
         !zheevr definitions
@@ -916,39 +916,39 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 				call MPI_ABORT(MPI_COMM_WORLD, 1, MPIError)
 			end if
 
-			elpa_error = elpa_init(ELPA_API_VERSION)
-			call elpa_check(elpa_error, 'elpa_init', MPI_COMM_WORLD)
-			elpa_instance => elpa_allocate(elpa_error)
-			call elpa_check(elpa_error, 'elpa_allocate', MPI_COMM_WORLD)
+			elpa_status = elpa_init(ELPA_API_VERSION)
+			call elpa_check(elpa_status, 'elpa_init', MPI_COMM_WORLD)
+			elpa_instance => elpa_allocate(elpa_status)
+			call elpa_check(elpa_status, 'elpa_allocate', MPI_COMM_WORLD)
 
-			call elpa_instance%set('na', dimbse, elpa_error)
-			call elpa_check(elpa_error, 'set na', MPI_COMM_WORLD)
-			call elpa_instance%set('nev', dimbse, elpa_error)
-			call elpa_check(elpa_error, 'set nev', MPI_COMM_WORLD)
-			call elpa_instance%set('local_nrows', locr, elpa_error)
-			call elpa_check(elpa_error, 'set local_nrows', MPI_COMM_WORLD)
-			call elpa_instance%set('local_ncols', locc, elpa_error)
-			call elpa_check(elpa_error, 'set local_ncols', MPI_COMM_WORLD)
-			call elpa_instance%set('nblk', mb, elpa_error)
-			call elpa_check(elpa_error, 'set nblk', MPI_COMM_WORLD)
-			call elpa_instance%set('mpi_comm_parent', MPI_COMM_WORLD, elpa_error)
-			call elpa_check(elpa_error, 'set mpi_comm_parent', MPI_COMM_WORLD)
-			call elpa_instance%set('process_row', myrow, elpa_error)
-			call elpa_check(elpa_error, 'set process_row', MPI_COMM_WORLD)
-			call elpa_instance%set('process_col', mycol, elpa_error)
-			call elpa_check(elpa_error, 'set process_col', MPI_COMM_WORLD)
-			elpa_error = elpa_instance%setup()
-			call elpa_check(elpa_error, 'elpa setup', MPI_COMM_WORLD)
-			call elpa_instance%set('omp_threads', nthreads, elpa_error)
-			call elpa_check(elpa_error, 'set omp_threads', MPI_COMM_WORLD)
-			call elpa_instance%set('solver', ELPA_SOLVER_2STAGE, elpa_error)
-			call elpa_check(elpa_error, 'set ELPA 2-stage solver', MPI_COMM_WORLD)
-			call elpa_instance%eigenvectors(hbse_dist, W, elpa_eigenvectors, elpa_error)
-			call elpa_check(elpa_error, 'ELPA eigenvectors', MPI_COMM_WORLD)
-			call elpa_deallocate(elpa_instance, elpa_error)
-			call elpa_check(elpa_error, 'elpa_deallocate', MPI_COMM_WORLD)
-			call elpa_uninit(elpa_error)
-			call elpa_check(elpa_error, 'elpa_uninit', MPI_COMM_WORLD)
+			call elpa_instance%set('na', dimbse, elpa_status)
+			call elpa_check(elpa_status, 'set na', MPI_COMM_WORLD)
+			call elpa_instance%set('nev', dimbse, elpa_status)
+			call elpa_check(elpa_status, 'set nev', MPI_COMM_WORLD)
+			call elpa_instance%set('local_nrows', locr, elpa_status)
+			call elpa_check(elpa_status, 'set local_nrows', MPI_COMM_WORLD)
+			call elpa_instance%set('local_ncols', locc, elpa_status)
+			call elpa_check(elpa_status, 'set local_ncols', MPI_COMM_WORLD)
+			call elpa_instance%set('nblk', mb, elpa_status)
+			call elpa_check(elpa_status, 'set nblk', MPI_COMM_WORLD)
+			call elpa_instance%set('mpi_comm_parent', MPI_COMM_WORLD, elpa_status)
+			call elpa_check(elpa_status, 'set mpi_comm_parent', MPI_COMM_WORLD)
+			call elpa_instance%set('process_row', myrow, elpa_status)
+			call elpa_check(elpa_status, 'set process_row', MPI_COMM_WORLD)
+			call elpa_instance%set('process_col', mycol, elpa_status)
+			call elpa_check(elpa_status, 'set process_col', MPI_COMM_WORLD)
+			call elpa_instance%set('omp_threads', nthreads, elpa_status)
+			call elpa_check(elpa_status, 'set omp_threads', MPI_COMM_WORLD)
+			elpa_status = elpa_instance%setup()
+			call elpa_check(elpa_status, 'elpa setup', MPI_COMM_WORLD)
+			call elpa_instance%set('solver', ELPA_SOLVER_2STAGE, elpa_status)
+			call elpa_check(elpa_status, 'set ELPA 2-stage solver', MPI_COMM_WORLD)
+			call elpa_instance%eigenvectors(hbse_dist, W, elpa_eigenvectors, elpa_status)
+			call elpa_check(elpa_status, 'ELPA eigenvectors', MPI_COMM_WORLD)
+			call elpa_deallocate(elpa_instance, elpa_status)
+			call elpa_check(elpa_status, 'elpa_deallocate', MPI_COMM_WORLD)
+			call elpa_uninit(elpa_status)
+			call elpa_check(elpa_status, 'elpa_uninit', MPI_COMM_WORLD)
 
 			deallocate(hbse_dist)
 			call move_alloc(elpa_eigenvectors, hbse_dist)
@@ -1206,19 +1206,19 @@ end subroutine bsesolver
 
 #ifdef MPI
 #ifdef ELPA
-subroutine elpa_check(status, operation, mpi_comm)
+subroutine elpa_check(status, operation, comm)
 	use mpi
 	use elpa
 
 	implicit none
 
-	integer, intent(in) :: status, mpi_comm
+	integer, intent(in) :: status, comm
 	character(len=*), intent(in) :: operation
-	integer :: mpi_error
+	integer :: mpi_ierr
 
 	if (status /= ELPA_OK) then
 		write(*,*) 'ELPA failed during ', trim(operation), '; status = ', status
-		call MPI_ABORT(mpi_comm, 1, mpi_error)
+		call MPI_ABORT(comm, 1, mpi_ierr)
 		stop
 	end if
 end subroutine elpa_check

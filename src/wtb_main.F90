@@ -118,6 +118,10 @@ program main
     close(2055)
     endif
 
+#ifdef MPI
+    call MPI_BCAST(rlatv, 9, MPI_REAL, 0, MPI_COMM_WORLD, MPIError)
+#endif
+
 	if (meshtype .eq. "RK3D") then
 
 		call rkmesh(rk,rlatv,ngrid)
@@ -493,7 +497,6 @@ program main
 #endif
 
 end program main
-
 
 
 
