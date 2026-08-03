@@ -171,11 +171,12 @@ program main
 	if (pponly) go to 131
 	
 	if (gwmesh) then
+#ifdef MPI
          if (Nodes /= 1) then
           write(2077,*) "Not implemented in parallel yet"
           call mpi_abort(MPI_Comm_World,1, MPIError)
          endif
-
+#endif
 	  !call gw_pi0_calc(nthreads,outputfolder,ngrid,smegw,params,&
           !             exc,mshift,nocpf,fermishift,dft,mag,&
           !             nomega,omegamax,sysdim)
@@ -219,10 +220,12 @@ program main
 
 
 	if (bandscalc) then
+#ifdef MPI
         if (Nodes /= 1) then
          write(2077,*) "Not implemented in parallel yet"
          call mpi_abort(MPI_Comm_World,1, MPIError)
         endif
+#endif
 	 call bandstool(nthreads,outputfolder,params,kpaths,orbw, &
 		     exc,mag,mshift,dft,nocpf,fermishift)
 	 write(2077,*) "Band Structure finished"
@@ -231,10 +234,12 @@ program main
 
 
 	if (doscalc) then
+#ifdef MPI
         if (Nodes /= 1) then
          write(2077,*) "Not implemented in parallel yet"
          call mpi_abort(MPI_Comm_World,1, MPIError)
         endif
+#endif
 
 	 call dostool(nthreads,outputfolder,ngrid,numdos, &
 		      sme,params,orbw,exc,mag,mshift,dft,nocpf,fermishift,spintxt)
@@ -244,20 +249,24 @@ program main
 	end if
 	
 	if (spintxt) then
+#ifdef MPI
         if (Nodes /= 1) then
          write(2077,*) "Not implemented in parallel yet"
          call mpi_abort(MPI_Comm_World,1, MPIError)
         endif
+#endif
 	write(2077,*) "Spin Texture finished"
 	call flush(2077)
 	end if
 	
 		
 	if (emt) then
+#ifdef MPI
         if (Nodes /= 1) then
          write(2077,*) "Not implemented in parallel yet"
          call mpi_abort(MPI_Comm_World,1, MPIError)
         endif
+#endif
 
 	 !call efmass(nthreads,dft,outputfolder,params,emfile,dk,nocpf,fermishift,exc,mag,sysdim)
 	 
@@ -268,10 +277,12 @@ program main
 	end if	
 	
 	if (boltz) then
+#ifdef MPI
         if (Nodes /= 1) then
          write(2077,*) "Not implemented in parallel yet"
          call mpi_abort(MPI_Comm_World,1, MPIError)
         endif
+#endif
 		call boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc,mag,mshift,dft,nocpf,fermishift, &
                            mu0,muf,nmu,btemp,klat,elft,hlft)
                            
@@ -300,10 +311,12 @@ program main
 		endif
 
 		else
+#ifdef MPI
             if (Nodes /= 1) then
              write(2077,*) "Not implemented in parallel yet"
              call mpi_abort(MPI_Comm_World,1, MPIError)
             endif
+#endif
 
 		call bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		     ebse0,ebsef,numbse,cshift,ktol,params,kpaths,kpathsbse,orbw,ediel, &
@@ -497,7 +510,5 @@ program main
 #endif
 
 end program main
-
-
 
 

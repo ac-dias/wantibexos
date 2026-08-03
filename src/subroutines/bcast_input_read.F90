@@ -6,6 +6,7 @@
 !   Copyright 2026 ___ORGANIZATIONNAME___. All rights reserved.
 !
 
+#ifdef MPI
 subroutine bcast_input_read()
 
 use input_variables
@@ -207,3 +208,12 @@ call MPI_BCAST(ovp, &
       nvec*w90basis*w90basis, MPI_REAL, 0, MPI_COMM_WORLD, ierr)
 
 end subroutine bcast_hamil
+#else
+! The broadcast routines are only called by MPI code.  Keep no-op definitions
+! in serial builds because this source file is compiled unconditionally.
+subroutine bcast_input_read()
+end subroutine bcast_input_read
+
+subroutine bcast_hamil()
+end subroutine bcast_hamil
+#endif
