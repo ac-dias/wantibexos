@@ -452,19 +452,21 @@ program main
 	call spoptprop(numbse,outputfolder,tmax,ni,ns) !calculate abs coeficient and other properties
 	
 	call emissionopt(nthreads,"IPA",outputfolder,numbse,ngrid,nc,nv,ctemp,cshift,eg)
-
-	 write(2077,*) "Single particle dielectric properties calculated"
-         call flush(2077)
-     
+       
+        if (Node == 0) then
+	  write(2077,*) "Single particle dielectric properties calculated"
+          call flush(2077)
+        endif
      		if (cpol) then
      		
      			call spdielrawpol(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebse0,ebsef,numbse,cshift) !calculate dielectric constants different 												       light polarizations
 			call spoptproppol(numbse,outputfolder,tmax,ni,ns) !calculate abs coeficient and other properties
 
 			call emissionopt(nthreads,"IPP",outputfolder,numbse,ngrid,nc,nv,ctemp,cshift,eg)
-
+                     if (Node == 0) then
 	 		write(2077,*) "Single particle absorption/PL spectrum with light polarization calculated"
      			call flush(2077)
+                     endif
      		
      		end if
 

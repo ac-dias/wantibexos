@@ -84,7 +84,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	real,parameter :: ABSTOL=1.0e-6
 	INTEGER  ::        INFO
 	real,allocatable,dimension(:) :: W,RWORK
-		COMPLEX,allocatable,dimension(:,:) :: hbse,hbse_dist
+		COMPLEX,allocatable,dimension(:,:) :: hbse,hbse_dist,hbse_eigenvectors
 		COMPLEX,allocatable,dimension(:) :: eigvec_dist
 
         INTEGER :: LWMAX
@@ -961,20 +961,26 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 #endif
 		LWORK = -1
 		LRWORK = -1
+		! PCHEEV overwrites Z before the back transformation is complete, so A and Z
+		! must be distinct distributed arrays (unlike the one-process CHEEV path).
+		allocate(hbse_eigenvectors(lld,max(1,locc)),stat=erro)
+		if (erro /= 0) then
+			write(*,*) 'Could not allocate distributed BSE eigenvector storage'
+			call MPI_ABORT(MPI_COMM_WORLD, 1, MPIError)
+		end if
 		allocate(WORK(1),RWORK(1))
-		call PCHEEV('V','U',dimbse,hbse_dist,1,1,desca,W,hbse_dist,1,1,descz,WORK,LWORK,RWORK,LRWORK,INFO)
+		call PCHEEV('V','U',dimbse,hbse_dist,1,1,desca,W,hbse_eigenvectors,1,1,descz,WORK,LWORK,RWORK,LRWORK,INFO)
 		LWORK = max(1,int(real(WORK(1))))
 		LRWORK = max(1,int(RWORK(1)))
 		deallocate(WORK,RWORK)
 		allocate(WORK(LWORK),RWORK(LRWORK))
-		call PCHEEV('V','U',dimbse,hbse_dist,1,1,desca,W,hbse_dist,1,1,descz,WORK,LWORK,RWORK,LRWORK,INFO)
+		call PCHEEV('V','U',dimbse,hbse_dist,1,1,desca,W,hbse_eigenvectors,1,1,descz,WORK,LWORK,RWORK,LRWORK,INFO)
 		if (INFO .ne. 0) then
 			write(*,*) 'ScaLAPACK PCHEEV failed with INFO = ', INFO
 			call MPI_ABORT(MPI_COMM_WORLD, INFO, MPIError)
 		end if
-			! Keep the PCHEEV eigenvectors in their 2D block-cyclic distribution.
-			! Reconstructing hbse here would allocate a full dimbse-by-dimbse copy
-			! on every MPI rank and defeats the ScaLAPACK memory distribution.
+		deallocate(hbse_dist)
+		call move_alloc(hbse_eigenvectors,hbse_dist)
 #ifdef ELPA
 		end if
 #endif

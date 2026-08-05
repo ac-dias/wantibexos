@@ -1142,7 +1142,7 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	write(unitout,"(A10,I0)") "NTHREADS= ",nthreads
 #ifdef MPI
         call MPI_Comm_Size( MPI_Comm_World, Nodes, MPIError )
-        write(unitout,"(A10,I0)") "MPI THREDS= ",Nodes
+        write(unitout,"(A13,I0)") "MPI THREADS= ",Nodes
 #endif
 	write(unitout,"(A8,A2)") "SYSDIM= ",sysdim
 	write(unitout,"(A5,A1)") "DFT= ",dft		
