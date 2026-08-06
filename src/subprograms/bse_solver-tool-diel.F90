@@ -507,12 +507,13 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	!write(*,*) "autovetores e autovalores"
 
 
-	allocate(sk(ngkpt,w90basis,w90basis))
+	! Store each k-point overlap matrix contiguously: sk(:,:,ik).
+	allocate(sk(w90basis,w90basis,ngkpt))
 	if (dft .eq. "S") then
 		
 		do i=1,ngkpt
 		
-			call overlap(w90basis,nvec,rvec,ovp,kpt(i,1),kpt(i,2),kpt(i,3),sk(i,:,:))
+			call overlap(w90basis,nvec,rvec,ovp,kpt(i,1),kpt(i,2),kpt(i,3),sk(:,:,i))
 		
 		end do
 		
@@ -524,7 +525,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		sk = 0.0
 		do i=1,ngkpt
 			do j=1,w90basis
-				sk(i,j,j) = 1.0
+				sk(j,j,i) = 1.0
 			end do
 		end do
 	end if
@@ -696,7 +697,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 					    ,stt(i,3),:) ,vector(stt(i,4),stt(i,2),:),kpt(stt(i,4),:),stt(j,:),eigv(stt(j,4),stt(j,3))&
 					    ,eigv(stt(j,4),stt(j,2)) &
 					    ,vector(stt(j,4),stt(j,3),:),vector(stt(j,4),stt(j,2),:),kpt(stt(j,4),:),dft,nvec,rvec,&
-					    sk(stt(i,4),:,:),sk(stt(j,4),:,:))
+					    sk(:,:,stt(i,4)),sk(:,:,stt(j,4)))
 				end do
 			end do
 			!$omp end parallel do
@@ -710,8 +711,8 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		end if
     else
 #ifdef MPI
-		mb = 64
-		nb = 64
+		mb = 16
+		nb = 16
 		nprow = int(sqrt(real(Nodes)))
 		do while (mod(Nodes,nprow) /= 0)
 			nprow = nprow - 1
@@ -759,7 +760,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 						    eigv(stt(ig,4),stt(ig,3)),eigv(stt(ig,4),stt(ig,2)),vector(stt(ig,4),stt(ig,3),:),&
 						    vector(stt(ig,4),stt(ig,2),:),kpt(stt(ig,4),:),stt(jg,:),eigv(stt(jg,4),stt(jg,3)),&
 						    eigv(stt(jg,4),stt(jg,2)),vector(stt(jg,4),stt(jg,3),:),vector(stt(jg,4),stt(jg,2),:),&
-						    kpt(stt(jg,4),:),dft,nvec,rvec,sk(stt(ig,4),:,:),sk(stt(jg,4),:,:))
+						    kpt(stt(jg,4),:),dft,nvec,rvec,sk(:,:,stt(ig,4)),sk(:,:,stt(jg,4)))
 					end if
 				end do
 			end do
