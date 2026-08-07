@@ -104,7 +104,7 @@ subroutine bsebndstemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	character(len=70) :: outputfolder    !pasta saida
 	character(len=70) :: calcparms
 	character(len=70) :: meshtype
-	character(len=5) :: coultype
+	character(len=7) :: coultype
 	character(len=2) :: ta
 	real,dimension(3) :: ediel
 	real :: ez,w1,lc

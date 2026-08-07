@@ -3,7 +3,7 @@ function matrizelbsekq(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,est1
 
 	implicit none
 
-	character(len=5) :: coultype
+	character(len=7) :: coultype
 	character(len=1) :: dft
 
 	integer,dimension(3) :: ngrid
@@ -46,7 +46,7 @@ function matrizelbsekq(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,est1
 
 	real :: vcoulk,vcoulq
 
-	real :: v2dk,vcoul,v3diel,v2dt,v0dt,v2dt2
+	real :: v2dk,vcoul,v3diel,v2dt,v2dtavg,v0dt,v2dt2
 	real :: v2dohono,v2drk,v1dt,v2d,v2diel
 	real :: v1d,v1diel
 
@@ -94,6 +94,11 @@ function matrizelbsekq(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,est1
 
 		vcoulk= v2dt(kpt1,kpt2,ngrid,rlat,tolr)
 		vcoulq= v2dt(vq,v0,ngrid,rlat,tolr)
+
+	case("V2DTAVG")
+
+		vcoulk= v2dtavg(kpt1,kpt2,ngrid,rlat,tolr)
+		vcoulq= v2dtavg(vq,v0,ngrid,rlat,tolr)
 
 	case("V2DT2")
 
@@ -293,7 +298,6 @@ end if
 
 
 end function matrizelbsekq
-
 
 
 

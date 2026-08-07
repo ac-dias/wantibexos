@@ -269,7 +269,7 @@ module input_variables
 	character(len=70) :: calcparms
 	character(len=70) :: meshtype
         character(len=70) :: meshgen
-	character(len=5) :: coultype
+	character(len=7) :: coultype
 	character(len=5) :: sysdim
 	character(len=1) :: dft
 	character(len=2) :: ta
@@ -1082,7 +1082,7 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	character(len=70) :: calcparms
 	character(len=70) :: meshtype
 	character(len=70) :: meshgen	
-	character(len=5) :: coultype
+	character(len=7) :: coultype
 	character(len=5) :: sysdim
 	character(len=1) :: dft
 	character(len=2) :: ta	
@@ -1216,7 +1216,7 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	write(unitout,"(A6,F8.4)") "KTOL= ", ktol
 	write(unitout,"(A10,I0)") "EXC_WF_I= ",excwf0
 	write(unitout,"(A10,I0)") "EXC_WF_F= ",excwff
-	write(unitout,"(A13,A5)") "COULOMB_POT= ",coultype
+	write(unitout,"(A13,A7)") "COULOMB_POT= ",coultype
 	write(unitout,"(A8,F8.4)") "CSHIFT= ", cshift	
 	write(unitout,"(A6,L1)") "RNMD= ",renorm
 	write(unitout,"(A4,F8.4)") "NI= ",ni
@@ -1312,4 +1312,3 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
     call flush(unitout)
 
 end subroutine param_out
-

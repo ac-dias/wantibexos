@@ -126,7 +126,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	character(len=70) :: outputfolder    !pasta saida
 	character(len=70) :: calcparms
 	character(len=70) :: meshtype
-	character(len=5) :: coultype
+	character(len=7) :: coultype
 	real,dimension(3) :: ediel
 	logical :: bsewf
 	integer :: excwf0,excwff
@@ -711,8 +711,8 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		end if
     else
 #ifdef MPI
-		mb = 16
-		nb = 16
+		mb = 64
+		nb = 64
 		nprow = int(sqrt(real(Nodes)))
 		do while (mod(Nodes,nprow) /= 0)
 			nprow = nprow - 1

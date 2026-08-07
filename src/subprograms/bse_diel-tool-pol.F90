@@ -257,4 +257,3 @@ subroutine bsedielrawpol(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebs
 
 end subroutine bsedielrawpol
 
-

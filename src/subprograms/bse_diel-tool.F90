@@ -278,4 +278,3 @@ subroutine bsedielraw(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebse0,
 
 end subroutine bsedielraw
 
-

@@ -249,4 +249,3 @@ subroutine spdielrawpol(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebse
 
 end subroutine spdielrawpol
 
-

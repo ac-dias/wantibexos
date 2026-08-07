@@ -269,4 +269,3 @@ subroutine spdielraw(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebse0,e
 
 end subroutine spdielraw
 
-
