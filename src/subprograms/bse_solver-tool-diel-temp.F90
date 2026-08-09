@@ -903,11 +903,11 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	! $omp do ordered
 	do i=1,dimbse
 		! $omp ordered
-		write(301,"(7F15.6)") W(i),actxx(i),actyy(i),actzz(i),actxy(i),actxz(i),actyz(i)
+		write(301,"(7E15.6)") W(i),actxx(i),actyy(i),actzz(i),actxy(i),actxz(i),actyz(i)
 		call flush(301)
 		
 		if (cpol) then
-		write(302,"(6F15.6)") W(i),actxx(i),actyy(i),actzz(i),actsp(i),actsm(i)
+		write(302,"(6E15.6)") W(i),actxx(i),actyy(i),actzz(i),actsp(i),actsm(i)
 		call flush(302)		
 		end if
 

@@ -124,7 +124,7 @@ subroutine bseoptproppol(numbse,outputfolder,tmax,ni,ns)
 		call refracao(rsm(i),ism(i),refr_sm)
 
 
-		write(200,"(6F15.6)") energy(i),refr_xx,refr_yy,refr_zz,refr_sp,refr_sm
+		write(200,"(1F15.6,5E15.6)") energy(i),refr_xx,refr_yy,refr_zz,refr_sp,refr_sm
 
 		call extincao(rxx(i),ixx(i),ext_xx)
 		call extincao(ryy(i),iyy(i),ext_yy)
@@ -133,7 +133,7 @@ subroutine bseoptproppol(numbse,outputfolder,tmax,ni,ns)
 		call extincao(rsm(i),ism(i),ext_sm)
 
 
-		write(300,"(6F15.6)") energy(i),ext_xx,ext_yy,ext_zz,ext_sp,ext_sm
+		write(300,"(1F15.6,5E15.6)") energy(i),ext_xx,ext_yy,ext_zz,ext_sp,ext_sm
 
 		call reflectibilidade(rxx(i),ixx(i),refl_xx)
 		call reflectibilidade(ryy(i),iyy(i),refl_yy)
@@ -142,7 +142,7 @@ subroutine bseoptproppol(numbse,outputfolder,tmax,ni,ns)
 		call reflectibilidade(rsm(i),ism(i),refl_sm)
 
 
-		write(400,"(6F15.6)") energy(i),refl_xx,refl_yy,refl_zz,refl_sp,refl_sm
+		write(400,"(1F15.6,5E15.6)") energy(i),refl_xx,refl_yy,refl_zz,refl_sp,refl_sm
 
 		call abscoef(rxx(i),ixx(i),energy(i),abs_xx)
 		call abscoef(ryy(i),iyy(i),energy(i),abs_yy)
@@ -151,7 +151,7 @@ subroutine bseoptproppol(numbse,outputfolder,tmax,ni,ns)
 		call abscoef(rsm(i),ism(i),energy(i),abs_sm)
 
 
-		write(500,"(6F15.6)") energy(i),abs_xx,abs_yy,abs_zz,abs_sp,abs_sm
+		write(500,"(1F15.6,5E15.6)") energy(i),abs_xx,abs_yy,abs_zz,abs_sp,abs_sm
 		
 		call enloss(rxx(i),ixx(i),els_xx)
 		call enloss(ryy(i),iyy(i),els_yy)
@@ -160,7 +160,7 @@ subroutine bseoptproppol(numbse,outputfolder,tmax,ni,ns)
 		call enloss(rsm(i),ism(i),els_sm)
 
 
-		write(600,"(6F15.6)") energy(i),els_xx,els_yy,els_zz,els_sp,els_sm		
+		write(600,"(1F15.6,5E15.6)") energy(i),els_xx,els_yy,els_zz,els_sp,els_sm		
 
 
 		call optcondcalc(rxx(i),ixx(i),energy(i),optc_xx)

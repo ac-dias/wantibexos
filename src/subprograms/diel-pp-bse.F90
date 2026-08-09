@@ -126,7 +126,7 @@ subroutine bseoptprop(numbse,outputfolder,tmax,ni,ns)
 		call refracao(rxz(i),ixz(i),refr_xz)
 		call refracao(ryz(i),iyz(i),refr_yz)
 
-		write(200,"(7F15.6)") energy(i),refr_xx,refr_yy,refr_zz,refr_xy,refr_xz,refr_yz
+		write(200,"(1F15.6,6E15.6)") energy(i),refr_xx,refr_yy,refr_zz,refr_xy,refr_xz,refr_yz
 
 		call extincao(rxx(i),ixx(i),ext_xx)
 		call extincao(ryy(i),iyy(i),ext_yy)
@@ -135,7 +135,7 @@ subroutine bseoptprop(numbse,outputfolder,tmax,ni,ns)
 		call extincao(rxz(i),ixz(i),ext_xz)
 		call extincao(ryz(i),iyz(i),ext_yz)
 
-		write(300,"(7F15.6)") energy(i),ext_xx,ext_yy,ext_zz,ext_xy,ext_xz,ext_yz
+		write(300,"(1F15.6,6E15.6)") energy(i),ext_xx,ext_yy,ext_zz,ext_xy,ext_xz,ext_yz
 
 		call reflectibilidade(rxx(i),ixx(i),refl_xx)
 		call reflectibilidade(ryy(i),iyy(i),refl_yy)
@@ -144,7 +144,7 @@ subroutine bseoptprop(numbse,outputfolder,tmax,ni,ns)
 		call reflectibilidade(rxz(i),ixz(i),refl_xz)
 		call reflectibilidade(ryz(i),iyz(i),refl_yz)
 
-		write(400,"(7F15.6)") energy(i),refl_xx,refl_yy,refl_zz,refl_xy,refl_xz,refl_yz
+		write(400,"(1F15.6,6E15.6)") energy(i),refl_xx,refl_yy,refl_zz,refl_xy,refl_xz,refl_yz
 
 		call abscoef(rxx(i),ixx(i),energy(i),abs_xx)
 		call abscoef(ryy(i),iyy(i),energy(i),abs_yy)
@@ -153,7 +153,7 @@ subroutine bseoptprop(numbse,outputfolder,tmax,ni,ns)
 		call abscoef(rxz(i),ixz(i),energy(i),abs_xz)
 		call abscoef(ryz(i),iyz(i),energy(i),abs_yz)
 
-		write(500,"(7F15.6)") energy(i),abs_xx,abs_yy,abs_zz,abs_xy,abs_xz,abs_yz
+		write(500,"(1F15.6,6E15.6)") energy(i),abs_xx,abs_yy,abs_zz,abs_xy,abs_xz,abs_yz
 		
 		call enloss(rxx(i),ixx(i),els_xx)
 		call enloss(ryy(i),iyy(i),els_yy)
@@ -162,7 +162,7 @@ subroutine bseoptprop(numbse,outputfolder,tmax,ni,ns)
 		call enloss(rxz(i),ixz(i),els_xz)
 		call enloss(ryz(i),iyz(i),els_yz)
 
-		write(600,"(7F15.6)") energy(i),els_xx,els_yy,els_zz,els_xy,els_xz,els_yz		
+		write(600,"(1F15.6,6E15.6)") energy(i),els_xx,els_yy,els_zz,els_xy,els_xz,els_yz		
 
 		call optcondcalc(rxx(i),ixx(i),energy(i),optc_xx)
 		call optcondcalc(ryy(i),iyy(i),energy(i),optc_yy)

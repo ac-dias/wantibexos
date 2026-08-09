@@ -354,8 +354,8 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 	
 	do i=1,dimsp
 	
-		write(301,"(7F15.6)") vecres(i,7),vecres(i,8),vecres(i,9),vecres(i,10),vecres(i,11),vecres(i,12),vecres(i,13)
-		write(303,"(6F15.6)") vecres(i,7),vecres(i,8),vecres(i,9),vecres(i,10),vecres(i,14),vecres(i,15)
+		write(301,"(7E15.6)") vecres(i,7),vecres(i,8),vecres(i,9),vecres(i,10),vecres(i,11),vecres(i,12),vecres(i,13)
+		write(303,"(6E15.6)") vecres(i,7),vecres(i,8),vecres(i,9),vecres(i,10),vecres(i,14),vecres(i,15)
 		
 		if (tmcoef) then
 	        write(302,"(3F10.6,3I10.0,9F10.6)") vecres(i,1),vecres(i,2),vecres(i,3),int(vecres(i,4)),int(vecres(i,5)),&
