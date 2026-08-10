@@ -360,7 +360,7 @@ program main
 	end if
 	
 	
-	if (spdiel) then
+	if (spdiel .and. Node == 0) then
 
 	call spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 		     cshift,params,exc,mshift,tmcoef,nocpf,fermishift,mag)
@@ -405,6 +405,15 @@ program main
 	
 131 continue
 
+	! The spectrum post-processing routines below use ordinary formatted files.
+	! Wait until all MPI ranks have finished producing their distributed results,
+	! then let only rank zero create and consume the shared post-processing files.
+#ifdef MPI
+	call MPI_BARRIER(MPI_COMM_WORLD,MPIError)
+#endif
+
+	if (Node == 0) then
+
 	!calculo espectro
 
 	if ((spec) .and. (bse)) then
@@ -439,7 +448,14 @@ program main
 	end if
 	
 	end if
-	
+
+	end if
+
+#ifdef MPI
+	! Do not let the remaining ranks finalize while rank zero still owns the files.
+	call MPI_BARRIER(MPI_COMM_WORLD,MPIError)
+#endif
+
 
 
 
@@ -512,5 +528,3 @@ program main
 #endif
 
 end program main
-
-
