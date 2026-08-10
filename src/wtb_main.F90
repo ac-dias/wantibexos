@@ -449,18 +449,6 @@ program main
 	
 	end if
 
-	end if
-
-#ifdef MPI
-	! Do not let the remaining ranks finalize while rank zero still owns the files.
-	call MPI_BARRIER(MPI_COMM_WORLD,MPIError)
-#endif
-
-
-
-
-	
-
 	if ((spec) .and. ((spdiel) .or. (bse) )) then
 
 	call spdielraw(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebse0,ebsef,numbse,cshift) !calculate dielectric constants
@@ -487,8 +475,15 @@ program main
      		end if
 
 	end if
-	
-	
+
+	end if
+
+#ifdef MPI
+	! Do not let the remaining ranks finalize while rank zero still owns the files.
+	call MPI_BARRIER(MPI_COMM_WORLD,MPIError)
+#endif
+
+
 
 
 
