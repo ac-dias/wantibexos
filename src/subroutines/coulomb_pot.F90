@@ -260,7 +260,7 @@ end function
 
 ! Slab-truncated 2D potential with the q=0 value averaged over the
 ! reciprocal-space sampling cell. Away from q=0 this is identical to V2DT.
-function v2dtavg(kpt1,kpt2,ngrid,rlat,tolr)
+function v2dtavg(kpt1,kpt2,ediel,ngrid,rlat,tolr)
 
 	implicit none
 
@@ -272,6 +272,8 @@ function v2dtavg(kpt1,kpt2,ngrid,rlat,tolr)
 	real :: vc,vbz,factor,gpar,gz,rc
 	real :: aux1,aux2,aux3,aux4,aux5
 	real(kind=8) :: v2dtavg_cell
+        real,dimension(3) :: ediel
+        real :: ed
 
 	logical,save :: cache_valid=.false.
 	integer,dimension(3),save :: cached_ngrid=(/0,0,0/)
@@ -286,7 +288,9 @@ function v2dtavg(kpt1,kpt2,ngrid,rlat,tolr)
 	gz=abs(vkpt(3))
 	gpar=sqrt(vkpt(1)*vkpt(1)+vkpt(2)*vkpt(2))
 	rc=0.5*rlat(3,3)
-	factor=1.0
+
+        ed = ediel(2)
+	factor=2.0/ed
 
 	if ((gpar .lt. tolr) .and. (gz .lt. tolr)) then
 		! The BSE construction is OpenMP parallel. Cache the mesh-dependent
@@ -302,7 +306,7 @@ function v2dtavg(kpt1,kpt2,ngrid,rlat,tolr)
 			cached_ngrid=ngrid
 			cached_rlat=rlat
 		end if
-		v2dtavg=cached_value
+		v2dtavg=factor*cached_value
 		!$omp end critical (v2dtavg_cache)
 
 	else if ((gpar .lt. tolr) .and. (gz .ge. tolr)) then
@@ -318,6 +322,7 @@ function v2dtavg(kpt1,kpt2,ngrid,rlat,tolr)
 		v2dtavg=(vbz*cic)*(factor/(modk*modk)) &
 		         *(1.0+exp(-aux2)*(aux4-aux5))
 	end if
+
 
 end function v2dtavg
 

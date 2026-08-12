@@ -1,19 +1,18 @@
 include makefile.inc
 
-#IS_IFX := $(findstring ifx, $(FOR))
+IS_IFX := $(findstring ifx, $(FOR))
 
 SRC_DIR   := ./src
 BUILD_DIR := ./build
 BIN_DIR   := $(DIR)
 UTILS_DIR := ./utils
 
-MOD_OUT_FLAG := -J$(BUILD_DIR)
+ifeq ($(IS_IFX), ifx)
+    MOD_OUT_FLAG := -module $(BUILD_DIR)
+else
+    MOD_OUT_FLAG := -J$(BUILD_DIR)
+endif
 
-#ifeq ($(IS_IFX), ifx)
-#    MOD_OUT_FLAG := -module $(BUILD_DIR)
-#else
-#    MOD_OUT_FLAG := -J$(BUILD_DIR)
-#endif
 
 FC_FLAGS := $(OMP) $(COND) $(EXTRA) -I$(BUILD_DIR)
 L_FLAGS  := $(OMP) $(LIBS) $(COND) $(EXTRA) -I$(BUILD_DIR)

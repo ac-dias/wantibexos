@@ -81,7 +81,7 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 
 	case("V2DTAVG")
 
-		vcoul1= v2dtavg(kpt1,kpt2,ngrid,rlat,tolr)
+		vcoul1= v2dtavg(kpt1,kpt2,ediel,ngrid,rlat,tolr)
 
 	case("V2DT2")
 
