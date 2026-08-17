@@ -46,7 +46,7 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 
 	real :: vcoul1
 
-	real :: vcoul,v2dk,v3diel,v2dt,v2dtavg,v0dt,v2dt2
+	real :: vcoul,v2dk,v3diel,v3davg,v2dt,v2dtavg,v0dt,v2dt2
 	real :: v2dohono,v2drk,v1dt,v2d,v2diel
 	real :: v1d,v1diel
 	
@@ -66,6 +66,14 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 	case("V3DL")
 
 		vcoul1= v3diel(kpt1,kpt2,ediel,rlat,ngrid,tolr)
+
+	case("V3DAVG")
+
+		vcoul1= v3davg(kpt1,kpt2,1.0,rlat,ngrid,tolr)
+
+	case("V3DLAVG")
+
+		vcoul1= v3davg(kpt1,kpt2,ediel(2),rlat,ngrid,tolr)
 		
 	case("V2D")
 
@@ -776,7 +784,6 @@ subroutine excwfi(outputfolder,ngkpt,kpt,qpt,nc,nv,nocp,stt,excenergy,excnum,qpt
 	close(800+excnum*qptnum)
 
 end subroutine excwfi
-
 
 
 

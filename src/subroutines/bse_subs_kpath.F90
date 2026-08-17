@@ -46,7 +46,7 @@ function matrizelbsekq(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,est1
 
 	real :: vcoulk,vcoulq
 
-	real :: v2dk,vcoul,v3diel,v2dt,v2dtavg,v0dt,v2dt2
+	real :: v2dk,vcoul,v3diel,v3davg,v2dt,v2dtavg,v0dt,v2dt2
 	real :: v2dohono,v2drk,v1dt,v2d,v2diel
 	real :: v1d,v1diel
 
@@ -79,6 +79,16 @@ function matrizelbsekq(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,est1
 
 		vcoulk= v3diel(kpt1,kpt2,ediel,rlat,ngrid,tolr)
 		vcoulq= v3diel(vq,v0,ediel,rlat,ngrid,tolr)
+
+	case("V3DAVG")
+
+		vcoulk= v3davg(kpt1,kpt2,1.0,rlat,ngrid,tolr)
+		vcoulq= v3davg(vq,v0,1.0,rlat,ngrid,tolr)
+
+	case("V3DLAVG")
+
+		vcoulk= v3davg(kpt1,kpt2,ediel(2),rlat,ngrid,tolr)
+		vcoulq= v3davg(vq,v0,ediel(2),rlat,ngrid,tolr)
 		
 	case("V2D")
 
@@ -298,7 +308,6 @@ end if
 
 
 end function matrizelbsekq
-
 
 
 

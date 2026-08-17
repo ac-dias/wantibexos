@@ -46,7 +46,7 @@ function matrizelbsetemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1
 
 	real :: vcoul1
 
-	real :: vcoul,v2dk,v3diel,v2dt,v2dtavg,v0dt,v2dt2
+	real :: vcoul,v2dk,v3diel,v3davg,v2dt,v2dtavg,v0dt,v2dt2
 	real :: v2dohono,v2drk,v1dt,v2d,v2diel
 	real :: v1d,v1diel
 	
@@ -68,6 +68,14 @@ function matrizelbsetemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1
 	case("V3DL")
 
 		vcoul1= v3diel(kpt1,kpt2,ediel,rlat,ngrid,tolr)
+
+	case("V3DAVG")
+
+		vcoul1= v3davg(kpt1,kpt2,1.0,rlat,ngrid,tolr)
+
+	case("V3DLAVG")
+
+		vcoul1= v3davg(kpt1,kpt2,ediel(2),rlat,ngrid,tolr)
 		
 	case("V2D")
 
@@ -211,7 +219,7 @@ function matrizelbsekqtemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,
 
 	real :: vcoulk,vcoulq
 
-	real :: v2dk,vcoul,v3diel,v2dt,v2dtavg,v0dt,v2dt2
+	real :: v2dk,vcoul,v3diel,v3davg,v2dt,v2dtavg,v0dt,v2dt2
 	real :: v2dohono,v2drk,v1dt,v2d,v2diel
 	real :: v1d,v1diel
 
@@ -246,6 +254,16 @@ function matrizelbsekqtemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,
 
 		vcoulk= v3diel(kpt1,kpt2,ediel,rlat,ngrid,tolr)
 		vcoulq= v3diel(vq,v0,ediel,rlat,ngrid,tolr)
+
+	case("V3DAVG")
+
+		vcoulk= v3davg(kpt1,kpt2,1.0,rlat,ngrid,tolr)
+		vcoulq= v3davg(vq,v0,1.0,rlat,ngrid,tolr)
+
+	case("V3DLAVG")
+
+		vcoulk= v3davg(kpt1,kpt2,ediel(2),rlat,ngrid,tolr)
+		vcoulq= v3davg(vq,v0,ediel(2),rlat,ngrid,tolr)
 		
 	case("V2D")
 
@@ -524,7 +542,6 @@ subroutine dielbseptemp(nthread,dimse,excitonvec,hopt1,hopt2,fdeh,activity)
 
 
 end subroutine dielbseptemp
-
 
 
 
