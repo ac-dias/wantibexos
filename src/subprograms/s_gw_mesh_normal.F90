@@ -659,6 +659,17 @@ end if
 	
 	end do
 	
+	do i=1,w90basis
+	
+		
+	 do j=1,nkpt
+	 
+	 	encor(i,j) = ebands(i,j)+eigcor(i,j)
+	 	 
+	 end do	
+	
+	end do		
+	
 	allocate(selfcavg(w90basis),selfxavg(w90basis),znkavg(w90basis))
 	
 	call selfavg(nkpt,w90basis,selfx,selfc,znk,selfxavg,selfcavg,znkavg)
@@ -670,6 +681,7 @@ end if
 	
 	 end do
 	end do	
+		
 	
 	write(304,*) '#G0W0cor-avg selfx-avg Re(selfc-avg) Im(selfc-avg) Znk-avg'
 	
@@ -680,6 +692,27 @@ end if
 	end do				
 	
 
+	!estimating GW gap
+	
+	write(300,*)
+	write(300,*)"QP Eigenvalues and Eigenvectors in k-mesh calculated"	
+	write(300,*)
+	
+	call gapfinder(w90basis,nkpt,nocpk,encor,nkc,nkv,nkgap,gap,cbm,vbm)
+	
+	write(300,*) "G0W0 QP fundamental band gap (eV):",cbm-vbm
+	write(300,*) "G0W0 QP direct band gap (eV):",gap
+	write(300,*)
+	write(300,*)
+	write(300,*)"G0W0 QP kpoint cbm"
+	write(300,"(3E18.8)")kpt(nkc,1),kpt(nkc,2),kpt(nkc,3)
+	write(300,*)	
+	write(300,*)"G0W0 QP kpoint vbm"
+	write(300,"(3E18.8)")kpt(nkv,1),kpt(nkv,2),kpt(nkv,3)
+	write(300,*)		 
+	write(300,*)"G0W0 QP kpoint direct band gap"
+	write(300,"(3E18.8)")kpt(nkgap,1),kpt(nkgap,2),kpt(nkgap,3)	
+	call flush(300)	
 	
 	
 	write(305,*) w90basis
@@ -727,7 +760,7 @@ end if
 	!estimating GW gap
 	
 	write(300,*)
-	write(300,*)"QP Eigenvalues and Eigenvectors in k-mesh calculated"	
+	write(300,*)"QP Eigenvalues and Eigenvectors renormalized in k-mesh calculated"	
 	write(300,*)
 	
 	call gapfinder(w90basis,nkpt,nocpk,encor,nkc,nkv,nkgap,gap,cbm,vbm)
