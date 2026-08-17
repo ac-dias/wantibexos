@@ -121,6 +121,207 @@ function v3diel(kpt1,kpt2,ediel,rlat,ngrid,tolr)
 
 end function 
 
+function v3davg(kpt1,kpt2,ngrid,rlat,tolr)
+
+    implicit none
+
+    real,parameter :: cic=-(0.0904756)*10**3
+    real,dimension(3) :: kpt1,kpt2
+    real,dimension(3,3) :: rlat
+    integer,dimension(3) :: ngrid
+    real :: tolr,modk,v3davg
+    real :: vc
+    real(kind=8) :: vbz8,factor8,value8
+    real(kind=8) :: v3davg_cell
+
+    logical,save :: cache_valid=.false.
+    integer,dimension(3),save :: cached_ngrid=(/0,0,0/)
+    real,dimension(3,3),save :: cached_rlat=0.0
+    real(kind=8),save :: cached_value=0.0d0
+
+    call vcell3D(rlat,vc)
+    call modvec(kpt1,kpt2,modk)
+
+    ! Form the mesh-size product in double precision to avoid integer overflow
+    ! before conversion to real.
+    vbz8=1.0d0/(dble(ngrid(1))*dble(ngrid(2))*dble(ngrid(3))*dble(vc))
+    factor8=1.0d0
+
+    ! <= also handles the exact q=0 point if tolr is zero.
+    if (modk .le. tolr) then
+        !$omp critical (v3davg_cache)
+        if (.not. cache_valid) then
+            cached_value=v3davg_cell(ngrid,rlat)
+            cached_ngrid=ngrid
+            cached_rlat=rlat
+            cache_valid=.true.
+        else if (any(cached_ngrid .ne. ngrid) .or. any(cached_rlat .ne. rlat)) then
+            cached_value=v3davg_cell(ngrid,rlat)
+            cached_ngrid=ngrid
+            cached_rlat=rlat
+        end if
+        value8=cached_value
+        !$omp end critical (v3davg_cache)
+
+    else
+        value8=vbz8*dble(cic)*factor8/(dble(modk)*dble(modk))
+    end if
+
+    v3davg=real(value8)
+
+end function v3davg
+
+real(kind=8) function v3davg_cell(ngrid,rlat)
+
+    implicit none
+
+    integer,dimension(3) :: ngrid
+    real,dimension(3,3) :: rlat
+
+    integer,parameter :: nq=16
+    real(kind=8),parameter,dimension(nq) :: xg=(/ &
+        -0.989400934991650d0,-0.944575023073233d0,-0.865631202387832d0, &
+        -0.755404408355003d0,-0.617876244402644d0,-0.458016777657227d0, &
+        -0.281603550779259d0,-0.095012509837637d0, 0.095012509837637d0, &
+         0.281603550779259d0, 0.458016777657227d0, 0.617876244402644d0, &
+         0.755404408355003d0, 0.865631202387832d0, 0.944575023073233d0, &
+         0.989400934991650d0 /)
+    real(kind=8),parameter,dimension(nq) :: wg=(/ &
+        0.027152459411754d0,0.062253523938648d0,0.095158511682493d0, &
+        0.124628971255534d0,0.149595988816577d0,0.169156519395003d0, &
+        0.182603415044924d0,0.189450610455069d0,0.189450610455069d0, &
+        0.182603415044924d0,0.169156519395003d0,0.149595988816577d0, &
+        0.124628971255534d0,0.095158511682493d0,0.062253523938648d0, &
+        0.027152459411754d0 /)
+
+    real(kind=8),parameter :: pi=acos(-1.0d0)
+    real(kind=8),parameter :: cic=-(0.0904756d0)*10.0d0**3
+    real(kind=8),dimension(3) :: a1,a2,a3
+    real(kind=8),dimension(3) :: cross23,cross31,cross12
+    real(kind=8),dimension(3) :: b1,b2,b3,dq1,dq2,dq3
+    real(kind=8),dimension(3,8) :: vertex
+    integer,dimension(4,6) :: face
+    real(kind=8),dimension(3) :: va,vb,vc,crossbc,direction
+    real(kind=8) :: volume,cell_volume
+    real(kind=8) :: integral,jacobian,t,r,wt,wr
+    real(kind=8) :: direction_norm2,avg_kernel,grid_size
+    integer :: iface,itri,j,k
+
+    if (any(ngrid .le. 0)) then
+        write(*,*) 'ERROR in v3davg_cell: ngrid must be positive: ',ngrid
+        stop
+    end if
+
+    a1=dble(rlat(1,:))
+    a2=dble(rlat(2,:))
+    a3=dble(rlat(3,:))
+
+    cross23(1)=a2(2)*a3(3)-a2(3)*a3(2)
+    cross23(2)=a2(3)*a3(1)-a2(1)*a3(3)
+    cross23(3)=a2(1)*a3(2)-a2(2)*a3(1)
+    volume=a1(1)*cross23(1)+a1(2)*cross23(2)+a1(3)*cross23(3)
+
+    if (abs(volume) .le. tiny(1.0d0)) then
+        write(*,*) 'ERROR in v3davg_cell: singular real-space lattice; volume=',volume
+        stop
+    end if
+
+    cross31(1)=a3(2)*a1(3)-a3(3)*a1(2)
+    cross31(2)=a3(3)*a1(1)-a3(1)*a1(3)
+    cross31(3)=a3(1)*a1(2)-a3(2)*a1(1)
+
+    cross12(1)=a1(2)*a2(3)-a1(3)*a2(2)
+    cross12(2)=a1(3)*a2(1)-a1(1)*a2(3)
+    cross12(3)=a1(1)*a2(2)-a1(2)*a2(1)
+
+    b1=(2.0d0*pi/volume)*cross23
+    b2=(2.0d0*pi/volume)*cross31
+    b3=(2.0d0*pi/volume)*cross12
+
+    dq1=b1/dble(ngrid(1))
+    dq2=b2/dble(ngrid(2))
+    dq3=b3/dble(ngrid(3))
+
+    vertex(:,1)= 0.5d0*( dq1+dq2+dq3)
+    vertex(:,2)= 0.5d0*( dq1+dq2-dq3)
+    vertex(:,3)= 0.5d0*( dq1-dq2-dq3)
+    vertex(:,4)= 0.5d0*( dq1-dq2+dq3)
+    vertex(:,5)= 0.5d0*(-dq1+dq2+dq3)
+    vertex(:,6)= 0.5d0*(-dq1+dq2-dq3)
+    vertex(:,7)=-0.5d0*( dq1+dq2+dq3)
+    vertex(:,8)= 0.5d0*(-dq1-dq2+dq3)
+
+    face(:,1)=(/1,2,3,4/) ! +dq1 face
+    face(:,2)=(/5,6,7,8/) ! -dq1 face
+    face(:,3)=(/1,5,6,2/) ! +dq2 face
+    face(:,4)=(/4,3,7,8/) ! -dq2 face
+    face(:,5)=(/1,4,8,5/) ! +dq3 face
+    face(:,6)=(/2,6,7,3/) ! -dq3 face
+
+    crossbc(1)=dq2(2)*dq3(3)-dq2(3)*dq3(2)
+    crossbc(2)=dq2(3)*dq3(1)-dq2(1)*dq3(3)
+    crossbc(3)=dq2(1)*dq3(2)-dq2(2)*dq3(1)
+    cell_volume=abs(dq1(1)*crossbc(1)+dq1(2)*crossbc(2)+dq1(3)*crossbc(3))
+
+    if (cell_volume .le. tiny(1.0d0)) then
+        write(*,*) 'ERROR in v3davg_cell: singular reciprocal sampling cell; volume=',cell_volume
+        stop
+    end if
+
+    integral=0.0d0
+
+    do iface=1,6
+        do itri=1,2
+
+            if (itri .eq. 1) then
+                va=vertex(:,face(1,iface))
+                vb=vertex(:,face(2,iface))
+                vc=vertex(:,face(3,iface))
+            else
+                va=vertex(:,face(1,iface))
+                vb=vertex(:,face(3,iface))
+                vc=vertex(:,face(4,iface))
+            end if
+
+            crossbc(1)=vb(2)*vc(3)-vb(3)*vc(2)
+            crossbc(2)=vb(3)*vc(1)-vb(1)*vc(3)
+            crossbc(3)=vb(1)*vc(2)-vb(2)*vc(1)
+            jacobian=abs(va(1)*crossbc(1)+va(2)*crossbc(2)+va(3)*crossbc(3))
+
+            do j=1,nq
+                t=0.5d0*(xg(j)+1.0d0)
+                wt=0.5d0*wg(j)
+
+                do k=1,nq
+                    r=0.5d0*(xg(k)+1.0d0)
+                    wr=0.5d0*wg(k)
+
+                    direction=(1.0d0-t)*va+t*((1.0d0-r)*vb+r*vc)
+                    direction_norm2=sum(direction*direction)
+
+                    if (direction_norm2 .le. tiny(1.0d0)) then
+                        write(*,*) 'ERROR in v3davg_cell: zero Duffy direction.'
+                        write(*,*) 'iface,itri,t,r=',iface,itri,t,r
+                        stop
+                    end if
+
+                    ! The integration over s is exactly unity after the
+                    ! analytical cancellation of s^2 between Jacobian and 1/q^2.
+                    integral=integral+wt*wr*jacobian*t/direction_norm2
+
+                end do
+            end do
+
+        end do
+    end do
+
+    avg_kernel=integral/cell_volume
+    grid_size=dble(ngrid(1))*dble(ngrid(2))*dble(ngrid(3))
+
+    v3davg_cell=cic*avg_kernel/(grid_size*abs(volume))
+
+end function v3davg_cell
+
 !potencial 2D tradicional
 
 function v2d(kpt1,kpt2,rlat,ngrid,tolr)
@@ -256,6 +457,176 @@ function v2dt(kpt1,kpt2,ngrid,rlat,tolr)
 
 
 end function 
+
+! Slab-truncated 2D potential with the q=0 value averaged over the
+! reciprocal-space sampling cell. Away from q=0 this is identical to V2DT.
+function v2dtavg(kpt1,kpt2,ngrid,rlat,tolr)
+
+	implicit none
+
+	real,parameter :: cic=-(0.0904756)*10**3
+	real,dimension(3) :: kpt1,kpt2,vkpt
+	real,dimension(3,3) :: rlat
+	integer,dimension(3) :: ngrid
+	real :: tolr,modk,v2dtavg
+	real :: vc,vbz,factor,gpar,gz,rc
+	real :: aux1,aux2,aux3,aux4,aux5
+	real(kind=8) :: v2dtavg_cell
+
+	logical,save :: cache_valid=.false.
+	integer,dimension(3),save :: cached_ngrid=(/0,0,0/)
+	real,dimension(3,3),save :: cached_rlat=0.0
+	real,save :: cached_value=0.0
+
+	call vcell3D(rlat,vc)
+	call modvec(kpt1,kpt2,modk)
+
+	vbz=1.0/((ngrid(1)*ngrid(2)*ngrid(3))*vc)
+	vkpt=kpt1-kpt2
+	gz=abs(vkpt(3))
+	gpar=sqrt(vkpt(1)*vkpt(1)+vkpt(2)*vkpt(2))
+	rc=0.5*rlat(3,3)
+	factor=1.0
+
+	if ((gpar .lt. tolr) .and. (gz .lt. tolr)) then
+		! The BSE construction is OpenMP parallel. Cache the mesh-dependent
+		! average so the reciprocal-cell quadrature is evaluated only once.
+		!$omp critical (v2dtavg_cache)
+		if (.not. cache_valid) then
+			cached_value=real(v2dtavg_cell(ngrid,rlat))
+			cached_ngrid=ngrid
+			cached_rlat=rlat
+			cache_valid=.true.
+		else if (any(cached_ngrid .ne. ngrid) .or. any(cached_rlat .ne. rlat)) then
+			cached_value=real(v2dtavg_cell(ngrid,rlat))
+			cached_ngrid=ngrid
+			cached_rlat=rlat
+		end if
+		v2dtavg=cached_value
+		!$omp end critical (v2dtavg_cache)
+
+	else if ((gpar .lt. tolr) .and. (gz .ge. tolr)) then
+		v2dtavg=(vbz*cic)*(factor/(modk*modk)) &
+		         *(1.0-cos(gz*rc)-(gz*rc*sin(gz*rc)))
+
+	else
+		aux1=gz/gpar
+		aux2=gpar*rc
+		aux3=gz*rc
+		aux4=aux1*sin(aux3)
+		aux5=cos(aux3)
+		v2dtavg=(vbz*cic)*(factor/(modk*modk)) &
+		         *(1.0+exp(-aux2)*(aux4-aux5))
+	end if
+
+end function v2dtavg
+
+! Average [1-exp(-q*Rc)]/q**2 over the parallelogram generated by
+! b1/ngrid(1) and b2/ngrid(2). Four Duffy-mapped triangles remove the
+! integrable 1/q singularity from the numerical quadrature.
+real(kind=8) function v2dtavg_cell(ngrid,rlat)
+
+	implicit none
+
+	integer,dimension(3) :: ngrid
+	real,dimension(3,3) :: rlat
+
+	integer,parameter :: nq=16
+	real(kind=8),parameter,dimension(nq) :: xg=(/ &
+		-0.989400934991650d0,-0.944575023073233d0,-0.865631202387832d0, &
+		-0.755404408355003d0,-0.617876244402644d0,-0.458016777657227d0, &
+		-0.281603550779259d0,-0.095012509837637d0, 0.095012509837637d0, &
+		 0.281603550779259d0, 0.458016777657227d0, 0.617876244402644d0, &
+		 0.755404408355003d0, 0.865631202387832d0, 0.944575023073233d0, &
+		 0.989400934991650d0 /)
+	real(kind=8),parameter,dimension(nq) :: wg=(/ &
+		0.027152459411754d0,0.062253523938648d0,0.095158511682493d0, &
+		0.124628971255534d0,0.149595988816577d0,0.169156519395003d0, &
+		0.182603415044924d0,0.189450610455069d0,0.189450610455069d0, &
+		0.182603415044924d0,0.169156519395003d0,0.149595988816577d0, &
+		0.124628971255534d0,0.095158511682493d0,0.062253523938648d0, &
+		0.027152459411754d0 /)
+
+	real(kind=8),parameter :: pi=acos(-1.0d0)
+	real(kind=8),parameter :: cic=-(0.0904756d0)*10.0d0**3
+	real(kind=8),dimension(3) :: a1,a2,a3,cross23,cross31
+	real(kind=8),dimension(3) :: b1,b2,dq1,dq2
+	real(kind=8),dimension(3,4) :: vertex
+	real(kind=8),dimension(3) :: va,vb,crossab,direction,qvec
+	real(kind=8) :: volume,cell_area,rc
+	real(kind=8) :: integral,jacobian,s,t,ws,wt
+	real(kind=8) :: qnorm,x,kernel,avg_kernel,grid_size
+	integer :: itri,inext,i,j
+
+	a1=dble(rlat(1,:))
+	a2=dble(rlat(2,:))
+	a3=dble(rlat(3,:))
+
+	cross23(1)=a2(2)*a3(3)-a2(3)*a3(2)
+	cross23(2)=a2(3)*a3(1)-a2(1)*a3(3)
+	cross23(3)=a2(1)*a3(2)-a2(2)*a3(1)
+	volume=a1(1)*cross23(1)+a1(2)*cross23(2)+a1(3)*cross23(3)
+
+	cross31(1)=a3(2)*a1(3)-a3(3)*a1(2)
+	cross31(2)=a3(3)*a1(1)-a3(1)*a1(3)
+	cross31(3)=a3(1)*a1(2)-a3(2)*a1(1)
+
+	b1=(2.0d0*pi/volume)*cross23
+	b2=(2.0d0*pi/volume)*cross31
+	dq1=b1/dble(ngrid(1))
+	dq2=b2/dble(ngrid(2))
+
+	vertex(:,1)= 0.5d0*(dq1+dq2)
+	vertex(:,2)= 0.5d0*(-dq1+dq2)
+	vertex(:,3)=-0.5d0*(dq1+dq2)
+	vertex(:,4)= 0.5d0*(dq1-dq2)
+
+	crossab(1)=dq1(2)*dq2(3)-dq1(3)*dq2(2)
+	crossab(2)=dq1(3)*dq2(1)-dq1(1)*dq2(3)
+	crossab(3)=dq1(1)*dq2(2)-dq1(2)*dq2(1)
+	cell_area=sqrt(sum(crossab*crossab))
+
+	rc=0.5d0*dble(rlat(3,3))
+	integral=0.0d0
+
+	do itri=1,4
+		inext=mod(itri,4)+1
+		va=vertex(:,itri)
+		vb=vertex(:,inext)
+
+		crossab(1)=va(2)*vb(3)-va(3)*vb(2)
+		crossab(2)=va(3)*vb(1)-va(1)*vb(3)
+		crossab(3)=va(1)*vb(2)-va(2)*vb(1)
+		jacobian=sqrt(sum(crossab*crossab))
+
+		do i=1,nq
+			s=0.5d0*(xg(i)+1.0d0)
+			ws=0.5d0*wg(i)
+			do j=1,nq
+				t=0.5d0*(xg(j)+1.0d0)
+				wt=0.5d0*wg(j)
+				direction=(1.0d0-t)*va+t*vb
+				qvec=s*direction
+				qnorm=sqrt(sum(qvec*qvec))
+				x=rc*qnorm
+
+				if (abs(x) .lt. 1.0d-5) then
+					kernel=rc/qnorm-0.5d0*rc*rc &
+					       +(rc**3)*qnorm/6.0d0-(rc**4)*qnorm*qnorm/24.0d0
+				else
+					kernel=(1.0d0-exp(-x))/(qnorm*qnorm)
+				end if
+
+				integral=integral+ws*wt*jacobian*s*kernel
+			end do
+		end do
+	end do
+
+	avg_kernel=integral/cell_area
+	grid_size=dble(ngrid(1))*dble(ngrid(2))*dble(ngrid(3))
+	v2dtavg_cell=cic*avg_kernel/(grid_size*abs(volume))
+
+end function v2dtavg_cell
 
 !potencial 0D truncado (DOI: 10.1103/PhysRevB.73.205119)
 

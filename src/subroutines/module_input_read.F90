@@ -522,7 +522,7 @@ subroutine input_read
 	omegamax = 150
 	smegw = 0.01
 
-	coultypegw = "V3D"
+	coultypegw = "V3DA"
 	
 	edielgw(1) = 1.0
 	edielgw(2) = 1.0

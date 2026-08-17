@@ -48,7 +48,7 @@ function matrizelbsetemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1
 
 	real :: vcoul,v2dk,v3diel,v2dt,v0dt,v2dt2
 	real :: v2dohono,v2drk,v1dt,v2d,v2diel
-	real :: v1d,v1diel
+	real :: v1d,v1diel,v3davg,v2dtavg
 	
 	real :: r0
 	
@@ -65,6 +65,10 @@ function matrizelbsetemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1
 
 		vcoul1= vcoul(kpt1,kpt2,rlat,ngrid,tolr)
 
+	case("V3DA")
+
+		vcoul1= v3davg(kpt1,kpt2,ngrid,rlat,tolr)
+
 	case("V3DL")
 
 		vcoul1= v3diel(kpt1,kpt2,ediel,rlat,ngrid,tolr)
@@ -80,6 +84,10 @@ function matrizelbsetemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1
 	case("V2DT")
 
 		vcoul1= v2dt(kpt1,kpt2,ngrid,rlat,tolr)
+
+	case("V2DTA")
+
+		vcoul1= v2dtavg(kpt1,kpt2,ngrid,rlat,tolr)
 
 	case("V2DT2")
 
@@ -209,7 +217,7 @@ function matrizelbsekqtemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,
 
 	real :: v2dk,vcoul,v3diel,v2dt,v0dt,v2dt2
 	real :: v2dohono,v2drk,v1dt,v2d,v2diel
-	real :: v1d,v1diel
+	real :: v1d,v1diel,v3davg,v2dtavg
 
 	real :: r0
 	
@@ -237,6 +245,11 @@ function matrizelbsekqtemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,
 
 		vcoulk= vcoul(kpt1,kpt2,rlat,ngrid,tolr)
 		vcoulq= vcoul(vq,v0,rlat,ngrid,tolr)
+		
+	case("V3DA")
+
+		vcoulk= v3davg(kpt1,kpt2,ngrid,rlat,tolr)
+		vcoulq= v3davg(vq,v0,ngrid,rlat,tolr)		
 
 	case("V3DL")
 
@@ -257,6 +270,11 @@ function matrizelbsekqtemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,
 
 		vcoulk= v2dt(kpt1,kpt2,ngrid,rlat,tolr)
 		vcoulq= v2dt(vq,v0,ngrid,rlat,tolr)
+		
+	case("V2DTA")
+
+		vcoulk= v2dtavg(kpt1,kpt2,ngrid,rlat,tolr)
+		vcoulq= v2dtavg(vq,v0,ngrid,rlat,tolr)		
 
 	case("V2DT2")
 

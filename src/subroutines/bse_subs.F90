@@ -48,7 +48,7 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 
 	real :: vcoul,v2dk,v3diel,v2dt,v0dt,v2dt2
 	real :: v2dohono,v2drk,v1dt,v2d,v2diel
-	real :: v1d,v1diel
+	real :: v1d,v1diel,v3davg,v2dtavg
 	
 	real :: r0
 
@@ -62,6 +62,10 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 	case("V3D")
 
 		vcoul1= vcoul(kpt1,kpt2,rlat,ngrid,tolr)
+		
+	case("V3DA")
+
+		vcoul1= v3davg(kpt1,kpt2,ngrid,rlat,tolr)		
 
 	case("V3DL")
 
@@ -78,6 +82,10 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 	case("V2DT")
 
 		vcoul1= v2dt(kpt1,kpt2,ngrid,rlat,tolr)
+
+	case("V2DTA")
+
+		vcoul1= v2dtavg(kpt1,kpt2,ngrid,rlat,tolr)
 
 	case("V2DT2")
 

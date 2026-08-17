@@ -242,17 +242,45 @@ subroutine self_en_x(w90basis,sysdim,rlat,n,kpt,ngrid,nq,qpt,nocpq,coultype,edie
 	real :: lc,ez,w,r0,tolr
 	
 	real :: v2dkgw,vcoulgw,v3dielgw,v2dgw,v2dielgw,v2dtgw,vcoulgwt,vcoulgwt2
-	real :: v0dtgw,v2dt2gw,v2drkgw,v2dohonogw,v1dtgw,v1dgw,v1dielgw
+	real :: v0dtgw,v2dt2gw,v2drkgw,v2dohonogw,v1dtgw,v1dgw,v1dielgw,v3davggw
+	real :: v2dtavggw
 	real :: vq
+	
 	
 	real,dimension(w90basis,w90basis,nq) :: ovpmnkq
 	real :: wk,waux,sxnk
+	real :: modk,modk2
+	
+	real,dimension(3) :: v0aux
 	
 	sxnk = 0.0
 	
 	waux = wk(sysdim,ngrid,rlat)
 	
+	v0aux= 0.0
+	
+	!call modvec(kpt,v0aux,modk)
+	
+	!if (modk .lt. tolr) then
+	
+	!	kpt(1) = kpt(1) + tolr
+	!	kpt(2) = kpt(2) + tolr
+		!kpt(3) = kpt(3) + tolr
+	
+	!end if
+	
 	do i=1,nq
+	
+	!call modvec(qpt(i,:),v0aux,modk2)
+	
+	!if (modk2 .lt. tolr) then
+	
+	!	qpt(i,1) = qpt(i,1) + tolr
+	!	qpt(i,2) = qpt(i,2) + tolr
+	!	qpt(i,3) = qpt(i,3) + tolr
+	
+	!end if		
+	
 	
 	select case (coultype)
 
@@ -263,6 +291,10 @@ subroutine self_en_x(w90basis,sysdim,rlat,n,kpt,ngrid,nq,qpt,nocpq,coultype,edie
 	case("V3D")
 
 		vq= vcoulgw(kpt,qpt(i,:),rlat,ngrid,tolr)
+		
+	case("V3DA")
+
+		vq= v3davggw(kpt,qpt(i,:),ngrid,rlat,tolr)		
 
 	case("V3DT")
 
@@ -287,6 +319,10 @@ subroutine self_en_x(w90basis,sysdim,rlat,n,kpt,ngrid,nq,qpt,nocpq,coultype,edie
 	case("V2DT")
 
 		vq= v2dtgw(kpt,qpt(i,:),ngrid,rlat,tolr)
+		
+	case("V2DTA")
+
+		vq= v2dtavggw(kpt,qpt(i,:),ngrid,rlat,tolr)		
 
 	case("V2DT2")
 
@@ -613,7 +649,7 @@ subroutine self_en_x_normal(dft,nkp,w90basis,sysdim,rlat,n,kpt,ngrid,nq,qpt,nocp
 	real :: lc,ez,w,r0,tolr
 	
 	real :: v2dkgw,vcoulgw,v3dielgw,v2dgw,v2dielgw,v2dtgw,vcoulgwt,vcoulgwt2
-	real :: v0dtgw,v2dt2gw,v2drkgw,v2dohonogw,v1dtgw,v1dgw,v1dielgw
+	real :: v0dtgw,v2dt2gw,v2drkgw,v2dohonogw,v1dtgw,v1dgw,v1dielgw,v3davggw,v2dtavggw
 	real :: vq
 	
 	real :: ovpmnkq
@@ -637,6 +673,10 @@ subroutine self_en_x_normal(dft,nkp,w90basis,sysdim,rlat,n,kpt,ngrid,nq,qpt,nocp
 	case("V3D")
 
 		vq= vcoulgw(kpt,qpt(i,:),rlat,ngrid,tolr)
+		
+	case("V3DA")
+
+		vq= v3davggw(kpt,qpt(i,:),ngrid,rlat,tolr)		
 
 	case("V3DT")
 
@@ -661,6 +701,10 @@ subroutine self_en_x_normal(dft,nkp,w90basis,sysdim,rlat,n,kpt,ngrid,nq,qpt,nocp
 	case("V2DT")
 
 		vq= v2dtgw(kpt,qpt(i,:),ngrid,rlat,tolr)
+		
+	case("V2DTA")
+
+		vq= v2dtavggw(kpt,qpt(i,:),ngrid,rlat,tolr)		
 
 	case("V2DT2")
 
