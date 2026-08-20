@@ -3,8 +3,11 @@
 subroutine bsebnds(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		     ebse0,ebsef,numbse,sme,ktol,params,kpaths,kpathsbse,orbw,ediel, &
 		     exc,mshift,coultype,ez,w1,r0,lc,rk,meshtype,bsewf,excwf0,excwff,&
-		     nocpf,fermishift,bsealgo,dft,mag)
+		     nocpf,fermishift,bsealgo,bsekpathmpi,bsekpathcheckpoint,bsekpathcheckpointfile,dft,mag)
 
+#ifdef MPI
+	use mpi
+#endif
 	use omp_lib
 	use hamiltonian_input_variables
 
@@ -39,7 +42,7 @@ subroutine bsebnds(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 	real :: a,r0,ed
 
-	integer :: ngkpt
+	integer :: ngkpt,nqpath,checkpoints_loaded,checkpoints_restored
 
 	!variaveis relacionadas a marcacao do tempo
 
@@ -56,8 +59,13 @@ subroutine bsebnds(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	
 	integer :: nocpf
 	real :: fermishift
-	character(len=12) :: bsealgo
+	character(len=12) :: bsealgo,bsekpathmpi
+	character(len=70) :: bsekpathcheckpointfile
 	character(len=1) :: dft
+	integer :: Node,Nodes,MPIError
+	logical :: bsekpathcheckpoint,checkpoint_ok,checkpoint_loaded
+	character(len=240) :: checkpoint_path
+	character(len=8) :: checkpoint_label
 	
 	real,dimension(3) :: mag
 	complex,allocatable,dimension(:,:,:) :: sk,skq	
@@ -113,17 +121,35 @@ subroutine bsebnds(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 	!call input_read
 
+	Node=0
+	Nodes=1
+	MPIError=0
+#ifdef MPI
+	call MPI_COMM_RANK(MPI_COMM_WORLD,Node,MPIError)
+	call MPI_COMM_SIZE(MPI_COMM_WORLD,Nodes,MPIError)
+#endif
+
+	if (trim(bsekpathmpi) .ne. "Q") then
+		if (Node .eq. 0) write(*,*) "Unsupported BSE_KPATH_MPI; use Q (HYBRID is reserved)"
+#ifdef MPI
+		call MPI_ABORT(MPI_COMM_WORLD,1,MPIError)
+#endif
+		stop
+	end if
+
 	! INPUT 
 	OPEN(UNIT=500, FILE= kpathsbse,STATUS='old', IOSTAT=erro)
     	if (erro/=0) stop "Error opening bse-kpath input file"
 	!OPEN(UNIT=201, FILE= diein,STATUS='old', IOSTAT=erro)
     	!if (erro/=0) stop "Erro na abertura do arquivo de entrada ambiente dieletrico"
 
-	!OUTPUT : criando arquivos de saida
-	OPEN(UNIT=300, FILE=trim(outputfolder)//"log_bse_kpath.dat",STATUS='unknown', IOSTAT=erro)
+	! Only rank zero owns the shared formatted output files.
+	if (Node .eq. 0) then
+		OPEN(UNIT=300, FILE=trim(outputfolder)//"log_bse_kpath.dat",STATUS='unknown', IOSTAT=erro)
     	if (erro/=0) stop "Error opening log_bse_kpath output file"
-	OPEN(UNIT=400, FILE=trim(outputfolder)//"bands_bse.dat",STATUS='unknown', IOSTAT=erro)
+		OPEN(UNIT=400, FILE=trim(outputfolder)//"bands_bse.dat",STATUS='unknown', IOSTAT=erro)
     	if (erro/=0) stop "Error opening bands_bse output file"
+	end if
 
 
 	call cpu_time(t0)
@@ -172,6 +198,7 @@ subroutine bsebnds(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 
 	ngkpt = ngrid(1)*ngrid(2)*ngrid(3)
+	nqpath=(nks/2)*nkpts
 	dimbse = ngkpt*nc*nv
 
 	!call alat(systype,rlat,a)
@@ -188,12 +215,18 @@ subroutine bsebnds(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 	!definindo kpath
 	!allocate(qauxv(nkpts*(nks-1),4))
-	allocate(qauxv((nks/2)*nkpts,4))	
+	allocate(qauxv(nqpath,4))
 
-	call kpathbse(outputfolder,rlat(1,:),rlat(2,:),rlat(3,:),nks,ks,nkpts,qauxv)
+	if (Node .eq. 0) then
+		call kpathbse(outputfolder,rlat(1,:),rlat(2,:),rlat(3,:),nks,ks,nkpts,qauxv)
+	end if
+#ifdef MPI
+	call MPI_BCAST(qauxv,4*nqpath,MPI_REAL,0,MPI_COMM_WORLD,MPIError)
+#endif
 
 	!Informações para o arquivo de log do calculo
 
+	if (Node .eq. 0) then
 	write(300,*) 'threads:', nthreads
 	write(300,*)
 	write(300,*) 'grid:',ngrid(1),ngrid(2),ngrid(3)
@@ -207,14 +240,16 @@ subroutine bsebnds(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	write(300,*) 'Coulomb Potential:',coultype
 	write(300,*)
 	write(300,*) 'BSE_ALGO:',bsealgo	
+	write(300,*) 'BSE_KPATH_MPI:',bsekpathmpi
 	write(300,*)	
-	write(300,*) 'number of kpoints in the path:','   ',(nks/2)*nkpts
+	write(300,*) 'number of kpoints in the path:','   ',nqpath
 	write(300,*)
 	write(300,*)
 	write(300,*) 'begin','  ','month',values(2),'day',values(3),'',values(5),'hours',values(6),'min',values(7),'seg'
 	write(300,*) 
 
 	call flush(300)
+	end if
 
 	allocate(kpt(ngkpt,3))
 	
@@ -290,11 +325,12 @@ subroutine bsebnds(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	
 	if (dft .eq. "S") then
 	
-		allocate(sk(ngkpt,w90basis,w90basis))
+		! Keep each overlap matrix contiguous when passed into the BSE kernel.
+		allocate(sk(w90basis,w90basis,ngkpt))
 		
 		do i=1,ngkpt
 		
-			call overlap(w90basis,nvec,rvec,ovp,kpt(i,1),kpt(i,2),kpt(i,3),sk(i,:,:))
+			call overlap(w90basis,nvec,rvec,ovp,kpt(i,1),kpt(i,2),kpt(i,3),sk(:,:,i))
 		
 		end do
 		!write(300,*) 'overlap matrices calculated'
@@ -308,17 +344,21 @@ subroutine bsebnds(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
     !write(*,*) "quantum numbers for exciton basis set finished"
 
-	write(300,*) "quantum numbers for exciton basis set finished"
-	call flush(300)	
+	if (Node .eq. 0) then
+		write(300,*) "quantum numbers for exciton basis set finished"
+		call flush(300)
+	end if
 
 	counter=counter-1 !numero total de estados para equação bse
 
 	allocate(qpt(ngkpt,3))
-	allocate(exk(dimbse,nkpts*(nks-1)))
+	allocate(exk(dimbse,nqpath))
+	exk=0.0
+	checkpoints_loaded=0
 
 
 
-	do i=1,(nks/2)*nkpts
+	q_loop: do i=Node+1,nqpath,Nodes
 
 		
 		!definindo os pontos q
@@ -327,6 +367,16 @@ subroutine bsebnds(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		q(2)= qauxv(i,2) 
 		q(3)= qauxv(i,3)
 		q(4)= qauxv(i,4)
+
+		if (bsekpathcheckpoint) then
+			write(checkpoint_label,"(I8.8)") i
+			checkpoint_path=trim(outputfolder)//trim(bsekpathcheckpointfile)//"_q"//checkpoint_label//".bin"
+			call bse_kpath_checkpoint_read(checkpoint_path,i,dimbse,q,exk(:,i),checkpoint_loaded)
+			if (checkpoint_loaded) then
+				checkpoints_loaded=checkpoints_loaded+1
+				cycle q_loop
+			end if
+		end if
 
 		!gerando o grid k+q
 		
@@ -401,15 +451,17 @@ subroutine bsebnds(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	
 	if (dft .eq. "S") then
 	
-		allocate(skq(ngkpt,w90basis,w90basis))
+		allocate(skq(w90basis,w90basis,ngkpt))
 		
 		do i2=1,ngkpt
 		
-			call overlap(w90basis,nvec,rvec,ovp,qpt(i2,1),qpt(i2,2),qpt(i2,3),skq(i2,:,:))
+			call overlap(w90basis,nvec,rvec,ovp,qpt(i2,1),qpt(i2,2),qpt(i2,3),skq(:,:,i2))
 		
 		end do
-		write(300,*) 'overlap matrices calculated'
-		call flush(300)	
+		if (Node .eq. 0) then
+			write(300,*) 'overlap matrices calculated'
+			call flush(300)
+		end if
 	
 	
 	end if	
@@ -440,7 +492,7 @@ hbse(i2,j)= matrizelbsekq(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,q,rlat,
           ,stt(i2,3),:) ,vector(stt(i2,4),stt(i2,2),:),kpt(stt(i2,4),:),stt(j,:)&
           ,energyq(stt(j,4),stt(j,3)),energy(stt(j,4),stt(j,2))&
           ,vectorq(stt(j,4),stt(j,3),:),vector(stt(j,4),stt(j,2),:),kpt(stt(j,4),:),dft,nvec,rvec,&
-          sk(stt(i2,4),:,:),sk(stt(j,4),:,:),skq(stt(i2,4),:,:),skq(stt(j,4),:,:))
+          sk(:,:,stt(i2,4)),sk(:,:,stt(j,4)),skq(:,:,stt(i2,4)),skq(:,:,stt(j,4)))
 
 
 			end do
@@ -719,6 +771,17 @@ hbse(i2,j)= matrizelbsekq(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,q,rlat,
 	
 	end if
 
+		if (bsekpathcheckpoint) then
+			call bse_kpath_checkpoint_write(checkpoint_path,i,dimbse,q,exk(:,i),checkpoint_ok)
+			if (.not. checkpoint_ok) then
+				write(*,*) 'Unable to write BSE q-path checkpoint: ',trim(checkpoint_path)
+#ifdef MPI
+				call MPI_ABORT(MPI_COMM_WORLD,1,MPIError)
+#endif
+				stop
+			end if
+		end if
+
 		deallocate(hbse,W)
 		deallocate(energyq,vectorq)
 		deallocate(stt)
@@ -753,8 +816,10 @@ hbse(i2,j)= matrizelbsekq(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,q,rlat,
 		qpt=0.0
 		nocpq=0
 
-		write(300,*) 'progress:',i,'/',(nks/2)*nkpts
-		call flush(300)
+		if (Node .eq. 0) then
+			write(300,*) 'progress:',i,'/',nqpath
+			call flush(300)
+		end if
 		
 		if (dft .eq. "S") then
 		
@@ -762,13 +827,33 @@ hbse(i2,j)= matrizelbsekq(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,q,rlat,
 		
 		end if
 
-	end do
+	end do q_loop
 
+	checkpoints_restored=checkpoints_loaded
+#ifdef MPI
+	if (Nodes .gt. 1) then
+		call MPI_REDUCE(checkpoints_loaded,checkpoints_restored,1,MPI_INTEGER,MPI_SUM,0,MPI_COMM_WORLD,MPIError)
+	end if
+#endif
+	if (Node .eq. 0 .and. bsekpathcheckpoint) then
+		write(300,*) 'BSE q-path checkpoints restored:',checkpoints_restored
+		call flush(300)
+	end if
 
+#ifdef MPI
+	if (Nodes .gt. 1) then
+		if (Node .eq. 0) then
+			call MPI_REDUCE(MPI_IN_PLACE,exk,dimbse*nqpath,MPI_REAL,MPI_SUM,0,MPI_COMM_WORLD,MPIError)
+		else
+			call MPI_REDUCE(exk,exk,dimbse*nqpath,MPI_REAL,MPI_SUM,0,MPI_COMM_WORLD,MPIError)
+		end if
+	end if
+#endif
 
+	if (Node .eq. 0) then
 	do i2=1,dimbse
 
-		do i=1,(nks/2)*nkpts
+		do i=1,nqpath
 
 			write(400,*) real(qauxv(i,1)),exk(i2,i)
 			call flush(400)
@@ -778,6 +863,7 @@ hbse(i2,j)= matrizelbsekq(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,q,rlat,
 		write(400,*)
 
 	end do
+	end if
 
 580 continue
 
@@ -798,16 +884,20 @@ hbse(i2,j)= matrizelbsekq(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,q,rlat,
 	call cpu_time(tf)
 	call date_and_time(VALUES=values2)
 
-	write(300,*)
-	write(300,*) 'end','   ','month',values2(2),'day',values2(3),'',values2(5),'hours',values2(6),'min',values2(7),'seg'
-	write(300,*)
+	if (Node .eq. 0) then
+		write(300,*)
+		write(300,*) 'end','   ','month',values2(2),'day',values2(3),'',values2(5),'hours',values2(6),'min',values2(7),'seg'
+		write(300,*)
+	end if
 
 	close(200)
 
 
 
-	close(300)
-	close(400)
+	if (Node .eq. 0) then
+		close(300)
+		close(400)
+	end if
 	close(500)
 
 

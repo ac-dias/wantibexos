@@ -19,6 +19,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 #endif
 	use omp_lib
 	use hamiltonian_input_variables
+	use iso_fortran_env, only: error_unit
 
 	implicit none
 
@@ -142,6 +143,10 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	integer :: numroc, indxl2g
 	integer,dimension(3) :: bseham_metadata
 	character(len=160) :: bseham_path
+#ifdef MPI
+	integer,parameter :: matrix_count_kind = selected_int_kind(18)
+	integer(kind=matrix_count_kind) :: matrix_element_count
+#endif
 
 	!fim modificacoes versao 2.1
 
@@ -711,6 +716,20 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		end if
     else
 #ifdef MPI
+		matrix_element_count = int(dimbse,matrix_count_kind)*int(dimbse,matrix_count_kind)
+		if (matrix_element_count > 2147483647_matrix_count_kind) then
+			if (Node == 0) then
+				write(error_unit,*) 'Distributed BSE Hamiltonian exceeds the 32-bit MPI count limit'
+				write(error_unit,*) 'dimbse: ',dimbse
+				write(error_unit,*) 'H(dimbse,dimbse) elements: ',matrix_element_count
+				write(error_unit,*) '32-bit MPI count limit: ',2147483647_matrix_count_kind
+				call flush(error_unit)
+			end if
+			call MPI_BARRIER(MPI_COMM_WORLD,MPIError)
+			call MPI_ABORT(MPI_COMM_WORLD,1,MPIError)
+			stop
+		end if
+
 		mb = 64
 		nb = 64
 		nprow = int(sqrt(real(Nodes)))

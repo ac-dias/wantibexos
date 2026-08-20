@@ -151,7 +151,7 @@ program main
 		     spdiel,spdielpol,sppolbz,berryk,berrybz,pponly,bsewf,excwf0,excwff,&
 		     tmcoef,ez,w,lc,r0,sysdim,dtfull,cpol,cshift,dft,&
 		     st,phavg,temp,ta,pce,ses,ctemp,tmax,eg,egd,egs,ebgs,renorm,emt,emfile,&
-		     dk,nocpf,fermishift,bsealgo,spintxt,meshgen,exc,mag,boltz,nmu,nsteps,mu0,&
+		     dk,nocpf,fermishift,bsealgo,bsekpathmpi,bsekpathcheckpoint,bsekpathcheckpointfile,spintxt,meshgen,exc,mag,boltz,nmu,nsteps,mu0,&
 		     bsehamwrite,bsehamread,bsehamfile,&
 		     muf,btemp,klat,elft,hlft,smeboltz,ni,ns,edielgw,r0gw,lcgw,ezgw,wgw,coultypegw,&
 		     nomega,omegamax,gwmesh,gwmeshuse,gwbnd,gwbnduse,gwbsebnd,ktolgw,smegw,selfxonly,ifactor)
@@ -340,20 +340,24 @@ program main
 		call bsebnds(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		     ebse0,ebsef,numbse,sme,ktol,params,kpaths,kpathsbse,orbw,ediel, &
 		     exc,mshift,coultype,ez,w,r0,lc,rk,meshtype,bsewf,excwf0,excwff,&
-		     nocpf,fermishift,bsealgo,dft,mag)	
+		     nocpf,fermishift,bsealgo,bsekpathmpi,bsekpathcheckpoint,bsekpathcheckpointfile,dft,mag)
 		     
-		 write(2077,*) "BSE exciton band structure finished"
-     		 call flush(2077)	
+		 if (Node == 0) then
+			 write(2077,*) "BSE exciton band structure finished"
+			 call flush(2077)
+		 end if
 		
 		else 
 		
 		call bsebndstemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		     ebse0,ebsef,numbse,sme,ktol,params,kpaths,kpathsbse,orbw,ediel, &
 		     exc,mshift,coultype,ez,w,r0,lc,rk,meshtype,bsewf,excwf0,excwff,&
-		     st,phavg,ta,temp,nocpf,fermishift,bsealgo,dft,mag)	
+		     st,phavg,ta,temp,nocpf,fermishift,bsealgo,bsekpathmpi,bsekpathcheckpoint,bsekpathcheckpointfile,dft,mag)
 		     
-	 	write(2077,*) "BSE exciton band structure, with temperature, finished"
-     		call flush(2077)
+		if (Node == 0) then
+			write(2077,*) "BSE exciton band structure, with temperature, finished"
+			call flush(2077)
+		end if
 		
 		end if
 	

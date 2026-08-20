@@ -471,11 +471,12 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 	if (dft .eq. "S") then
 	
-		allocate(sk(ngkpt,w90basis,w90basis))
+		! Keep each overlap matrix contiguous when it is passed to matrizelbsetemp.
+		allocate(sk(w90basis,w90basis,ngkpt))
 		
 		do i=1,ngkpt
 		
-			call overlap(w90basis,nvec,rvec,ovp,kpt(i,1),kpt(i,2),kpt(i,3),sk(i,:,:))
+			call overlap(w90basis,nvec,rvec,ovp,kpt(i,1),kpt(i,2),kpt(i,3),sk(:,:,i))
 		
 		end do
 		write(300,*) 'overlap matrices calculated'
@@ -629,7 +630,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
             ,stt(i,3),:) ,vector(stt(i,4),stt(i,2),:),kpt(stt(i,4),:),stt(j,:),eigv(stt(j,4),stt(j,3))&
   	    ,eigv(stt(j,4),stt(j,2)) &
             ,vector(stt(j,4),stt(j,3),:),vector(stt(j,4),stt(j,2),:),kpt(stt(j,4),:),temp,dft,nvec,rvec,&
-            sk(stt(i,4),:,:),sk(stt(j,4),:,:))
+            sk(:,:,stt(i,4)),sk(:,:,stt(j,4)))
 
 			end do
 		end do

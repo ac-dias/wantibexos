@@ -65,6 +65,39 @@ about twice and one extra local BSE matrix per MPI rank.  Executables built
 without `-DELPA` reject `BSE_ALGO=elpa` explicitly; all other distributed
 choices continue to use ScaLAPACK `PCHEEV`.
 
+BSE q-path MPI parallelism
+--------------------------
+
+The BSE q-path calculation (`BSE_BND= T`) can distribute independent exciton
+momenta over MPI ranks.  The default is:
+
+```
+BSE_KPATH_MPI= Q
+```
+
+Each rank diagonalizes complete fixed-Q BSE Hamiltonians for a cyclic subset of
+the requested path, and rank zero collects the eigenvalues and writes the
+q-path output.  This is therefore most useful when the number of q-path points
+is at least the number of MPI ranks.  `HYBRID` is reserved for a future mode
+that will split ranks into multiple intra-Q communicator groups; it is not yet
+implemented and is rejected explicitly.
+
+For restartable q-path calculations, enable per-Q checkpoints:
+
+```
+BSE_KPATH_CHECKPOINT= T
+BSE_KPATH_CHECKPOINT_FILE= bse_kpath_checkpoint
+```
+
+Each completed Q point writes its eigenvalue block in the output directory as
+`<prefix>_q########.bin`.  On the next run with the same option, valid
+files matching the Q point and BSE dimension are reused automatically; missing
+or incomplete files are recalculated.  The file is first written as a temporary
+file and then atomically renamed, so an interrupted write cannot replace a
+previous valid checkpoint.  Checkpoints are native binary files: reuse them
+only with the same executable/platform and unchanged physical BSE inputs.  Use
+a different prefix or disable the option for a fresh calculation.
+
 The Siesta/Honpas Hamiltonian extract script (siesta2wtb.py) was tested in SISL version 0.16.2, could not be work in other versions.
 
 Citing

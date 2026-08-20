@@ -276,6 +276,7 @@ module input_variables
 	character(len=6) :: ses
 	character(len=70) :: emfile
 	character(len=70) :: bsehamfile
+	character(len=70) :: bsekpathcheckpointfile
 		
 
 	logical :: bandscalc,doscalc
@@ -286,6 +287,7 @@ module input_variables
 	logical :: pponly
 	logical :: bsewf
 	logical :: bsehamwrite,bsehamread
+	logical :: bsekpathcheckpoint
 	logical :: tmcoef
 	logical :: dtfull,cpol
 	!logical :: bset,bsetbnd
@@ -308,6 +310,7 @@ module input_variables
 	integer :: nocpf
 	real :: fermishift
 	character(len=12) :: bsealgo
+	character(len=12) :: bsekpathmpi
 	
 	real :: exc
 	real,dimension(3) :: mag
@@ -443,6 +446,8 @@ subroutine input_read
 	bsehamwrite = .false.
 	bsehamread = .false.
 	bsehamfile = "bse_hamiltonian.bin"
+	bsekpathcheckpoint = .false.
+	bsekpathcheckpointfile = "bse_kpath_checkpoint"
 	
 	tmcoef = .false.
 	
@@ -462,6 +467,7 @@ subroutine input_read
 	ta = "FA"
 	
 	bsealgo = "cheev"
+	bsekpathmpi = "Q"
 	!bset = .false.
 	!bsetbnd = .false.
 	renorm = .true.
@@ -589,6 +595,18 @@ subroutine input_read
 	case ("BSE_ALGO=")
 
 		read(b,*) bsealgo
+
+	case ("BSE_KPATH_MPI=")
+
+		read(b,*) bsekpathmpi
+
+	case ("BSE_KPATH_CHECKPOINT=")
+
+		read(b,*) bsekpathcheckpoint
+
+	case ("BSE_KPATH_CHECKPOINT_FILE=")
+
+		bsekpathcheckpointfile = b
 
 	case ("BSE_HAM_SAVE=")
 
@@ -1044,7 +1062,7 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 		     spdiel,spdielpol,sppolbz,berryk,berrybz,pponly,bsewf,excwf0,excwff,&
 		     tmcoef,ez,w,lc,r0,sysdim,dtfull,cpol,cshift,dft,&
 		     st,phavg,temp,ta,pce,ses,ctemp,tmax,eg,egd,egs,ebgs,renorm,emt,emfile,&
-		     dk,nocpf,fermishift,bsealgo,spintxt,meshgen,exc,mag,boltz,nmu,nsteps,mu0,&
+		     dk,nocpf,fermishift,bsealgo,bsekpathmpi,bsekpathcheckpoint,bsekpathcheckpointfile,spintxt,meshgen,exc,mag,boltz,nmu,nsteps,mu0,&
 		     bsehamwrite,bsehamread,bsehamfile,&
 		     muf,btemp,klat,elft,hlft,smeboltz,ni,ns,edielgw,r0gw,lcgw,ezgw,wgw,coultypegw,&
 		     nomega,omegamax,gwmesh,gwmeshuse,gwbnd,gwbnduse,gwbsebnd,ktolgw,smegw,selfxonly,ifactor)
@@ -1089,7 +1107,8 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	character(len=6) :: ses
 	character(len=70) :: emfile
 	character(len=70) :: bsehamfile
-	character(len=12) :: bsealgo		
+	character(len=70) :: bsekpathcheckpointfile
+	character(len=12) :: bsealgo,bsekpathmpi
 
 	logical :: bandscalc,doscalc
 	logical :: bse,bsepol,bsekpath
@@ -1102,7 +1121,7 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	logical :: emt,spintxt	
 	!logical :: lowdin
 	logical :: boltz
-	logical :: bsehamwrite,bsehamread
+	logical :: bsehamwrite,bsehamread,bsekpathcheckpoint
 	
 	real :: fermishift
 	real :: ez,w,lc,r0
@@ -1208,6 +1227,9 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	write(unitout,*) "BSE/OPTICAL PROPERTIES"
 	write(unitout,*)
 	write(unitout,"(A10,A12)") "BSE_ALGO= ", bsealgo
+	write(unitout,"(A15,A12)") "BSE_KPATH_MPI= ", bsekpathmpi
+	write(unitout,"(A22,L1)") "BSE_KPATH_CHECKPOINT= ", bsekpathcheckpoint
+	write(unitout,"(A27,A70)") "BSE_KPATH_CHECKPOINT_FILE= ", bsekpathcheckpointfile
 	write(unitout,"(A9,I0)") "NBANDSC= ", nc
 	write(unitout,"(A9,I0)") "NBANDSV= ", nv
 	write(unitout,"(A9,F8.4)") "ENSPECI= ", ebse0

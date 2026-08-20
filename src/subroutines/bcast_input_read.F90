@@ -106,6 +106,8 @@ call MPI_BCAST(emfile,70,MPI_CHARACTER,root,MPI_COMM_WORLD,ierr)
 call MPI_BCAST(bsehamfile,70,MPI_CHARACTER,root,MPI_COMM_WORLD,ierr)
 
 call MPI_BCAST(bsealgo,12,MPI_CHARACTER,root,MPI_COMM_WORLD,ierr)
+call MPI_BCAST(bsekpathmpi,12,MPI_CHARACTER,root,MPI_COMM_WORLD,ierr)
+call MPI_BCAST(bsekpathcheckpointfile,70,MPI_CHARACTER,root,MPI_COMM_WORLD,ierr)
 
 call MPI_BCAST(coultypegw,5,MPI_CHARACTER,root,MPI_COMM_WORLD,ierr)
 
@@ -130,6 +132,7 @@ call MPI_BCAST(pponly,1,MPI_LOGICAL,root,MPI_COMM_WORLD,ierr)
 call MPI_BCAST(bsewf,1,MPI_LOGICAL,root,MPI_COMM_WORLD,ierr)
 call MPI_BCAST(bsehamwrite,1,MPI_LOGICAL,root,MPI_COMM_WORLD,ierr)
 call MPI_BCAST(bsehamread,1,MPI_LOGICAL,root,MPI_COMM_WORLD,ierr)
+call MPI_BCAST(bsekpathcheckpoint,1,MPI_LOGICAL,root,MPI_COMM_WORLD,ierr)
 call MPI_BCAST(tmcoef,1,MPI_LOGICAL,root,MPI_COMM_WORLD,ierr)
 
 call MPI_BCAST(dtfull,1,MPI_LOGICAL,root,MPI_COMM_WORLD,ierr)
