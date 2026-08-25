@@ -148,8 +148,8 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 		 !call overlap(w90basis,nvec,rvec,ovp,kpt1(1),kpt1(2),kpt1(3),sk)
 		 !call overlap(w90basis,nvec,rvec,ovp,kpt2(1),kpt2(2),kpt2(3),skp)
 		 
-		 call sandwich(w90basis,vbc1,0.5*(sk+skp),vbc2,vc)
-		 call sandwich(w90basis,vbv1,0.5*(sk+skp),vbv2,vv)
+		 call sandwich_average(w90basis,vbc1,sk,skp,vbc2,vc)
+		 call sandwich_average(w90basis,vbv1,sk,skp,vbv2,vv)
 		 
 		 matrizelbse=  vcoul1*vc*vv		
 		
@@ -784,7 +784,6 @@ subroutine excwfi(outputfolder,ngkpt,kpt,qpt,nc,nv,nocp,stt,excenergy,excnum,qpt
 	close(800+excnum*qptnum)
 
 end subroutine excwfi
-
 
 
 

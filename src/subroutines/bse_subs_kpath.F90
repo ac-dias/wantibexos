@@ -176,8 +176,8 @@ if (modq .eq. 0.) then
 		  !call overlap(w90basis,nvec,rvec,ovp,kpt1(1),kpt1(2),kpt1(3),sk)
 		  !call overlap(w90basis,nvec,rvec,ovp,kpt2(1),kpt2(2),kpt2(3),skp)
 		 
-		  call sandwich(w90basis,vbc1,0.5*(sk+skp),vbc2,vc)
-		  call sandwich(w90basis,vbv1,0.5*(sk+skp),vbv2,vv)
+		  call sandwich_average(w90basis,vbc1,sk,skp,vbc2,vc)
+		  call sandwich_average(w90basis,vbv1,sk,skp,vbv2,vv)
 		 
 		  matrizelbsekq=  vcoulk*vc*vv		
 		
@@ -218,8 +218,8 @@ else
 		  !call overlap(w90basis,nvec,rvec,ovp,kpt1(1)+q(2),kpt1(2)+q(3),kpt1(3)+q(4),skq)
 		  !call overlap(w90basis,nvec,rvec,ovp,kpt2(1)+q(2),kpt2(2)+q(3),kpt2(3)+q(4),skpq)
 		  
-		  call sandwich(w90basis,vbc1,0.5*(skq+sk),vbv1,vcv)		  
-		  call sandwich(w90basis,vbv2,0.5*(skp+skpq),vbc2,vvc)		
+		  call sandwich_average(w90basis,vbc1,skq,sk,vbv1,vcv)
+		  call sandwich_average(w90basis,vbv2,skp,skpq,vbc2,vvc)
 
 		 matrizelbsekq= (ec1-ev1) + vcoulk &
 			     - vcoulq*vcv*vvc
@@ -263,11 +263,11 @@ else
 		  !call overlap(w90basis,nvec,rvec,ovp,kpt1(1)+q(2),kpt1(2)+q(3),kpt1(3)+q(4),skq)
 		  !call overlap(w90basis,nvec,rvec,ovp,kpt2(1)+q(2),kpt2(2)+q(3),kpt2(3)+q(4),skpq)
 		  
-		  call sandwich(w90basis,vbc1,0.5*(skq+skpq),vbc2,vc)
-		  call sandwich(w90basis,vbv1,0.5*(sk+skp),vbv2,vv)
+		  call sandwich_average(w90basis,vbc1,skq,skpq,vbc2,vc)
+		  call sandwich_average(w90basis,vbv1,sk,skp,vbv2,vv)
 		  
-		  call sandwich(w90basis,vbc1,0.5*(skq+sk),vbv1,vcv)		  
-		  call sandwich(w90basis,vbv2,0.5*(skp+skpq),vbc2,vvc)
+		  call sandwich_average(w90basis,vbc1,skq,sk,vbv1,vcv)
+		  call sandwich_average(w90basis,vbv2,skp,skpq,vbc2,vvc)
 
 		 matrizelbsekq= vcoulk*vc*vv&
 				- vcoulq*vcv*vvc		
@@ -308,7 +308,5 @@ end if
 
 
 end function matrizelbsekq
-
-
 
 

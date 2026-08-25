@@ -20,8 +20,9 @@ subroutine bsebndstemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 	integer :: ncaux,nvaux
 
-	integer,allocatable,dimension(:,:) :: stt !(ngrid*ngrid*nc*nv,4)
+	integer,allocatable,dimension(:,:) :: stt,stt_bse !(ngrid*ngrid*nc*nv,4)
 	real,allocatable,dimension(:,:) :: kpt,qpt !pontos k do grid (ngrid*ngrid,2)
+	real,allocatable,dimension(:,:) :: kpt_bse
 
 	real,dimension(4) :: q
 
@@ -263,9 +264,16 @@ subroutine bsebndstemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	!shift= 0.0
 	call monhkhorst_pack(ngrid(1),ngrid(2),ngrid(3),mshift,rlat(1,:),rlat(2,:),rlat(3,:),kpt)
 	!call gridgenmhp(ngrid,rlat,kpt)
+	allocate(kpt_bse(3,ngkpt))
+	do i=1,ngkpt
+		do j=1,3
+		kpt_bse(j,i) = kpt(i,j)
+		end do
+	end do
 
 	allocate(eaux(w90basis),vaux(w90basis,w90basis))
-	allocate(energy(ngkpt,nc+nv),vector(ngkpt,nc+nv,w90basis))
+	! Store the orbital index first; BSE eigenvector sections are then contiguous.
+	allocate(energy(ngkpt,nc+nv),vector(w90basis,nc+nv,ngkpt))
 
 	allocate(nocpk(ngkpt))
 	allocate(nocpq(ngkpt))
@@ -336,7 +344,7 @@ subroutine bsebndstemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 				do h=1,w90basis
 
-					vector(i,l,h)=vaux(nocpk(i)-nv+l,h)
+					vector(h,l,i)=vaux(nocpk(i)-nv+l,h)
 
 
 				end do
@@ -412,7 +420,7 @@ subroutine bsebndstemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 		allocate(eaux(w90basis),vaux(w90basis,w90basis))
 
-		allocate(energyq(ngkpt,nc+nv),vectorq(ngkpt,nc+nv,w90basis))
+		allocate(energyq(ngkpt,nc+nv),vectorq(w90basis,nc+nv,ngkpt))
 
 	allocate (stt(ngkpt*nc*nv,4))
 
@@ -467,7 +475,7 @@ subroutine bsebndstemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 					do h=1,w90basis
 
-						vectorq(i2,l,h)=vaux(nocpq(i2)-nv+l,h)
+						vectorq(h,l,i2)=vaux(nocpq(i2)-nv+l,h)
 
 	
 					end do
@@ -500,6 +508,12 @@ subroutine bsebndstemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	end if	
 
 		call quantumnumbers2(w90basis,ngkpt,nc,nv,nocpk,nocpq,stt)
+		allocate(stt_bse(4,dimbse))
+		do i2=1,dimbse
+			do j=1,4
+				stt_bse(j,i2) = stt(i2,j)
+			end do
+		end do
 
 		deallocate(eaux,vaux)
 
@@ -520,12 +534,12 @@ subroutine bsebndstemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 
 
-hbse(i2,j)= matrizelbsekqtemp(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,q,rlat,stt(i2,:),energyq(stt(i2,4),stt(i2,3))&
-          ,energy(stt(i2,4),stt(i2,2)),vectorq(stt(i2,4)&
-          ,stt(i2,3),:) ,vector(stt(i2,4),stt(i2,2),:),kpt(stt(i2,4),:),stt(j,:)&
-          ,energyq(stt(j,4),stt(j,3)),energy(stt(j,4),stt(j,2))&
-          ,vectorq(stt(j,4),stt(j,3),:),vector(stt(j,4),stt(j,2),:),kpt(stt(j,4),:),temp,dft,nvec,rvec,&
-          sk(:,:,stt(i2,4)),sk(:,:,stt(j,4)),skq(:,:,stt(i2,4)),skq(:,:,stt(j,4)))
+hbse(i2,j)= matrizelbsekqtemp(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,q,rlat,stt_bse(:,i2),&
+          energyq(stt_bse(4,i2),stt_bse(3,i2))&
+          ,energy(stt_bse(4,i2),stt_bse(2,i2)),vectorq(:,stt_bse(3,i2),stt_bse(4,i2)),vector(:,stt_bse(2,i2),stt_bse(4,i2)),&
+          kpt_bse(:,stt_bse(4,i2)),stt_bse(:,j),energyq(stt_bse(4,j),stt_bse(3,j)),energy(stt_bse(4,j),stt_bse(2,j))&
+          ,vectorq(:,stt_bse(3,j),stt_bse(4,j)),vector(:,stt_bse(2,j),stt_bse(4,j)),kpt_bse(:,stt_bse(4,j)),temp,dft,nvec,rvec,&
+          sk(:,:,stt_bse(4,i2)),sk(:,:,stt_bse(4,j)),skq(:,:,stt_bse(4,i2)),skq(:,:,stt_bse(4,j)))
 
 			end do
 
@@ -812,7 +826,7 @@ hbse(i2,j)= matrizelbsekqtemp(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,q,r
 
 		deallocate(hbse,W)
 		deallocate(energyq,vectorq)
-		deallocate(stt)
+		deallocate(stt,stt_bse)
 
 	select case (bsealgo)
 	
@@ -896,7 +910,7 @@ hbse(i2,j)= matrizelbsekqtemp(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,q,r
 580 continue
 
 	deallocate(energy,vector)
-	deallocate(kpt)
+	deallocate(kpt,kpt_bse)
 	deallocate(qpt)
 	deallocate(exk)
 	deallocate(nocpq,nocpk)

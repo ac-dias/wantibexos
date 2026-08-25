@@ -145,6 +145,30 @@ subroutine sandwich(w90basis,lvec,hm,rvec,res)
 
 end subroutine sandwich
 
+
+subroutine sandwich_average(w90basis,lvec,hma,hmb,rvec,res)
+
+	implicit none
+
+	integer :: w90basis,i,j
+	complex,dimension(w90basis) :: lvec,rvec
+	complex,dimension(w90basis,w90basis) :: hma,hmb
+	complex :: res,aux
+
+	! Evaluate conjg(lvec)^T [(hma + hmb) / 2] rvec directly.  Passing
+	! 0.5*(hma+hmb) to sandwich creates a full w90basis-by-w90basis
+	! compiler temporary for every BSE Hamiltonian element.
+	res = 0.0
+	do i=1,w90basis
+		aux = 0.0
+		do j=1,w90basis
+			aux = aux + 0.5*(hma(i,j)+hmb(i,j))*rvec(j)
+		end do
+		res = res + conjg(lvec(i))*aux
+	end do
+
+end subroutine sandwich_average
+
 subroutine applyovp(w90basis,ovp,hm)
 
 	implicit none
@@ -280,7 +304,9 @@ subroutine vcell2D(rlat,vc)
 	real,dimension(3) :: vx
 	real :: aux
 
-		call prodvec(rlat(1,:),rlat(2,:),vx)
+		vx(1)=rlat(1,2)*rlat(2,3)-rlat(1,3)*rlat(2,2)
+		vx(2)=rlat(1,3)*rlat(2,1)-rlat(1,1)*rlat(2,3)
+		vx(3)=rlat(1,1)*rlat(2,2)-rlat(1,2)*rlat(2,1)
 		call vecsize(vx,vc)
 
 end subroutine vcell2D
@@ -293,7 +319,9 @@ subroutine vcell3D(rlat,vc)
 	real,dimension(3) :: vx
 	real :: aux
 
-		call prodvec(rlat(1,:),rlat(2,:),vx)
+		vx(1)=rlat(1,2)*rlat(2,3)-rlat(1,3)*rlat(2,2)
+		vx(2)=rlat(1,3)*rlat(2,1)-rlat(1,1)*rlat(2,3)
+		vx(3)=rlat(1,1)*rlat(2,2)-rlat(1,2)*rlat(2,1)
 
 		vc=vx(1)*rlat(3,1)+vx(2)*rlat(3,2)+vx(3)*rlat(3,3)
 		vc = abs(vc)
@@ -311,11 +339,15 @@ subroutine vcell(systype,rlat,vc)
 
 	if (systype .eq. "2D") then
 
-		call prodvec(rlat(1,:),rlat(2,:),vx)
+		vx(1)=rlat(1,2)*rlat(2,3)-rlat(1,3)*rlat(2,2)
+		vx(2)=rlat(1,3)*rlat(2,1)-rlat(1,1)*rlat(2,3)
+		vx(3)=rlat(1,1)*rlat(2,2)-rlat(1,2)*rlat(2,1)
 		call vecsize(vx,vc)
 		
 	else
-		call prodvec(rlat(1,:),rlat(2,:),vx)
+		vx(1)=rlat(1,2)*rlat(2,3)-rlat(1,3)*rlat(2,2)
+		vx(2)=rlat(1,3)*rlat(2,1)-rlat(1,1)*rlat(2,3)
+		vx(3)=rlat(1,1)*rlat(2,2)-rlat(1,2)*rlat(2,1)
 
 		vc=vx(1)*rlat(3,1)+vx(2)*rlat(3,2)+vx(3)*rlat(3,3)
 		vc = abs(vc)
@@ -331,9 +363,9 @@ subroutine alat2D(rlat,a0)
 	real :: a0
 	real,dimension(3) :: vsize
 
-	call vecsize(rlat(1,:),vsize(1))
-	call vecsize(rlat(2,:),vsize(2))
-	call vecsize(rlat(3,:),vsize(3))
+	vsize(1)=sqrt(rlat(1,1)**2+rlat(1,2)**2+rlat(1,3)**2)
+	vsize(2)=sqrt(rlat(2,1)**2+rlat(2,2)**2+rlat(2,3)**2)
+	vsize(3)=sqrt(rlat(3,1)**2+rlat(3,2)**2+rlat(3,3)**2)
 
 		a0 = 0.5*(vsize(1)+vsize(2))
 
@@ -347,9 +379,9 @@ subroutine alat(systype,rlat,a0)
 
 	real,dimension(3) :: vsize
 
-	call vecsize(rlat(1,:),vsize(1))
-	call vecsize(rlat(2,:),vsize(2))
-	call vecsize(rlat(3,:),vsize(3))
+	vsize(1)=sqrt(rlat(1,1)**2+rlat(1,2)**2+rlat(1,3)**2)
+	vsize(2)=sqrt(rlat(2,1)**2+rlat(2,2)**2+rlat(2,3)**2)
+	vsize(3)=sqrt(rlat(3,1)**2+rlat(3,2)**2+rlat(3,3)**2)
 
 
 	if (systype .eq. "2D") then
@@ -713,9 +745,5 @@ function fermidisteh(ec,ev,temp) !distribuição fermi-dirac -> fv-fc
 
 
 end function fermidisteh
-
-
-
-
 
 

@@ -18,8 +18,10 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	complex,allocatable,dimension(:,:,:) :: vector
 
 	real,allocatable,dimension(:,:) :: kpt !pontos k do grid
+	real,allocatable,dimension(:,:) :: kpt_bse
 
 	integer,allocatable,dimension(:,:) :: stt
+	integer,allocatable,dimension(:,:) :: stt_bse
 
 	real,allocatable,dimension(:) :: eaux !variavel auxiliar para energia
 	complex,allocatable,dimension(:,:) :: vaux !variavel auxiliar para os autovetores
@@ -269,7 +271,8 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 
 	allocate(eaux(w90basis),vaux(w90basis,w90basis))
-	allocate(eigv(ngkpt,nc+nv),vector(ngkpt,nc+nv,w90basis))
+	! Keep the orbital index first so BSE eigenvector arguments are contiguous.
+	allocate(eigv(ngkpt,nc+nv),vector(w90basis,nc+nv,ngkpt))
 	allocate(nocpk(ngkpt))
 
 	allocate (stt(ngkpt*nc*nv,4))
@@ -438,7 +441,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 				do h=1,w90basis
 
-					vector(i,l,h)=vaux(nocpk(i)-nv+l,h)
+					vector(h,l,i)=vaux(nocpk(i)-nv+l,h)
 
 
 				end do
@@ -538,8 +541,8 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		ev = eigv(stt(i,4),stt(i,2))
 		fdeh(i) = fermidisteh(ec,ev,temp)
 
-		call optsp(eigv(stt(i,4),stt(i,2)),vector(stt(i,4),stt(i,2),:),&
-		     eigv(stt(i,4),stt(i,3)),vector(stt(i,4),stt(i,3),:),&
+		call optsp(eigv(stt(i,4),stt(i,2)),vector(:,stt(i,2),stt(i,4)),&
+		     eigv(stt(i,4),stt(i,3)),vector(:,stt(i,3),stt(i,4)),&
 		     kpt(stt(i,4),1),kpt(stt(i,4),2),kpt(stt(i,4),3),ffactor,sme,&
 		     w90basis,nvec,rlat,rvec,hopmatrices,&
 		     ihopmatrices,hrx(i),hry(i),hrz(i))
@@ -600,6 +603,17 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	call flush(300)
 
 	deallocate(vecres)
+	allocate(stt_bse(4,dimbse),kpt_bse(3,ngkpt))
+	do i=1,dimbse
+		do j=1,4
+			stt_bse(j,i) = stt(i,j)
+		end do
+	end do
+	do i=1,ngkpt
+		do j=1,3
+			kpt_bse(j,i) = kpt(i,j)
+		end do
+	end do
 	
 	!go to 789
 
@@ -625,12 +639,12 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 			do j=i,dimbse
 
-  hbse(i,j)= matrizelbsetemp(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,rlat,stt(i,:),eigv(stt(i,4)&
-  	    ,stt(i,3)),eigv(stt(i,4),stt(i,2)),vector(stt(i,4)&
-            ,stt(i,3),:) ,vector(stt(i,4),stt(i,2),:),kpt(stt(i,4),:),stt(j,:),eigv(stt(j,4),stt(j,3))&
-  	    ,eigv(stt(j,4),stt(j,2)) &
-            ,vector(stt(j,4),stt(j,3),:),vector(stt(j,4),stt(j,2),:),kpt(stt(j,4),:),temp,dft,nvec,rvec,&
-            sk(:,:,stt(i,4)),sk(:,:,stt(j,4)))
+  hbse(i,j)= matrizelbsetemp(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,rlat,stt_bse(:,i),eigv(stt_bse(4,i)&
+	    ,stt_bse(3,i)),eigv(stt_bse(4,i),stt_bse(2,i)),vector(:,stt_bse(3,i),stt_bse(4,i)),&
+            vector(:,stt_bse(2,i),stt_bse(4,i)),kpt_bse(:,stt_bse(4,i)),stt_bse(:,j),eigv(stt_bse(4,j),stt_bse(3,j))&
+	    ,eigv(stt_bse(4,j),stt_bse(2,j)) &
+            ,vector(:,stt_bse(3,j),stt_bse(4,j)),vector(:,stt_bse(2,j),stt_bse(4,j)),kpt_bse(:,stt_bse(4,j)),temp,dft,nvec,rvec,&
+            sk(:,:,stt_bse(4,i)),sk(:,:,stt_bse(4,j)))
 
 			end do
 		end do
@@ -892,11 +906,11 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	deallocate(actxx,actxy,actxz,actyy,actyz,actzz)
 	deallocate(actsp,actsm)
 
-	deallocate(hbse,W,stt,nocpk)
+	deallocate(hbse,W,stt,stt_bse,nocpk)
 	deallocate(fdeh)
 	deallocate(ovp)	
 
-	deallocate(kpt)
+	deallocate(kpt,kpt_bse)
 	
 	if (dft .eq. "S") then
 	

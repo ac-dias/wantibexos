@@ -623,9 +623,9 @@ function v0dt(kpt1,kpt2,ngrid,rlat,tolr)
 
 	vbz= 1./((ngrid(1)*ngrid(2)*ngrid(3))*(vc))
 
-	call vecsize(rlat(1,:),vsize(1))
-	call vecsize(rlat(2,:),vsize(2))
-	call vecsize(rlat(3,:),vsize(3))
+	vsize(1)=sqrt(rlat(1,1)**2+rlat(1,2)**2+rlat(1,3)**2)
+	vsize(2)=sqrt(rlat(2,1)**2+rlat(2,2)**2+rlat(2,3)**2)
+	vsize(3)=sqrt(rlat(3,1)**2+rlat(3,2)**2+rlat(3,3)**2)
 
 	cr = MIN(vsize(1),vsize(2),vsize(3))
 	cr = 0.5*cr
