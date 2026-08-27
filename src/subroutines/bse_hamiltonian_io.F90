@@ -17,6 +17,13 @@ subroutine bse_hamiltonian_memory_report(unit,label,nrows,ncols)
 	write(unit,*) 'dimensions:',nrows,'x',ncols,'complex(single) elements:',elements
 	write(unit,"(A,F12.3,A,F12.3,A)") 'memory:',mib,' MiB  (',gib,' GiB)'
 	call flush(unit)
+	if (unit /= 6) then
+		write(6,*) 'BSE Hamiltonian memory estimate before allocation:'
+		write(6,*) 'storage:',trim(label)
+		write(6,*) 'dimensions:',nrows,'x',ncols,'complex(single) elements:',elements
+		write(6,"(A,F12.3,A,F12.3,A)") 'memory:',mib,' MiB  (',gib,' GiB)'
+		call flush(6)
+	end if
 
 end subroutine bse_hamiltonian_memory_report
 

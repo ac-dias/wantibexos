@@ -124,12 +124,12 @@ path-distance/energy output and `KLABELS-BSE.dat` file.
 BSE memory estimates
 --------------------
 
-Before allocating a dense BSE Hamiltonian, the BSE log now reports its exact
-storage as a default-precision complex matrix (8 bytes per element). Optical
-BSE reports both the global dense equivalent and, for a distributed run, the
-rank-zero local block. Finite-Q BSE reports the full per-active-rank matrix,
-because MPI-over-Q assigns complete Q sectors rather than distributing one
-Hamiltonian.
+Before allocating a dense BSE Hamiltonian, the BSE log and standard output now
+report its exact storage as a default-precision complex matrix (8 bytes per
+element). Optical BSE reports both the global dense equivalent and, for a
+distributed run, the rank-zero local block. Finite-Q BSE reports the full
+per-active-rank matrix, because MPI-over-Q assigns complete Q sectors rather
+than distributing one Hamiltonian.
 
 For a pre-run estimate, use:
 
