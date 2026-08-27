@@ -98,6 +98,53 @@ previous valid checkpoint.  Checkpoints are native binary files: reuse them
 only with the same executable/platform and unchanged physical BSE inputs.  Use
 a different prefix or disable the option for a fresh calculation.
 
+BSE q-grid sampling
+-------------------
+
+`KPATH_BSE=` normally points to the legacy q-path file: an even number of
+endpoints, then the number of points per segment, then the endpoint records.
+That format is unchanged. The same file can now instead request a uniform
+reciprocal-space grid:
+
+```
+GRID
+8 8 1
+0.0 0.0 0.0
+```
+
+The first line selects grid mode. The second gives `Nq1 Nq2 Nq3`; the optional
+third line is a shift in units of a grid spacing and defaults to `0 0 0`.
+Thus the example covers an 8-by-8-by-1 grid and includes Gamma. A shift of
+`0.5 0.5 0.0` creates a half-grid-shifted mesh. The grid is enumerated in the
+reciprocal-lattice basis and passed to the finite-Q BSE solver in Cartesian
+coordinates. In grid mode `bands_bse.dat` has four columns: Cartesian
+`qx qy qz` and exciton energy. Path mode retains its existing two-column
+path-distance/energy output and `KLABELS-BSE.dat` file.
+
+BSE memory estimates
+--------------------
+
+Before allocating a dense BSE Hamiltonian, the BSE log now reports its exact
+storage as a default-precision complex matrix (8 bytes per element). Optical
+BSE reports both the global dense equivalent and, for a distributed run, the
+rank-zero local block. Finite-Q BSE reports the full per-active-rank matrix,
+because MPI-over-Q assigns complete Q sectors rather than distributing one
+Hamiltonian.
+
+For a pre-run estimate, use:
+
+```
+python3 utils/bse_memory_estimate.py input.dat --nodes 4 --threads 8
+```
+
+The script reads `NGX`, `NGY`, `NGZ`, `NBANDSC`, `NBANDSV`, `BSE_ALGO`,
+`PARAMS_FILE`, and (for `BSE_BND`) `KPATH_BSE`. `--nodes` means MPI ranks, not
+physical compute nodes. It reports the Hamiltonian, explicit source-array peak
+per rank, and a conservative planning value that includes source-level
+OpenMP eigensystem scratch and a configurable safety factor. MPI/OpenMP,
+BLAS, ELPA, allocator, and operating-system overhead are outside the source
+model; add a per-thread reserve with `--external-thread-mib` when appropriate.
+
 The Siesta/Honpas Hamiltonian extract script (siesta2wtb.py) was tested in SISL version 0.16.2, could not be work in other versions.
 
 Citing

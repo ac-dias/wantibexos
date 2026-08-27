@@ -156,6 +156,40 @@ subroutine kpath(outputfolder,rlat1,rlat2,rlat3,nks,ks,npts,kpt)
 
 end subroutine kpath
 
+subroutine qgridbse(rlat1,rlat2,rlat3,nqgrid,shift,qpt)
+
+	implicit none
+
+	integer,dimension(3) :: nqgrid
+	integer :: i,j,k,counter
+	real,dimension(3) :: rlat1,rlat2,rlat3,shift
+	real,dimension(3) :: blat1,blat2,blat3
+	real,dimension(nqgrid(1)*nqgrid(2)*nqgrid(3),4) :: qpt
+
+	call recvec(rlat1,rlat2,rlat3,blat1,blat2,blat3)
+
+	counter=1
+	do i=0,nqgrid(1)-1
+		do j=0,nqgrid(2)-1
+			do k=0,nqgrid(3)-1
+				! qpt(:,2:4) is Cartesian.  shift is in units of a grid spacing.
+				qpt(counter,1)=real(counter)
+				qpt(counter,2)=((real(i)+shift(1))/real(nqgrid(1)))*blat1(1) &
+					+ ((real(j)+shift(2))/real(nqgrid(2)))*blat2(1) &
+					+ ((real(k)+shift(3))/real(nqgrid(3)))*blat3(1)
+				qpt(counter,3)=((real(i)+shift(1))/real(nqgrid(1)))*blat1(2) &
+					+ ((real(j)+shift(2))/real(nqgrid(2)))*blat2(2) &
+					+ ((real(k)+shift(3))/real(nqgrid(3)))*blat3(2)
+				qpt(counter,4)=((real(i)+shift(1))/real(nqgrid(1)))*blat1(3) &
+					+ ((real(j)+shift(2))/real(nqgrid(2)))*blat2(3) &
+					+ ((real(k)+shift(3))/real(nqgrid(3)))*blat3(3)
+				counter=counter+1
+			end do
+		end do
+	end do
+
+end subroutine qgridbse
+
 subroutine kpathbse(outputfolder,rlat1,rlat2,rlat3,nks,ks,npts,kpt)
 
 	implicit none
@@ -631,7 +665,6 @@ subroutine monhkhorst_pack_adp(n1,n2,n3,shift,rlat1,rlat2,rlat3,kpt)
 	end do
 
 end subroutine monhkhorst_pack_adp
-
 
 
 

@@ -1,3 +1,25 @@
+subroutine bse_hamiltonian_memory_report(unit,label,nrows,ncols)
+
+	implicit none
+
+	integer,intent(in) :: unit,nrows,ncols
+	character(len=*),intent(in) :: label
+	integer(kind=8) :: elements,bytes
+	real(kind=8) :: mib,gib
+
+	elements = int(nrows,kind=8)*int(ncols,kind=8)
+	bytes = 8_8*elements
+	mib = real(bytes,kind=8)/(1024.0d0*1024.0d0)
+	gib = mib/1024.0d0
+
+	write(unit,*) 'BSE Hamiltonian memory estimate before allocation:'
+	write(unit,*) 'storage:',trim(label)
+	write(unit,*) 'dimensions:',nrows,'x',ncols,'complex(single) elements:',elements
+	write(unit,"(A,F12.3,A,F12.3,A)") 'memory:',mib,' MiB  (',gib,' GiB)'
+	call flush(unit)
+
+end subroutine bse_hamiltonian_memory_report
+
 subroutine bse_hamiltonian_write(filename,metadata,nrows,ncols,hbse,ok)
 
 	implicit none

@@ -279,6 +279,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	allocate(hrx(dimbse),hry(dimbse),hrz(dimbse),hrsp(dimbse),hrsm(dimbse))
 	allocate(fdeh(dimbse))
 
+	call bse_hamiltonian_memory_report(300,'BSE Hamiltonian',dimbse,dimbse)
 	allocate(hbse(dimbse,dimbse))
 
 

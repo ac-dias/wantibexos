@@ -698,6 +698,9 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	call cpu_time(task_start)
 #endif
 
+	if (Node == 0) then
+		call bse_hamiltonian_memory_report(300,'BSE Hamiltonian, global dense equivalent',dimbse,dimbse)
+	end if
 
     if (Nodes == 1) then
 		bseham_metadata = (/ dimbse,1,1 /)
@@ -762,6 +765,9 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		locr = numroc(dimbse, mb, myrow, 0, nprow)
 		locc = numroc(dimbse, nb, mycol, 0, npcol)
 		lld = max(1,locr)
+		if (Node == 0) then
+			call bse_hamiltonian_memory_report(300,'BSE Hamiltonian on MPI rank 0',lld,max(1,locc))
+		end if
 		allocate(hbse_dist(lld,max(1,locc)))
 		call DESCINIT(desca, dimbse, dimbse, mb, nb, 0, 0, blacs_ctxt, lld, INFO)
 		call DESCINIT(descz, dimbse, dimbse, mb, nb, 0, 0, blacs_ctxt, lld, INFO)

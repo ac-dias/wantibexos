@@ -44,6 +44,8 @@ subroutine bsebndstemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	real :: a,r0,ed
 
 	integer :: ngkpt,nqpath,checkpoints_loaded,checkpoints_restored
+	integer,dimension(3) :: nqgrid
+	real,dimension(3) :: qshift
 
 	!variaveis relacionadas a marcacao do tempo
 
@@ -64,9 +66,11 @@ subroutine bsebndstemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	character(len=70) :: bsekpathcheckpointfile
 	character(len=1) :: dft
 	integer :: Node,Nodes,MPIError
-	logical :: bsekpathcheckpoint,checkpoint_ok,checkpoint_loaded
+	logical :: bsekpathcheckpoint,checkpoint_ok,checkpoint_loaded,qgrid
 	character(len=240) :: checkpoint_path
 	character(len=8) :: checkpoint_label
+	character(len=256) :: qinput
+	character(len=16) :: qsampling
 	
 	real,dimension(3) :: mag
 	complex,allocatable,dimension(:,:,:) :: sk,skq		
@@ -179,32 +183,51 @@ subroutine bsebndstemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	end select
 	!ediel(2) = edielh
 
-	read(500,*) nks
-	read(500,*) nkpts
+	! KPATH_BSE accepts its original path format, or the explicit GRID format:
+	!   GRID
+	!   nq1 nq2 nq3
+	!   shift1 shift2 shift3     ! optional, defaults to 0 0 0
+	! A grid shift is expressed in units of a grid spacing along each reciprocal
+	! lattice vector, so shift=0 includes Gamma and shift=0.5 is half-shifted.
+	qgrid=.false.
+	qshift=0.0
+	read(500,'(A)',IOSTAT=erro) qinput
+	if (erro .ne. 0) stop "Error reading BSE q-point sampling"
+	read(qinput,*,IOSTAT=erro) qsampling
+	if (erro .ne. 0) stop "Error reading BSE q-point sampling mode"
 
-	allocate(ks(nks,3))
-
-	do i=1,nks
-
-		read(500,*) ks(i,1),ks(i,2),ks(i,3)
-	
-	end do
-
-
-
-	!termino leitura parametros
-
-
-	!parametros do calculo
-
-
-	!termino parametros calculo 
-
-
-
+	select case (trim(qsampling))
+	case ("GRID","grid")
+		qgrid=.true.
+		read(500,*,IOSTAT=erro) nqgrid
+		if (erro .ne. 0 .or. any(nqgrid .le. 0)) stop "Invalid BSE q-grid dimensions"
+		read(500,*,IOSTAT=erro) qshift
+		if (erro .gt. 0) stop "Invalid BSE q-grid shift"
+		if (erro .lt. 0) qshift=0.0
+	case ("PATH","path")
+		read(500,*,IOSTAT=erro) nks
+		if (erro .ne. 0) stop "Error reading BSE q-path endpoints"
+	case default
+		! Backward-compatible input: the first record is the endpoint count.
+		read(qinput,*,IOSTAT=erro) nks
+		if (erro .ne. 0) stop "Unknown BSE q-point sampling mode"
+	end select
 
 	ngkpt = ngrid(1)*ngrid(2)*ngrid(3)
-	nqpath=(nks/2)*nkpts
+	if (qgrid) then
+		nqpath=nqgrid(1)*nqgrid(2)*nqgrid(3)
+	else
+		read(500,*,IOSTAT=erro) nkpts
+		if (erro .ne. 0 .or. nks .le. 0 .or. mod(nks,2) .ne. 0 .or. nkpts .lt. 2) then
+			stop "Invalid BSE q-path; use an even endpoint count and at least two points"
+		end if
+		allocate(ks(nks,3))
+		do i=1,nks
+			read(500,*,IOSTAT=erro) ks(i,1),ks(i,2),ks(i,3)
+			if (erro .ne. 0) stop "Error reading BSE q-path endpoint"
+		end do
+		nqpath=(nks/2)*nkpts
+	end if
 	dimbse = ngkpt*nc*nv
 
 	!call alat(systype,rlat,a)
@@ -219,12 +242,14 @@ subroutine bsebndstemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		
 	!end if
 
-	!definindo kpath
-	!allocate(qauxv(nkpts*(nks-1),4))
 	allocate(qauxv(nqpath,4))
 
 	if (Node .eq. 0) then
-		call kpathbse(outputfolder,rlat(1,:),rlat(2,:),rlat(3,:),nks,ks,nkpts,qauxv)
+		if (qgrid) then
+			call qgridbse(rlat(1,:),rlat(2,:),rlat(3,:),nqgrid,qshift,qauxv)
+		else
+			call kpathbse(outputfolder,rlat(1,:),rlat(2,:),rlat(3,:),nks,ks,nkpts,qauxv)
+		end if
 	end if
 #ifdef MPI
 	call MPI_BCAST(qauxv,4*nqpath,MPI_REAL,0,MPI_COMM_WORLD,MPIError)
@@ -249,8 +274,14 @@ subroutine bsebndstemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	write(300,*)
 	write(300,*) 'BSE_ALGO:',bsealgo	
 	write(300,*) 'BSE_KPATH_MPI:',bsekpathmpi
+	if (qgrid) then
+		write(300,*) 'BSE q-point sampling: GRID',nqgrid(1),nqgrid(2),nqgrid(3)
+		write(300,*) 'BSE q-grid shift:',qshift(1),qshift(2),qshift(3)
+	else
+		write(300,*) 'BSE q-point sampling: PATH'
+	end if
 	write(300,*)
-	write(300,*) 'number of kpoints in the path:','   ',nqpath
+	write(300,*) 'number of q points:','   ',nqpath
 	write(300,*)
 	write(300,*)
 	write(300,*) 'begin','  ','month',values(2),'day',values(3),'',values(5),'hours',values(6),'min',values(7),'seg'
@@ -389,6 +420,9 @@ subroutine bsebndstemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	allocate(exk(dimbse,nqpath))
 	exk=0.0
 	checkpoints_loaded=0
+	if (Node .eq. 0) then
+		call bse_hamiltonian_memory_report(300,'BSE Q-point Hamiltonian per active MPI rank',dimbse,dimbse)
+	end if
 
 
 
@@ -897,7 +931,11 @@ hbse(i2,j)= matrizelbsekqtemp(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,q,r
 
 		do i=1,nqpath
 
-			write(400,*) real(qauxv(i,1)),exk(i2,i)
+			if (qgrid) then
+				write(400,*) qauxv(i,2),qauxv(i,3),qauxv(i,4),exk(i2,i)
+			else
+				write(400,*) real(qauxv(i,1)),exk(i2,i)
+			end if
 			call flush(400)
 
 		end do
