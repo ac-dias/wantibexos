@@ -138,6 +138,7 @@ subroutine w0coul(qpt,nomega,rlat,ngrid,nk,coultype,ediel,lc,ez,w,r0,tolr,pol,vq
 	
 	real :: v2dkgw,vcoulgw,v3dielgw,v2dgw,v2dielgw,v2dtgw,vcoulgwt
 	real :: v0dtgw,v2dt2gw,v2drkgw,v2dohonogw,v1dtgw,v1dgw,v1dielgw
+	real :: v3davggw,v2dtavggw
 	
 	v0 = 0.0
 	
@@ -150,6 +151,10 @@ subroutine w0coul(qpt,nomega,rlat,ngrid,nk,coultype,ediel,lc,ez,w,r0,tolr,pol,vq
 	case("V3D")
 
 		vq= vcoulgw(qpt,v0,rlat,ngrid,tolr)
+		
+	case("V3DA")
+
+		vq= v3davggw(qpt,v0,ngrid,rlat,tolr)		
 		
 	case("V3DT")
 
@@ -170,6 +175,10 @@ subroutine w0coul(qpt,nomega,rlat,ngrid,nk,coultype,ediel,lc,ez,w,r0,tolr,pol,vq
 	case("V2DT")
 
 		vq= v2dtgw(qpt,v0,ngrid,rlat,tolr)
+		
+	case("V2DTA")
+
+		vq= v2dtavggw(qpt,v0,ngrid,rlat,tolr)		
 
 	case("V2DT2")
 
