@@ -91,7 +91,7 @@ function matrizelbsetemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1
 
 	case("V2DTAVG")
 
-		vcoul1= v2dtavg(kpt1,kpt2,ngrid,rlat,tolr)
+		vcoul1= v2dtavg(kpt1,kpt2,ediel,ngrid,rlat,tolr)
 
 	case("V2DT2")
 
@@ -210,7 +210,7 @@ function matrizelbsekqtemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,
 
 	real :: modk,modq
 
-	real,dimension(3) :: ediel
+	real,dimension(3) :: ediel,ediel_bare
 
 	real :: lc
 
@@ -228,6 +228,7 @@ function matrizelbsekqtemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,
 	real :: temp, fermidisteh
 
 	v0 = 0.0
+	ediel_bare = 1.0
 
 	vq = q(2:4)
 
@@ -282,8 +283,8 @@ function matrizelbsekqtemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,
 
 	case("V2DTAVG")
 
-		vcoulk= v2dtavg(kpt1,kpt2,ngrid,rlat,tolr)
-		vcoulq= v2dtavg(vq,v0,ngrid,rlat,tolr)
+		vcoulk= v2dtavg(kpt1,kpt2,ediel,ngrid,rlat,tolr)
+		vcoulq= v2dtavg(vq,v0,ediel_bare,ngrid,rlat,tolr)
 
 	case("V2DT2")
 
@@ -542,9 +543,6 @@ subroutine dielbseptemp(nthread,dimse,excitonvec,hopt1,hopt2,fdeh,activity)
 
 
 end subroutine dielbseptemp
-
-
-
 
 
 

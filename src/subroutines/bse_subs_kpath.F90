@@ -37,7 +37,7 @@ function matrizelbsekq(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,est1
 
 	real :: modk,modq
 
-	real,dimension(3) :: ediel
+	real,dimension(3) :: ediel,ediel_bare
 
 	real :: lc
 
@@ -53,6 +53,7 @@ function matrizelbsekq(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,est1
 	real :: r0
 
 	v0 = 0.0
+	ediel_bare = 1.0
 
 	vq = q(2:4)
 
@@ -107,8 +108,8 @@ function matrizelbsekq(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,est1
 
 	case("V2DTAVG")
 
-		vcoulk= v2dtavg(kpt1,kpt2,ngrid,rlat,tolr)
-		vcoulq= v2dtavg(vq,v0,ngrid,rlat,tolr)
+		vcoulk= v2dtavg(kpt1,kpt2,ediel,ngrid,rlat,tolr)
+		vcoulq= v2dtavg(vq,v0,ediel_bare,ngrid,rlat,tolr)
 
 	case("V2DT2")
 
@@ -308,5 +309,3 @@ end if
 
 
 end function matrizelbsekq
-
-

@@ -125,7 +125,8 @@ end function
 ! Three-dimensional Coulomb potential with the q=0 value replaced by the
 ! average of 1/q**2 over the reciprocal-space sampling cell.  The scalar ed
 ! permits both the bare (ed=1) and dielectric-screened variants to share the
-! same q=0 quadrature.
+! same q=0 quadrature.  cic=-e^2/(2*epsilon_0), whereas the three-dimensional
+! Fourier kernel is -e^2/(epsilon_0*q^2), hence the factor 2/ed below.
 function v3davg(kpt1,kpt2,ed,rlat,ngrid,tolr)
 
 	implicit none
@@ -161,10 +162,10 @@ function v3davg(kpt1,kpt2,ed,rlat,ngrid,tolr)
 			cached_ngrid=ngrid
 			cached_rlat=rlat
 		end if
-		v3davg=cached_value/ed
+		v3davg=(2.0/ed)*cached_value
 		!$omp end critical (v3davg_cache)
 	else
-		v3davg=vbz*(cic/ed)*(1.0/(modk*modk))
+		v3davg=vbz*((2.0*cic)/ed)*(1.0/(modk*modk))
 	end if
 
 end function v3davg
@@ -455,8 +456,10 @@ function v2dtavg(kpt1,kpt2,ediel,ngrid,rlat,tolr)
 	gpar=sqrt(vkpt(1)*vkpt(1)+vkpt(2)*vkpt(2))
 	rc=0.5*rlat(3,3)
 
-        ed = ediel(2)
-	factor=2.0/ed
+		ed = ediel(2)
+		! cic=-e^2/(2*epsilon_0); the slab-truncated 3D Fourier
+		! interaction therefore carries 2*cic/ed.
+		factor=2.0/ed
 
 	if ((gpar .lt. tolr) .and. (gz .lt. tolr)) then
 		! The BSE construction is OpenMP parallel. Cache the mesh-dependent

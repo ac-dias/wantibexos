@@ -220,6 +220,7 @@ subroutine bse_hamiltonian_write_parallel(filename,metadata,dimbse,hbse,locr,loc
 	integer :: char_bytes,integer_bytes,complex_bytes,darray_rank
 	integer :: gsizes(2),distribs(2),dargs(2),psizes(2)
 	integer(kind=MPI_OFFSET_KIND) :: header_bytes,file_bytes
+	integer,parameter :: bse_mpi_block_elements=16777216
 
 	ok = .false.
 	call MPI_Type_size(MPI_CHARACTER,char_bytes,mpi_ierr)
@@ -268,7 +269,8 @@ subroutine bse_hamiltonian_write_parallel(filename,metadata,dimbse,hbse,locr,loc
 		call MPI_File_set_view(file_handle,header_bytes,MPI_COMPLEX,filetype,'native',MPI_INFO_NULL,io_status)
 	end if
 	if (io_status == MPI_SUCCESS) then
-		call MPI_File_write_all(file_handle,hbse,locr*locc,MPI_COMPLEX,status,io_status)
+		call bse_mpi_file_write_all_complex_blocks(file_handle,hbse, &
+			int(locr,kind=8)*int(locc,kind=8),comm,bse_mpi_block_elements,io_status)
 	end if
 	if (filetype /= MPI_DATATYPE_NULL) then
 		call MPI_Type_free(filetype,mpi_ierr)
@@ -300,6 +302,7 @@ subroutine bse_hamiltonian_read_parallel(filename,metadata,dimbse,hbse,locr,locc
 	integer :: gsizes(2),distribs(2),dargs(2),psizes(2)
 	integer(kind=MPI_OFFSET_KIND) :: header_bytes,file_bytes,actual_file_bytes
 	logical :: header_ok
+	integer,parameter :: bse_mpi_block_elements=16777216
 
 	ok = .false.
 	call MPI_Type_size(MPI_CHARACTER,char_bytes,mpi_ierr)
@@ -347,7 +350,8 @@ subroutine bse_hamiltonian_read_parallel(filename,metadata,dimbse,hbse,locr,locc
 		call MPI_File_set_view(file_handle,header_bytes,MPI_COMPLEX,filetype,'native',MPI_INFO_NULL,io_status)
 	end if
 	if (io_status == MPI_SUCCESS) then
-		call MPI_File_read_all(file_handle,hbse,locr*locc,MPI_COMPLEX,status,io_status)
+		call bse_mpi_file_read_all_complex_blocks(file_handle,hbse, &
+			int(locr,kind=8)*int(locc,kind=8),comm,bse_mpi_block_elements,io_status)
 	end if
 	if (filetype /= MPI_DATATYPE_NULL) then
 		call MPI_Type_free(filetype,mpi_ierr)
@@ -358,4 +362,225 @@ subroutine bse_hamiltonian_read_parallel(filename,metadata,dimbse,hbse,locr,locc
 	ok = (io_status == MPI_SUCCESS)
 
 end subroutine bse_hamiltonian_read_parallel
+
+
+subroutine bse_mpi_bcast_real_blocks(values,element_count,root,comm,mpierror,block_elements)
+
+	use mpi
+	implicit none
+
+	real :: values(*)
+	integer(kind=8),intent(in) :: element_count
+	integer,intent(in) :: root,comm,block_elements
+	integer,intent(out) :: mpierror
+	integer(kind=8) :: offset,chunk_count
+	integer :: chunk
+
+	mpierror=MPI_SUCCESS
+	if (block_elements <= 0) then
+		mpierror=MPI_ERR_COUNT
+		return
+	end if
+
+	offset=0_8
+	do while (offset < element_count)
+		chunk_count=min(element_count-offset,int(block_elements,kind=8))
+		chunk=int(chunk_count)
+		call MPI_BCAST(values(offset+1_8),chunk,MPI_REAL,root,comm,mpierror)
+		if (mpierror /= MPI_SUCCESS) return
+		offset=offset+chunk_count
+	end do
+
+end subroutine bse_mpi_bcast_real_blocks
+
+
+subroutine bse_mpi_bcast_complex_blocks(values,element_count,root,comm,mpierror,block_elements)
+
+	use mpi
+	implicit none
+
+	complex :: values(*)
+	integer(kind=8),intent(in) :: element_count
+	integer,intent(in) :: root,comm,block_elements
+	integer,intent(out) :: mpierror
+	integer(kind=8) :: offset,chunk_count
+	integer :: chunk
+
+	mpierror=MPI_SUCCESS
+	if (block_elements <= 0) then
+		mpierror=MPI_ERR_COUNT
+		return
+	end if
+
+	offset=0_8
+	do while (offset < element_count)
+		chunk_count=min(element_count-offset,int(block_elements,kind=8))
+		chunk=int(chunk_count)
+		call MPI_BCAST(values(offset+1_8),chunk,MPI_COMPLEX,root,comm,mpierror)
+		if (mpierror /= MPI_SUCCESS) return
+		offset=offset+chunk_count
+	end do
+
+end subroutine bse_mpi_bcast_complex_blocks
+
+
+subroutine bse_mpi_reduce_real_sum_blocks(values,element_count,root,rank,comm,mpierror,block_elements)
+
+	use mpi
+	implicit none
+
+	real :: values(*)
+	integer(kind=8),intent(in) :: element_count
+	integer,intent(in) :: root,rank,comm,block_elements
+	integer,intent(out) :: mpierror
+	integer(kind=8) :: offset,chunk_count
+	integer :: chunk
+
+	mpierror=MPI_SUCCESS
+	if (block_elements <= 0) then
+		mpierror=MPI_ERR_COUNT
+		return
+	end if
+
+	offset=0_8
+	do while (offset < element_count)
+		chunk_count=min(element_count-offset,int(block_elements,kind=8))
+		chunk=int(chunk_count)
+		if (rank == root) then
+			call MPI_REDUCE(MPI_IN_PLACE,values(offset+1_8),chunk,MPI_REAL,MPI_SUM,root,comm,mpierror)
+		else
+			call MPI_REDUCE(values(offset+1_8),values(offset+1_8),chunk,MPI_REAL,MPI_SUM,root,comm,mpierror)
+		end if
+		if (mpierror /= MPI_SUCCESS) return
+		offset=offset+chunk_count
+	end do
+
+end subroutine bse_mpi_reduce_real_sum_blocks
+
+
+subroutine bse_mpi_allreduce_complex_sum_blocks(values,element_count,comm,mpierror,block_elements)
+
+	use mpi
+	implicit none
+
+	complex :: values(*)
+	integer(kind=8),intent(in) :: element_count
+	integer,intent(in) :: comm,block_elements
+	integer,intent(out) :: mpierror
+	integer(kind=8) :: offset,chunk_count
+	integer :: chunk
+
+	mpierror=MPI_SUCCESS
+	if (block_elements <= 0) then
+		mpierror=MPI_ERR_COUNT
+		return
+	end if
+
+	offset=0_8
+	do while (offset < element_count)
+		chunk_count=min(element_count-offset,int(block_elements,kind=8))
+		chunk=int(chunk_count)
+		call MPI_ALLREDUCE(MPI_IN_PLACE,values(offset+1_8),chunk,MPI_COMPLEX,MPI_SUM,comm,mpierror)
+		if (mpierror /= MPI_SUCCESS) return
+		offset=offset+chunk_count
+	end do
+
+end subroutine bse_mpi_allreduce_complex_sum_blocks
+
+
+subroutine bse_mpi_file_write_all_complex_blocks(file_handle,values,element_count,comm,block_elements,mpierror)
+
+	use mpi
+	implicit none
+
+	integer,intent(in) :: file_handle,comm,block_elements
+	complex :: values(*)
+	integer(kind=8),intent(in) :: element_count
+	integer,intent(out) :: mpierror
+	integer(kind=8) :: offset,chunk_count,max_element_count
+	integer :: chunk,status(MPI_STATUS_SIZE)
+
+	mpierror=MPI_SUCCESS
+	if (block_elements <= 0) then
+		mpierror=MPI_ERR_COUNT
+		return
+	end if
+
+	call MPI_ALLREDUCE(element_count,max_element_count,1,MPI_INTEGER8,MPI_MAX,comm,mpierror)
+	if (mpierror /= MPI_SUCCESS) return
+
+	offset=0_8
+	do while (offset < max_element_count)
+		chunk=0
+		if (offset < element_count) then
+			chunk_count=min(element_count-offset,int(block_elements,kind=8))
+			chunk=int(chunk_count)
+			call MPI_FILE_WRITE_ALL(file_handle,values(offset+1_8),chunk,MPI_COMPLEX,status,mpierror)
+		else
+			! MPI permits a zero count, but keep the Fortran array reference valid.
+			call MPI_FILE_WRITE_ALL(file_handle,values(1),chunk,MPI_COMPLEX,status,mpierror)
+		end if
+		if (mpierror /= MPI_SUCCESS) return
+		offset=offset+int(block_elements,kind=8)
+	end do
+
+end subroutine bse_mpi_file_write_all_complex_blocks
+
+
+subroutine bse_mpi_file_read_all_complex_blocks(file_handle,values,element_count,comm,block_elements,mpierror)
+
+	use mpi
+	implicit none
+
+	integer,intent(in) :: file_handle,comm,block_elements
+	complex :: values(*)
+	integer(kind=8),intent(in) :: element_count
+	integer,intent(out) :: mpierror
+	integer(kind=8) :: offset,chunk_count,max_element_count
+	integer :: chunk,status(MPI_STATUS_SIZE)
+
+	mpierror=MPI_SUCCESS
+	if (block_elements <= 0) then
+		mpierror=MPI_ERR_COUNT
+		return
+	end if
+
+	call MPI_ALLREDUCE(element_count,max_element_count,1,MPI_INTEGER8,MPI_MAX,comm,mpierror)
+	if (mpierror /= MPI_SUCCESS) return
+
+	offset=0_8
+	do while (offset < max_element_count)
+		chunk=0
+		if (offset < element_count) then
+			chunk_count=min(element_count-offset,int(block_elements,kind=8))
+			chunk=int(chunk_count)
+			call MPI_FILE_READ_ALL(file_handle,values(offset+1_8),chunk,MPI_COMPLEX,status,mpierror)
+		else
+			! MPI permits a zero count, but keep the Fortran array reference valid.
+			call MPI_FILE_READ_ALL(file_handle,values(1),chunk,MPI_COMPLEX,status,mpierror)
+		end if
+		if (mpierror /= MPI_SUCCESS) return
+		offset=offset+int(block_elements,kind=8)
+	end do
+
+end subroutine bse_mpi_file_read_all_complex_blocks
+
+
+subroutine bse_mpi_collective_abort(operation,mpierror)
+
+	use mpi
+	implicit none
+
+	character(len=*),intent(in) :: operation
+	integer,intent(in) :: mpierror
+	integer :: rank,abort_error
+
+	call MPI_COMM_RANK(MPI_COMM_WORLD,rank,abort_error)
+	if (rank == 0) then
+		write(*,*) 'MPI collective failed while transferring ',trim(operation),': ',mpierror
+	end if
+	call MPI_ABORT(MPI_COMM_WORLD,1,abort_error)
+	stop
+
+end subroutine bse_mpi_collective_abort
 #endif

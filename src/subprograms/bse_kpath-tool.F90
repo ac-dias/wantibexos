@@ -66,6 +66,10 @@ subroutine bsebnds(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	character(len=70) :: bsekpathcheckpointfile
 	character(len=1) :: dft
 	integer :: Node,Nodes,MPIError
+#ifdef MPI
+	integer,parameter :: bse_mpi_block_elements=16777216
+	integer(kind=8) :: mpi_transfer_elements
+#endif
 	logical :: bsekpathcheckpoint,checkpoint_ok,checkpoint_loaded,qgrid
 	character(len=240) :: checkpoint_path
 	character(len=8) :: checkpoint_label
@@ -247,7 +251,9 @@ subroutine bsebnds(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		end if
 	end if
 #ifdef MPI
-	call MPI_BCAST(qauxv,4*nqpath,MPI_REAL,0,MPI_COMM_WORLD,MPIError)
+	mpi_transfer_elements=int(4,kind=8)*int(nqpath,kind=8)
+	call bse_mpi_bcast_real_blocks(qauxv,mpi_transfer_elements,0,MPI_COMM_WORLD,MPIError,bse_mpi_block_elements)
+	if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('BSE q-path points',MPIError)
 #endif
 
 	!Informações para o arquivo de log do calculo
@@ -889,11 +895,9 @@ hbse(i2,j)= matrizelbsekq(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,q,rlat,
 
 #ifdef MPI
 	if (Nodes .gt. 1) then
-		if (Node .eq. 0) then
-			call MPI_REDUCE(MPI_IN_PLACE,exk,dimbse*nqpath,MPI_REAL,MPI_SUM,0,MPI_COMM_WORLD,MPIError)
-		else
-			call MPI_REDUCE(exk,exk,dimbse*nqpath,MPI_REAL,MPI_SUM,0,MPI_COMM_WORLD,MPIError)
-		end if
+		mpi_transfer_elements=int(dimbse,kind=8)*int(nqpath,kind=8)
+		call bse_mpi_reduce_real_sum_blocks(exk,mpi_transfer_elements,0,Node,MPI_COMM_WORLD,MPIError,bse_mpi_block_elements)
+		if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('BSE q-path eigenvalues',MPIError)
 	end if
 #endif
 

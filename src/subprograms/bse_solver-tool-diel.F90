@@ -19,7 +19,6 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 #endif
 	use omp_lib
 	use hamiltonian_input_variables
-	use iso_fortran_env, only: error_unit
 
 	implicit none
 
@@ -146,8 +145,8 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	integer,dimension(3) :: bseham_metadata
 	character(len=160) :: bseham_path
 #ifdef MPI
-	integer,parameter :: matrix_count_kind = selected_int_kind(18)
-	integer(kind=matrix_count_kind) :: matrix_element_count
+	integer,parameter :: bse_mpi_block_elements=16777216
+	integer(kind=8) :: mpi_transfer_elements
 #endif
 
 	!fim modificacoes versao 2.1
@@ -508,9 +507,15 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 #ifdef MPI
 	call MPI_BCAST(nocpk, ngkpt, MPI_INTEGER, 0, MPI_COMM_WORLD, MPIError)
-	call MPI_BCAST(eigv, ngkpt*(nc+nv), MPI_REAL, 0, MPI_COMM_WORLD, MPIError)
-	call MPI_BCAST(vector, ngkpt*(nc+nv)*w90basis, MPI_COMPLEX, 0, MPI_COMM_WORLD, MPIError)
+	if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('single-particle band indices',MPIError)
+	mpi_transfer_elements=int(ngkpt,kind=8)*int(nc+nv,kind=8)
+	call bse_mpi_bcast_real_blocks(eigv,mpi_transfer_elements,0,MPI_COMM_WORLD,MPIError,bse_mpi_block_elements)
+	if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('single-particle eigenvalues',MPIError)
+	mpi_transfer_elements=mpi_transfer_elements*int(w90basis,kind=8)
+	call bse_mpi_bcast_complex_blocks(vector,mpi_transfer_elements,0,MPI_COMM_WORLD,MPIError,bse_mpi_block_elements)
+	if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('single-particle eigenvectors',MPIError)
 	call MPI_BCAST(egap, 1, MPI_REAL, 0, MPI_COMM_WORLD, MPIError)
+	if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('direct gap',MPIError)
 #endif
 
 	!write(*,*) "autovetores e autovalores"
@@ -736,20 +741,8 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		end if
     else
 #ifdef MPI
-		matrix_element_count = int(dimbse,matrix_count_kind)*int(dimbse,matrix_count_kind)
-		if (matrix_element_count > 2147483647_matrix_count_kind) then
-			if (Node == 0) then
-				write(error_unit,*) 'Distributed BSE Hamiltonian exceeds the 32-bit MPI count limit'
-				write(error_unit,*) 'dimbse: ',dimbse
-				write(error_unit,*) 'H(dimbse,dimbse) elements: ',matrix_element_count
-				write(error_unit,*) '32-bit MPI count limit: ',2147483647_matrix_count_kind
-				call flush(error_unit)
-			end if
-			call MPI_BARRIER(MPI_COMM_WORLD,MPIError)
-			call MPI_ABORT(MPI_COMM_WORLD,1,MPIError)
-			stop
-		end if
-
+		! hbse_dist is assembled and diagonalized locally on the BLACS grid.
+		! Its N**2 size is never passed as one MPI count; transfers use blocks.
 		mb = 64
 		nb = 64
 		nprow = int(sqrt(real(Nodes)))

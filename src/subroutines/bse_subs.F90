@@ -448,6 +448,7 @@ subroutine dielbsev_dist(dimse,excitonvec,lld,locr,locc,mb,nb,myrow,mycol,nprow,
 	implicit none
 
 	integer :: dimse,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,MPIError
+	integer,parameter :: bse_mpi_block_elements=16777216
 	integer :: li,lj,ig,jg
 	integer, external :: indxl2g
 	complex,dimension(lld,*) :: excitonvec
@@ -469,7 +470,8 @@ subroutine dielbsev_dist(dimse,excitonvec,lld,locr,locc,mb,nb,myrow,mycol,nprow,
 		end if
 	end do
 
-	call MPI_ALLREDUCE(MPI_IN_PLACE,amplitude,dimse,MPI_COMPLEX,MPI_SUM,MPI_COMM_WORLD,MPIError)
+	call bse_mpi_allreduce_complex_sum_blocks(amplitude,int(dimse,kind=8),MPI_COMM_WORLD,MPIError,bse_mpi_block_elements)
+	if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('distributed BSE optical amplitude',MPIError)
 	activity = real(amplitude*conjg(amplitude))
 	deallocate(amplitude)
 #else
@@ -488,6 +490,7 @@ subroutine dielbsep_dist(dimse,excitonvec,lld,locr,locc,mb,nb,myrow,mycol,nprow,
 	implicit none
 
 	integer :: dimse,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,MPIError
+	integer,parameter :: bse_mpi_block_elements=16777216
 	integer :: li,lj,ig,jg
 	integer, external :: indxl2g
 	complex,dimension(lld,*) :: excitonvec
@@ -513,8 +516,10 @@ subroutine dielbsep_dist(dimse,excitonvec,lld,locr,locc,mb,nb,myrow,mycol,nprow,
 		end if
 	end do
 
-	call MPI_ALLREDUCE(MPI_IN_PLACE,amplitude1,dimse,MPI_COMPLEX,MPI_SUM,MPI_COMM_WORLD,MPIError)
-	call MPI_ALLREDUCE(MPI_IN_PLACE,amplitude2,dimse,MPI_COMPLEX,MPI_SUM,MPI_COMM_WORLD,MPIError)
+	call bse_mpi_allreduce_complex_sum_blocks(amplitude1,int(dimse,kind=8),MPI_COMM_WORLD,MPIError,bse_mpi_block_elements)
+	if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('distributed BSE optical amplitude',MPIError)
+	call bse_mpi_allreduce_complex_sum_blocks(amplitude2,int(dimse,kind=8),MPI_COMM_WORLD,MPIError,bse_mpi_block_elements)
+	if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('distributed BSE optical amplitude',MPIError)
 	activity = real(amplitude1*conjg(amplitude2))
 	deallocate(amplitude1,amplitude2)
 #else
@@ -533,6 +538,7 @@ subroutine bse_eigenvector_column_dist(dimse,excitonvec,lld,locr,locc,mb,nb,myro
 	implicit none
 
 	integer :: dimse,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,icol,MPIError
+	integer,parameter :: bse_mpi_block_elements=16777216
 	integer :: li,lj,ig,jg
 	integer, external :: indxl2g
 	complex,dimension(lld,*) :: excitonvec
@@ -551,7 +557,8 @@ subroutine bse_eigenvector_column_dist(dimse,excitonvec,lld,locr,locc,mb,nb,myro
 		end if
 	end do
 
-	call MPI_ALLREDUCE(MPI_IN_PLACE,eigvec,dimse,MPI_COMPLEX,MPI_SUM,MPI_COMM_WORLD,MPIError)
+	call bse_mpi_allreduce_complex_sum_blocks(eigvec,int(dimse,kind=8),MPI_COMM_WORLD,MPIError,bse_mpi_block_elements)
+	if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('distributed BSE eigenvector',MPIError)
 #else
 	eigvec = cmplx(0.0,0.0)
 	stop "Distributed BSE postprocessing requires MPI"
@@ -784,7 +791,6 @@ subroutine excwfi(outputfolder,ngkpt,kpt,qpt,nc,nv,nocp,stt,excenergy,excnum,qpt
 	close(800+excnum*qptnum)
 
 end subroutine excwfi
-
 
 
 
