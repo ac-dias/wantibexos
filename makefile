@@ -23,6 +23,7 @@ SUBROUTINE_NAMES := \
     bse_hamiltonian_io \
     bse_subs \
     bse_subs_kpath \
+    bse_q_optics \
     bse_subs_temp \
     special_funct \
     ei_spec_funct \
@@ -87,11 +88,35 @@ all: $(MAIN_EXEC) pp
 main: $(MAIN_EXEC)
 	@echo "--- Main Executable Build Complete ---"
 
+test-bse-q-optics: $(BUILD_DIR)/tests/test_bse_q_optics.x
+	@$(BUILD_DIR)/tests/test_bse_q_optics.x
+
+$(BUILD_DIR)/tests/test_bse_q_optics.x: tests/test_bse_q_optics.F90 $(BUILD_DIR)/subroutines/bse_q_optics.o makefile.inc
+	@mkdir -p $(dir $@)
+	$(FOR) $< $(BUILD_DIR)/subroutines/bse_q_optics.o -o $@ $(L_FLAGS)
+
+test-bse-q0-optics: $(BUILD_DIR)/tests/test_bse_q0_optics.x
+	@$(BUILD_DIR)/tests/test_bse_q0_optics.x
+
+# Standard four-way Q=0 BSE regression: legacy serial, current serial,
+# current ScaLAPACK, and current ELPA.  Pass e.g.
+# BENCHMARK_ARGS='--dry-run' or '--case /path/to/case'.
+BENCHMARK_PYTHON ?= /opt/local/bin/python3.13
+benchmark-bse:
+	@$(BENCHMARK_PYTHON) benchmarks/run_bse_benchmark.py $(BENCHMARK_ARGS)
+
+test-bse-benchmark-runner:
+	@$(BENCHMARK_PYTHON) tests/test_bse_benchmark_runner.py
+
+$(BUILD_DIR)/tests/test_bse_q0_optics.x: tests/test_bse_q0_optics.F90 $(BUILD_DIR)/subroutines/bse_q_optics.o makefile.inc
+	@mkdir -p $(dir $@)
+	$(FOR) $< $(BUILD_DIR)/subroutines/bse_q_optics.o -o $@ $(L_FLAGS)
+
 $(MAIN_EXEC): $(LIB_FILE) $(MAIN_SRC) makefile.inc
 	@mkdir -p $(BIN_DIR)
 	@echo "--- Linking Main Executable: $@ ---"
 	$(FOR) $(MAIN_SRC) -o $@ -L$(BUILD_DIR) -lwtb $(L_FLAGS)
-	@cp $@ ./build/wtb.x
+	@cp $@ $(BUILD_DIR)/wtb.x
 
 $(LIB_FILE): $(MODULE_OBJECTS)
 	@echo "--- Creating Static Library: $@ ---"
@@ -150,4 +175,4 @@ clean:
 
 #$(BUILD_DIR)/subroutines/coulomb_pot.o: $(BUILD_DIR)/subroutines/ei_spec_funct.o
 
-.PHONY: all pp clean main
+.PHONY: all pp clean main benchmark-bse test-bse-benchmark-runner

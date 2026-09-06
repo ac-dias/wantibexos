@@ -19,6 +19,8 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 #endif
 	use omp_lib
 	use hamiltonian_input_variables
+	use input_variables, only: bsermatfile
+	use bse_q_optics, only: rmn_data, rmn_read, rmn_destroy, rmn_apply_q0_optical_correction
 
 	implicit none
 
@@ -79,6 +81,9 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	real,dimension(3) :: mag	
 	
 	complex,allocatable,dimension(:,:,:) :: sk
+	type(rmn_data) :: rmn
+	logical :: use_rmn,rmn_ok
+	character(len=256) :: rmn_message
 
 	!definicoes diagonalizacao 
 	INTEGER   ::       ifail
@@ -246,6 +251,24 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
       call mpi_barrier(MPI_COMM_WORLD,MPIError)
       call bcast_hamil()
 #endif
+
+		use_rmn=len_trim(bsermatfile) > 0
+		if (use_rmn) then
+			if (dft == 'S') stop 'BSE_RMAT_FILE currently requires the orthonormal Wannier representation'
+			call rmn_read(trim(bsermatfile),rmn,rmn_ok,rmn_message)
+			if (.not. rmn_ok) then
+				write(*,*) trim(rmn_message)
+				stop 'Unable to initialize the Q=0 Wannier position matrix'
+			end if
+			if (rmn%num_wann /= w90basis) then
+				write(*,*) 'Wannier position matrix basis:',rmn%num_wann,' Hamiltonian basis:',w90basis
+				stop 'Incompatible Wannier position and Hamiltonian bases'
+			end if
+			if (Node == 0) then
+				write(300,*) 'Q=0 optical position matrix:',trim(bsermatfile)
+				write(300,*) 'Q=0 position-matrix treatment: dH/dk - i[A,H]'
+			end if
+		end if
 
 	!termino parametros calculo 
 
@@ -594,17 +617,24 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 		 ! $omp parallel default(shared) private(i,w90basis,rlat,rvec,hopmatrices,ihopmatrices)
 
-		 !$omp parallel do
+			 !$omp parallel do private(rmn_ok,rmn_message)
 	do i=1,dimbse
 
 		!ec = eigv(stt(i,4),stt(i,3))
 		!ev = eigv(stt(i,4),stt(i,2))
 
-		call optsp(eigv(stt(i,4),stt(i,2)),vector(:,stt(i,2),stt(i,4)),&
-		     eigv(stt(i,4),stt(i,3)),vector(:,stt(i,3),stt(i,4)),&
-		     kpt(stt(i,4),1),kpt(stt(i,4),2),kpt(stt(i,4),3),ffactor,sme,&
-		     w90basis,nvec,rlat,rvec,hopmatrices,&
-		     ihopmatrices,hrx(i),hry(i),hrz(i))
+			call optsp(eigv(stt(i,4),stt(i,2)),vector(:,stt(i,2),stt(i,4)),&
+			     eigv(stt(i,4),stt(i,3)),vector(:,stt(i,3),stt(i,4)),&
+			     kpt(stt(i,4),1),kpt(stt(i,4),2),kpt(stt(i,4),3),ffactor,sme,&
+			     w90basis,nvec,rlat,rvec,hopmatrices,&
+			     ihopmatrices,hrx(i),hry(i),hrz(i))
+			if (use_rmn) then
+				call rmn_apply_q0_optical_correction(rmn,kpt(stt(i,4),:),rlat,&
+					eigv(stt(i,4),stt(i,2)),vector(:,stt(i,2),stt(i,4)),&
+					eigv(stt(i,4),stt(i,3)),vector(:,stt(i,3),stt(i,4)),sme,&
+					hrx(i),hry(i),hrz(i),rmn_ok,rmn_message)
+				if (.not. rmn_ok) stop 'Unable to evaluate the Q=0 Wannier position matrix'
+			end if
 		     
 		     hrsp(i) = (hrx(i)+cmplx(0.,1.)*hry(i))*(1.0/sqrt(2.))
 		     hrsm(i) = (hrx(i)-cmplx(0.,1.)*hry(i))*(1.0/sqrt(2.))
@@ -973,12 +1003,17 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 			call elpa_check(elpa_status, 'set process_row', MPI_COMM_WORLD)
 			call elpa_instance%set('process_col', mycol, elpa_status)
 			call elpa_check(elpa_status, 'set process_col', MPI_COMM_WORLD)
-			call elpa_instance%set('omp_threads', nthreads, elpa_status)
-			call elpa_check(elpa_status, 'set omp_threads', MPI_COMM_WORLD)
+			! Do not force ELPA's optional omp_threads setting here.  ELPA builds
+			! without OpenMP expose no such configurable option (status -3), while
+			! OpenMP-enabled ELPA obtains the caller's OpenMP thread count during
+			! setup when this setting is left unset.
 			elpa_status = elpa_instance%setup()
 			call elpa_check(elpa_status, 'elpa setup', MPI_COMM_WORLD)
-			call elpa_instance%set('solver', ELPA_SOLVER_2STAGE, elpa_status)
-			call elpa_check(elpa_status, 'set ELPA 2-stage solver', MPI_COMM_WORLD)
+			! The one-stage complex solver is the robust ELPA path on the local
+			! ARM/NEON build; the two-stage complex kernel returned invalid BSE
+			! eigenvalues for a valid 3600-state Hermitian matrix.
+			call elpa_instance%set('solver', ELPA_SOLVER_1STAGE, elpa_status)
+			call elpa_check(elpa_status, 'set ELPA 1-stage solver', MPI_COMM_WORLD)
 			call elpa_instance%eigenvectors(hbse_dist, W, elpa_eigenvectors, elpa_status)
 			call elpa_check(elpa_status, 'ELPA eigenvectors', MPI_COMM_WORLD)
 			call elpa_deallocate(elpa_instance, elpa_status)
@@ -1206,6 +1241,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	deallocate(kpt,kpt_bse)
 	
 		deallocate(sk)
+		call rmn_destroy(rmn)
 
 
 789     continue

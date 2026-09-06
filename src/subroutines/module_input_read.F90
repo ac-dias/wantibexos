@@ -277,6 +277,7 @@ module input_variables
 	character(len=70) :: emfile
 	character(len=70) :: bsehamfile
 	character(len=70) :: bsekpathcheckpointfile
+	character(len=70) :: bsermatfile
 		
 
 	logical :: bandscalc,doscalc
@@ -446,6 +447,7 @@ subroutine input_read
 	bsehamwrite = .false.
 	bsehamread = .false.
 	bsehamfile = "bse_hamiltonian.bin"
+	bsermatfile = ""
 	bsekpathcheckpoint = .false.
 	bsekpathcheckpointfile = "bse_kpath_checkpoint"
 	
@@ -619,6 +621,10 @@ subroutine input_read
 	case ("BSE_HAM_FILE=")
 
 		bsehamfile = b
+
+	case ("BSE_RMAT_FILE=")
+
+		bsermatfile = b
 	
 	case ("dK=")
 

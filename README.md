@@ -45,6 +45,32 @@ For distributed MPI BSE runs, the checkpoint is a single global matrix written
 with MPI-IO.  It can be restarted with a different MPI rank count or
 process-grid layout; each rank reads its own block-cyclic part of the matrix.
 
+Q=0 Wannier position-matrix vertex
+-----------------------------------
+
+The zero-temperature optical BSE solver can include the Wannier90 position
+matrix <0m|r|Rn> in its vertical optical vertex. Enable the Wannier90
+`write_rmn` output and pass its `seedname_r.dat` file explicitly:
+
+```
+BSE_RMAT_FILE= seedname_r.dat
+```
+
+When this setting is absent, the legacy derivative-only optical matrix element
+is retained unchanged. When it is present, the code reconstructs
+`A(k) = sum_R exp(i k.R) <0|r|R>` exactly at each BSE k point and uses
+`dH/dk - i[A,H]` for Q=0 transitions. This changes IPA and BSE oscillator
+strengths but does not modify the BSE Hamiltonian or exciton energies.
+
+This is currently the zero-temperature `BSE= T` path only; finite-Q and
+finite-temperature optical vertices remain unchanged. It requires the
+orthonormal Wannier representation (`DFT=W`), not the nonorthogonal `DFT=S`
+path. The path is also
+intentionally rejected when the companion `seedname_wsvec.dat` is present:
+Wannier90 `use_ws_distance` requires its additional Wigner-Seitz correction,
+which has not yet been implemented. `BSE_RMAT_FILE` is resolved from the run
+directory, and all MPI ranks must be able to read it.
+
 ELPA BSE diagonalization
 -------------------------
 
@@ -57,13 +83,34 @@ ELPA itself must have been built with OpenMP enabled; the code passes its
 existing `nthreads` setting to ELPA as `omp_threads`.
 
 Set `BSE_ALGO=elpa` in the input and launch with at least two MPI ranks.  ELPA
-uses the existing 64-by-64 BLACS block-cyclic distribution and the ELPA 2-stage
+uses the existing 64-by-64 BLACS block-cyclic distribution and the ELPA 1-stage
 complex-Hermitian solver.  ELPA builds both triangles of the Hermitian matrix
 and needs an additional distributed local matrix for the eigenvectors while
 diagonalizing, so its matrix construction work and peak memory are respectively
 about twice and one extra local BSE matrix per MPI rank.  Executables built
 without `-DELPA` reject `BSE_ALGO=elpa` explicitly; all other distributed
 choices continue to use ScaLAPACK `PCHEEV`.
+
+Standard four-way BSE benchmark
+-------------------------------
+
+The reproducible Q=0 regression runs the original `wantibexos-dev` serial
+reference followed by the current serial, two-rank ScaLAPACK, and two-rank
+ELPA implementations. The three current runs use the same Wannier90
+position-matrix file; the legacy reference deliberately retains its original
+vertex. Run it with:
+
+```
+make benchmark-bse
+```
+
+Each invocation performs fresh isolated current/ELPA builds and creates a new
+timestamped directory under `benchmark-results/`. It records executable and
+input hashes, exact inputs and logs, Lorentzian-broadened absorption/oscillator
+figures, energy residuals, tensor-resolved totals, and degeneracy-safe
+numerical metrics. Use `make benchmark-bse BENCHMARK_ARGS='--dry-run'` to
+inspect the plan. The configurable paths and output inventory are documented
+in [`benchmarks/README.md`](benchmarks/README.md).
 
 BSE q-path MPI parallelism
 --------------------------
