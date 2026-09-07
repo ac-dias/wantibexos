@@ -648,7 +648,7 @@ subroutine excwf(outputfolder,ngkpt,kpt,nc,nv,nocp,stt,excenergy,excnum,ewf) !ex
 	
 	
 	WRITE (file1,"(a7,I0,a4)") 'exc_wf_',excnum,'.dat'
-	Format = "(I,3F15.4,2I,2E15.4)"
+	Format = "(I10,3F15.4,2I10,2E15.4)"
 	
 	WRITE (file2,"(a8,I0,a4)") 'exc_den_',excnum,'.dat'
 	Format2 = "(3F15.4,1E15.4)"	

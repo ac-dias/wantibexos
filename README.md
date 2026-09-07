@@ -48,7 +48,7 @@ process-grid layout; each rank reads its own block-cyclic part of the matrix.
 Q=0 Wannier position-matrix vertex
 -----------------------------------
 
-The zero-temperature optical BSE solver can include the Wannier90 position
+The zero- and finite-temperature optical BSE solver can include the Wannier90 position
 matrix <0m|r|Rn> in its vertical optical vertex. Enable the Wannier90
 `write_rmn` output and pass its `seedname_r.dat` file explicitly:
 
@@ -62,8 +62,7 @@ is retained unchanged. When it is present, the code reconstructs
 `dH/dk - i[A,H]` for Q=0 transitions. This changes IPA and BSE oscillator
 strengths but does not modify the BSE Hamiltonian or exciton energies.
 
-This is currently the zero-temperature `BSE= T` path only; finite-Q and
-finite-temperature optical vertices remain unchanged. It requires the
+This is the Q=0 `BSE= T` path; finite-Q optical vertices remain unchanged. It requires the
 orthonormal Wannier representation (`DFT=W`), not the nonorthogonal `DFT=S`
 path. The path is also
 intentionally rejected when the companion `seedname_wsvec.dat` is present:
@@ -90,6 +89,69 @@ diagonalizing, so its matrix construction work and peak memory are respectively
 about twice and one extra local BSE matrix per MPI rank.  Executables built
 without `-DELPA` reject `BSE_ALGO=elpa` explicitly; all other distributed
 choices continue to use ScaLAPACK `PCHEEV`.
+
+Finite-temperature optical BSE
+--------------------------------
+
+The Q=0 optical calculation (`BSE= T`) uses the same distributed matrix
+assembly, ScaLAPACK/ELPA eigensolvers, and optical contractions at zero and
+finite temperature. For example:
+
+```
+BSE= T
+TEMP= 300
+TA= FA
+BSE_ALGO= elpa
+```
+
+Run ELPA with at least two MPI ranks and an ELPA-enabled executable. For
+ScaLAPACK use `BSE_ALGO= cheev` with multiple MPI ranks; one rank uses LAPACK.
+`TA= VE` and `TA= BE` retain their existing `ST`/`PHAVG` gap corrections;
+`TA= FA` applies no gap correction. `BSE_RMAT_FILE`, tensor/circular optical
+outputs, wavefunction output, and Hamiltonian restart also work at finite T.
+This extension concerns optical Q=0 calculations, not distributed diagonalization
+inside each finite-Q `BSE_BND` sector.
+
+Let `F_i = f_v(i)-f_c(i)` and `D_i = E_c(i)-E_v(i)`. The solver constructs
+`H_T = D + sqrt(F) K sqrt(F)` and uses optical vertices `sqrt(F) h`.
+For positive occupations this is the similarity transform of `D + F K`;
+it yields a Hermitian eigenproblem and the same linear-response resolvent.
+Zero occupations are supported without division and produce dark, decoupled
+transitions. Negative or nonfinite occupation differences are rejected.
+The chemical potential remains zero in the existing single-particle energy
+reference. This adds no temperature-dependent screening or phonon linewidths.
+
+The old serial temperature routine passed an upper triangle of `D + F K` to
+a Hermitian LAPACK solver even when F varied between transitions. Its old
+finite-T results therefore need not match the corrected formulation.
+`BSE_WF` now writes normalized eigenvectors `A` of `H_T`; the corresponding
+right eigenvectors of the row-weighted kernel are `sqrt(F) A`.
+
+New finite-T checkpoints use matrix-kind 3 and reject the old row-weighted
+kind-2 files. As with other Hamiltonian restarts, keep all physical inputs,
+including `TEMP`, `TA`, `ST`, and `PHAVG`, unchanged: the header does not
+fingerprint physical parameters. ELPA stores both triangles, whereas ScaLAPACK
+stores the upper triangle; use the matching solver layout when restarting.
+
+Run `make -j1 test-bse-temperature` for the occupation, similarity-transform,
+Hermiticity, dark-state, and optical-response tests. The end-to-end test uses a
+supplied Wannier fixture with two valence and two conduction bands, three built
+executables, and NumPy:
+
+```
+python3 tests/test_bse_temperature_mpi.py \
+  --case /path/to/bse-test-pos \
+  --serial-exe /path/to/serial/wtb.x \
+  --scalapack-exe /path/to/scalapack/wtb.x \
+  --elpa-exe /path/to/elpa/wtb.x \
+  --output /path/to/new-test-directory
+```
+
+It checks 0 K, 300 K, a 10000 K numerical occupation-weight stress test,
+VE/BE gap corrections, all optical tensor components, circular polarization,
+wavefunction output, restart, and rejection of legacy finite-T checkpoints.
+Spectra are broadened before comparing solvers to avoid dependence on
+rotations within degenerate exciton subspaces.
 
 Standard four-way BSE benchmark
 -------------------------------

@@ -311,12 +311,7 @@ program main
 		endif
 
 		else
-#ifdef MPI
-            if (Nodes /= 1) then
-             write(2077,*) "Not implemented in parallel yet"
-             call mpi_abort(MPI_Comm_World,1, MPIError)
-            endif
-#endif
+
 
 		call bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		     ebse0,ebsef,numbse,cshift,ktol,params,kpaths,kpathsbse,orbw,ediel, &

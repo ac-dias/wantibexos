@@ -1,3 +1,25 @@
+subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
+		     ebse0,ebsef,numbse,sme,ktol,params,kpaths,kpathsbse,orbw,ediel, &
+		     exc,mshift,coultype,ez,w1,r0,lc,rk,meshtype,bsewf,excwf0,excwff,&
+		     dtfull,cpol,tmcoef,nocpf,fermishift,bsealgo,bsehamwrite,bsehamread,bsehamfile,dft,mag)
+
+    implicit none
+    integer :: nthreads,ngrid(3),nc,nv,excwf0,excwff,nocpf
+    real :: numdos,ebse0,ebsef,numbse,sme,ktol,ediel(3),exc,mshift(3)
+    real :: ez,w1,r0,lc,rk,fermishift,mag(3)
+    character(len=70) :: outputfolder,calcparms,params,kpaths,kpathsbse,orbw,meshtype,bsehamfile
+    character(len=12) :: bsealgo
+    character(len=7) :: coultype
+    character(len=1) :: dft
+    logical :: bsewf,dtfull,cpol,tmcoef,bsehamwrite,bsehamread
+
+    call bsesolver_core(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
+		     ebse0,ebsef,numbse,sme,ktol,params,kpaths,kpathsbse,orbw,ediel, &
+		     exc,mshift,coultype,ez,w1,r0,lc,rk,meshtype,bsewf,excwf0,excwff,&
+		     dtfull,cpol,tmcoef,nocpf,fermishift,bsealgo,bsehamwrite,bsehamread,bsehamfile,dft,mag, &
+        0.0,0.0,"FA",0.0)
+end subroutine bsesolver
+
 
 #ifdef ELPA
 #ifndef ELPA_API_VERSION
@@ -5,10 +27,10 @@
 #endif
 #endif
 
-subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
+subroutine bsesolver_core(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		     ebse0,ebsef,numbse,sme,ktol,params,kpaths,kpathsbse,orbw,ediel, &
 		     exc,mshift,coultype,ez,w1,r0,lc,rk,meshtype,bsewf,excwf0,excwff,&
-		     dtfull,cpol,tmcoef,nocpf,fermishift,bsealgo,bsehamwrite,bsehamread,bsehamfile,dft,mag)
+		     dtfull,cpol,tmcoef,nocpf,fermishift,bsealgo,bsehamwrite,bsehamread,bsehamfile,dft,mag,st,phavg,ta,temp)
 
 #ifdef MPI
 	use mpi
@@ -22,7 +44,13 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	use input_variables, only: bsermatfile
 	use bse_q_optics, only: rmn_data, rmn_read, rmn_destroy, rmn_apply_q0_optical_correction
 
+	use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 	implicit none
+
+    real, intent(in) :: st,phavg,temp
+    character(len=2), intent(in) :: ta
+    real :: tcor,gapcortemp,gapcortemp2,fermidisteh
+    real, allocatable :: sqrt_fdeh(:)
 
 	real,parameter:: pi=acos(-1.)
 
@@ -430,13 +458,28 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 	!allocate(lcount(ngkpt,w90basis))
 
+    tcor = 0.0
+    if (temp > 0.0) then
+        select case (ta)
+        case ('VE')
+            tcor = gapcortemp(st,phavg,temp)
+        case ('BE')
+            tcor = gapcortemp2(st,phavg,temp)
+        end select
+        if (Node == 0) then
+            write(300,*) 'temperature:',temp
+            write(300,*) 'thermal gap correction:',tcor
+            write(300,*) 'Finite-T Hermitian kernel: D + sqrt(fv-fc) K sqrt(fv-fc)'
+            write(300,*) 'BSE wavefunctions are normalized eigenvectors in the symmetrized basis'
+        end if
+    end if
 	egap = 50.0
 
     if (Node == 0) then ! I am going to run this in serial for now
      allocate(eaux(w90basis),vaux(w90basis,w90basis))
      write(300,*) "We are going to perform independent particle calculations in serial for now"
 
-	!$omp parallel do default(shared) private(i,j,l,h,eaux,vaux)
+	!$omp parallel do default(shared) private(i,j,l,h,eaux,vaux) reduction(min:egap)
 	do i=1,ngkpt
 
 #ifdef MKL
@@ -453,7 +496,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		
 #endif
 	
-		call eigsys(nthreads,dft,systype,scs,exc,nocpk(i),ffactor,kpt(i,1),kpt(i,2),kpt(i,3),w90basis,nvec,&
+		call eigsys(nthreads,dft,systype,scs+tcor,exc,nocpk(i),ffactor,kpt(i,1),kpt(i,2),kpt(i,3),w90basis,nvec,&
 			    rlat,rvec,hopmatrices,&
 		             ihopmatrices,ovp,efermi,eaux,vaux,nocpf,fermishift,mag)
 #ifdef MKL
@@ -574,6 +617,26 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	!allocate (stt(ngkpt*nc*nv,4))
     
 	call quantumnumbers2(w90basis,ngkpt,nc,nv,nocpk,nocpk,stt)
+    allocate(sqrt_fdeh(dimbse))
+    sqrt_fdeh = 1.0
+    if (temp > 0.0) then
+        do i=1,dimbse
+            ec = eigv(stt(i,4),stt(i,3))
+            ev = eigv(stt(i,4),stt(i,2))
+            sqrt_fdeh(i) = fermidisteh(ec,ev,temp)
+        end do
+        if (any(.not. ieee_is_finite(sqrt_fdeh)) .or. any(sqrt_fdeh < 0.0)) then
+            if (Node == 0) write(*,*) 'Finite-T Hermitian BSE requires finite, nonnegative fv-fc'
+#ifdef MPI
+            call MPI_ABORT(MPI_COMM_WORLD,1,MPIError)
+#else
+            stop 1
+#endif
+        end if
+        sqrt_fdeh = sqrt(sqrt_fdeh)
+        if (Node == 0) write(300,*) 'occupation difference range:',minval(sqrt_fdeh)**2,maxval(sqrt_fdeh)**2
+    end if
+
 	!allocate(hrx(dimbse),hry(dimbse),hrz(dimbse))
 
     allocate(vecres(dimbse,17))
@@ -636,6 +699,11 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 				if (.not. rmn_ok) stop 'Unable to evaluate the Q=0 Wannier position matrix'
 			end if
 		     
+        ! The optical vertex in the Hermitian basis is sqrt(fv-fc) times h.
+        ! Applying it before the IPA products weights those intensities by fv-fc.
+        hrx(i) = sqrt_fdeh(i)*hrx(i)
+        hry(i) = sqrt_fdeh(i)*hry(i)
+        hrz(i) = sqrt_fdeh(i)*hrz(i)
 		     hrsp(i) = (hrx(i)+cmplx(0.,1.)*hry(i))*(1.0/sqrt(2.))
 		     hrsm(i) = (hrx(i)-cmplx(0.,1.)*hry(i))*(1.0/sqrt(2.))
 		     
@@ -739,6 +807,8 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
     if (Nodes == 1) then
 		bseham_metadata = (/ dimbse,1,1 /)
+        ! Distinguish the Hermitian finite-T kernel from legacy row-weighted files (2).
+        if (temp > 0.0) bseham_metadata(2) = 3
 		bseham_path = trim(outputfolder)//trim(bsehamfile)
 		allocate(hbse(dimbse,dimbse))
 		if (bsehamread) then
@@ -758,6 +828,9 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 					    ,eigv(stt_bse(4,j),stt_bse(2,j)) &
 					    ,vector(:,stt_bse(3,j),stt_bse(4,j)),vector(:,stt_bse(2,j),stt_bse(4,j)),kpt_bse(:,stt_bse(4,j)),dft,nvec,rvec,&
 					    sk(:,:,stt_bse(4,i)),sk(:,:,stt_bse(4,j)))
+                    if (temp > 0.0) call bse_thermal_element(hbse(i,j),i == j, &
+                        eigv(stt_bse(4,i),stt_bse(3,i))-eigv(stt_bse(4,i),stt_bse(2,i)), &
+                        sqrt_fdeh(i),sqrt_fdeh(j))
 				end do
 			end do
 			!$omp end parallel do
@@ -795,6 +868,8 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		call DESCINIT(desca, dimbse, dimbse, mb, nb, 0, 0, blacs_ctxt, lld, INFO)
 		call DESCINIT(descz, dimbse, dimbse, mb, nb, 0, 0, blacs_ctxt, lld, INFO)
 		bseham_metadata = (/ dimbse,1,1 /)
+        ! Distinguish the Hermitian finite-T kernel from legacy row-weighted files (2).
+        if (temp > 0.0) bseham_metadata(2) = 3
 		if (trim(bsealgo) == 'elpa') bseham_metadata(3) = 2
 		bseham_path = trim(outputfolder)//trim(bsehamfile)
 
@@ -826,6 +901,9 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 						    vector(:,stt_bse(2,ig),stt_bse(4,ig)),kpt_bse(:,stt_bse(4,ig)),stt_bse(:,jg),eigv(stt_bse(4,jg),stt_bse(3,jg)),&
 						    eigv(stt_bse(4,jg),stt_bse(2,jg)),vector(:,stt_bse(3,jg),stt_bse(4,jg)),vector(:,stt_bse(2,jg),stt_bse(4,jg)),&
 						    kpt_bse(:,stt_bse(4,jg)),dft,nvec,rvec,sk(:,:,stt_bse(4,ig)),sk(:,:,stt_bse(4,jg)))
+                        if (temp > 0.0) call bse_thermal_element(hbse_dist(li,lj),ig == jg, &
+                            eigv(stt_bse(4,ig),stt_bse(3,ig))-eigv(stt_bse(4,ig),stt_bse(2,ig)), &
+                            sqrt_fdeh(ig),sqrt_fdeh(jg))
 					end if
 				end do
 			end do
@@ -1224,7 +1302,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		deallocate(eigv,vector)
 		deallocate(rvec,hopmatrices)
 		deallocate(ihopmatrices,ffactor)
-		deallocate(hrx,hry,hrz,hrsp,hrsm)
+		deallocate(hrx,hry,hrz,hrsp,hrsm,sqrt_fdeh)
 	deallocate(actxx,actxy,actxz,actyy,actyz,actzz)
 	deallocate(actsp,actsm)
 		if (Nodes == 1) then
@@ -1280,7 +1358,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	
 
 
-end subroutine bsesolver
+end subroutine bsesolver_core
 
 #ifdef MPI
 #ifdef ELPA

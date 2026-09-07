@@ -176,3 +176,11 @@ clean:
 #$(BUILD_DIR)/subroutines/coulomb_pot.o: $(BUILD_DIR)/subroutines/ei_spec_funct.o
 
 .PHONY: all pp clean main benchmark-bse test-bse-benchmark-runner
+
+.PHONY: test-bse-temperature
+test-bse-temperature: $(BUILD_DIR)/tests/test_bse_temperature.x
+	@$(BUILD_DIR)/tests/test_bse_temperature.x
+
+$(BUILD_DIR)/tests/test_bse_temperature.x: tests/test_bse_temperature.F90 $(LIB_FILE)
+	@mkdir -p $(dir $@)
+	$(FOR) $< -o $@ -L$(BUILD_DIR) -lwtb $(L_FLAGS)

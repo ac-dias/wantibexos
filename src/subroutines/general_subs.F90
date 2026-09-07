@@ -716,34 +716,31 @@ function gapcortemp2(sparam,avgphonon,temp) !(bose-einstein model)doi: https://d
 
 end function gapcortemp2
 
-function fermidisteh(ec,ev,temp) !distribuição fermi-dirac -> fv-fc
-
-	implicit none
-	
-	real :: fermidisteh
-	real :: ec,ev,temp
-	real,parameter :: efermi = 0d0
-	real,parameter :: kb =8.617330350E-5
-	real :: beta
-	real :: fv,fc
-	
-	if ( temp .eq. 0d0 ) then
-	
-		temp = 1E-8
-	
-	end if	
-
-	beta = 1.0/(kb*temp)
-	
-	fv = 1.0/ (exp((ev-efermi)*beta)+1.0)
-	
-	fc = 1.0/ (exp((ec-efermi)*beta)+1.0)
-	
-	
-	fermidisteh = fv-fc
-
-
-
+function fermidisteh(ec,ev,temp) result(difference)
+    implicit none
+    real, intent(in) :: ec,ev,temp
+    real :: difference
+    real, parameter :: kb=8.617330350E-5
+    ! Preserve the existing energy reference: the chemical potential is zero.
+    difference = occupation(ev)-occupation(ec)
+contains
+    real function occupation(energy)
+        real, intent(in) :: energy
+        real :: decay
+        if (temp <= 0.0) then
+            occupation = 0.5
+            if (energy < 0.0) occupation = 1.0
+            if (energy > 0.0) occupation = 0.0
+        else
+            ! exp always has a nonpositive argument, including at very low T.
+            decay = exp(-abs(energy)/(kb*temp))
+            if (energy >= 0.0) then
+                occupation = decay/(1.0+decay)
+            else
+                occupation = 1.0/(1.0+decay)
+            end if
+        end if
+    end function occupation
 end function fermidisteh
 
 

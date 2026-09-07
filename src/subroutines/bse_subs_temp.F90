@@ -558,3 +558,15 @@ end subroutine dielbseptemp
 
 
 
+
+! H_T = D + sqrt(F) K sqrt(F), similar to D + F K for strictly positive F.
+! Zero occupations are supported without dividing by F: those states are dark.
+subroutine bse_thermal_element(element,is_diagonal,transition_energy,sqrt_fi,sqrt_fj)
+    implicit none
+    complex, intent(inout) :: element
+    logical, intent(in) :: is_diagonal
+    real, intent(in) :: transition_energy,sqrt_fi,sqrt_fj
+    if (is_diagonal) element = element-transition_energy
+    element = sqrt_fi*element*sqrt_fj
+    if (is_diagonal) element = element+transition_energy
+end subroutine bse_thermal_element
