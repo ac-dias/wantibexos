@@ -26,6 +26,7 @@ SUBROUTINE_NAMES := \
     bse_subs_temp \
     special_funct \
     ei_spec_funct \
+    dielectric_models \
     coulomb_pot \
     diel-pp-subs \
     dos_subs \
