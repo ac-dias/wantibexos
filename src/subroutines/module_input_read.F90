@@ -301,13 +301,14 @@ module input_variables
 	
 	integer :: excwf0,excwff
 	
-	real :: ez,w,lc,r0
+	real :: ez,w,lc,r0,penn_q0
+	real :: qtf2d,alpha_2d
 	real :: st,phavg,temp
-	
+
 	real :: ctemp,tmax,eg,egd
 	real :: egs,ebgs
 	real :: dk
-	
+
 	integer :: nocpf
 	real :: fermishift
 	character(len=12) :: bsealgo
@@ -480,9 +481,12 @@ subroutine input_read
 	ez = 1.0
 	w = 0.0
 	lc = 1.0
-	r0 = 1.0	
-	
-	st = 0.0 
+	r0 = 1.0
+	penn_q0 = 0.0
+	qtf2d = 0.0
+	alpha_2d = 1.5
+
+	st = 0.0
 	phavg = 0.0 
 	temp = 0.0
 	
@@ -719,9 +723,21 @@ subroutine input_read
 		read(b,*) sysdim 	
 	
 	case ("R_0=")
-	
-		read(b,*) r0	
-	
+
+		read(b,*) r0
+
+	case ("PENN_Q0=")
+
+		read(b,*) penn_q0
+
+	case ("QTF2D=")
+
+		read(b,*) qtf2d
+
+	case ("ALPHA_2D=")
+
+		read(b,*) alpha_2d
+
 	case ("LC=")
 	
 		read(b,*) lc	
@@ -1071,7 +1087,8 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 		     dk,nocpf,fermishift,bsealgo,bsekpathmpi,bsekpathcheckpoint,bsekpathcheckpointfile,spintxt,meshgen,exc,mag,boltz,nmu,nsteps,mu0,&
 		     bsehamwrite,bsehamread,bsehamfile,&
 		     muf,btemp,klat,elft,hlft,smeboltz,ni,ns,edielgw,r0gw,lcgw,ezgw,wgw,coultypegw,&
-		     nomega,omegamax,gwmesh,gwmeshuse,gwbnd,gwbnduse,gwbsebnd,ktolgw,smegw,selfxonly,ifactor)
+		     nomega,omegamax,gwmesh,gwmeshuse,gwbnd,gwbnduse,gwbsebnd,ktolgw,smegw,selfxonly,ifactor,&
+		     qtf2d,alpha_2d)
 
 #ifdef MPI
         use mpi
@@ -1131,6 +1148,7 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	
 	real :: fermishift
 	real :: ez,w,lc,r0
+	real :: qtf2d,alpha_2d
 	real :: st,phavg,temp
 	
 	real :: ctemp,tmax,eg,egd
@@ -1258,7 +1276,9 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	write(unitout,"(A5,F8.4)") "R_0= ",r0
 	write(unitout,"(A9,F8.4)") "EDIEL_T= ", ediel(1)
 	write(unitout,"(A9,F8.4)") "EDIEL_B= ", ediel(3)
-	write(unitout,"(A7,F8.4)") "EDIEL= ", ediel(2)	
+	write(unitout,"(A7,F8.4)") "EDIEL= ", ediel(2)
+	write(unitout,"(A7,F8.4)") "QTF2D= ", qtf2d
+	write(unitout,"(A9,F8.4)") "ALPHA_2D= ", alpha_2d
 	write(unitout,*)	
 	write(unitout,*) "PARAMETERS FOR BSE with Temperature Effects"
 	write(unitout,*)

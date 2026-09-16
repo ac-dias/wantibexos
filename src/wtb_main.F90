@@ -154,7 +154,8 @@ program main
 		     dk,nocpf,fermishift,bsealgo,bsekpathmpi,bsekpathcheckpoint,bsekpathcheckpointfile,spintxt,meshgen,exc,mag,boltz,nmu,nsteps,mu0,&
 		     bsehamwrite,bsehamread,bsehamfile,&
 		     muf,btemp,klat,elft,hlft,smeboltz,ni,ns,edielgw,r0gw,lcgw,ezgw,wgw,coultypegw,&
-		     nomega,omegamax,gwmesh,gwmeshuse,gwbnd,gwbnduse,gwbsebnd,ktolgw,smegw,selfxonly,ifactor)
+		     nomega,omegamax,gwmesh,gwmeshuse,gwbnd,gwbnduse,gwbsebnd,ktolgw,smegw,selfxonly,ifactor,&
+		     qtf2d,alpha_2d)
 		     
    
 

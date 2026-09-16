@@ -968,8 +968,105 @@ function v1dt(kpt1,kpt2,ngrid,rlat,tolr,lc)
 		c2 = abs(vkpt(1))*lc*j0*k1
 		
 		v1dt =	(vbz*cic)*(1.0+c1+c2)
-	
+
 	end if
 
 
 end function
+
+
+!potencial 2D Trolle-Pedersen-Veniard (DOI: 10.1038/srep39844)
+! Screened 2D Coulomb interaction for a 2D slab (thickness lc) embedded
+! between substrates ediel(1) (top) and ediel(3) (bottom), using the
+! model dielectric function epsilon(q) = 1 + (kappa-1)/(1+(q/qtf2d)^alpha_2d),
+! evaluated in the strict d->0 limit.
+!   ediel(1) = kappa_a  (top substrate)
+!   ediel(2) = kappa    (static dielectric of the 2D material)
+!   ediel(3) = kappa_b  (bottom substrate)
+!   lc       = slab thickness (Ang)
+!   qtf2d    = Thomas-Fermi wavevector (Ang^-1)
+!   alpha_2d = Penn exponent (typically ~1.5)
+function v2dtpv(kpt1,kpt2,ediel,rlat,ngrid,lc,qtf2d,alpha_2d,tolr)
+
+	implicit none
+
+	real,parameter :: cic= -(0.0904756)*10**(3)
+	real,parameter :: pi=acos(-1.)
+	real,parameter :: alpha1 = 1.76
+	real,parameter :: alpha2 = 1.0
+	real,parameter :: alpha3 = 0.0
+
+	integer,dimension(3) :: ngrid
+	real,dimension(3) :: kpt1,kpt2
+	real,dimension(3,3) :: rlat
+	real :: tolr
+	real,dimension(3) :: ediel
+	real :: lc,qtf2d,alpha_2d
+
+	real :: a0,modk,vc
+	real :: r0_k,r0_eff,ed,vbz,auxi,gridaux1
+	real :: v2dtpv
+
+	call alat2D(rlat,a0)
+	call modvec(kpt1,kpt2,modk)
+	call vcell2D(rlat,vc)
+
+	ed = (ediel(1)+ediel(3))/2.0
+	r0_k = (ediel(2)-1.0)*lc/(ediel(1)+ediel(3))
+	vbz = 1./((ngrid(1)*ngrid(2)*ngrid(3))*(vc))
+	gridaux1 = dble(ngrid(1)*ngrid(2))
+
+	if (modk .lt. tolr) then
+		! At q->0 the Penn denominator -> 1, so r0_eff -> r0_k.
+		! Use the same analytical cell-average formula as Keldysh.
+		auxi = (2.*pi*r0_k)/(a0*sqrt(gridaux1))
+		v2dtpv = vbz*(cic/ed)*(a0*sqrt(gridaux1)/(2.*pi))*(alpha1+auxi*alpha2+alpha3*auxi**2)
+	else
+		r0_eff = r0_k/(1.0+(modk/qtf2d)**alpha_2d)
+		v2dtpv = vbz*(cic/ed)*(1./(modk*(1.0+r0_eff*modk)))
+	end if
+
+end function v2dtpv
+
+
+! Trolle-Pedersen-Veniard model dielectric function (DOI: 10.1038/srep39844)
+! epsilon(q) = 1 + (kappa-1) / (1 + (q/qtf)^alpha)
+! Generalises epsilon_penn by allowing a free exponent alpha (Penn uses alpha=2).
+! Returns kappa when qtf <= 0 (constant-epsilon limit).
+real function epsilon_tpv(modk, kappa, qtf, alpha)
+
+	implicit none
+
+	real, intent(in) :: modk   ! |q| in Ang^-1
+	real, intent(in) :: kappa  ! static dielectric constant (q->0 limit)
+	real, intent(in) :: qtf    ! Thomas-Fermi wavevector (Ang^-1)
+	real, intent(in) :: alpha  ! Penn exponent (typically ~1.5)
+
+	if (qtf <= 0.0) then
+		epsilon_tpv = kappa
+	else
+		epsilon_tpv = 1.0 + (kappa - 1.0) / (1.0 + (modk/qtf)**alpha)
+	end if
+
+end function epsilon_tpv
+
+
+! Penn model dielectric function: ε(q) = 1 + (ε₀−1) / (1 + (q/q₀)²)
+! Interpolates from ε₀ at q=0 to 1 (bare) at large q, capturing the
+! over-screening of a constant-ε approximation at short wavelengths.
+! When q0 <= 0 the function returns ed0 unchanged (constant-ε limit).
+real function epsilon_penn(modk, ed0, q0)
+
+	implicit none
+
+	real, intent(in) :: modk  ! |q| in reciprocal-lattice units
+	real, intent(in) :: ed0   ! static dielectric constant ε₀
+	real, intent(in) :: q0    ! Penn cutoff wavevector (same units as modk)
+
+	if (q0 <= 0.0) then
+		epsilon_penn = ed0
+	else
+		epsilon_penn = 1.0 + (ed0 - 1.0) / (1.0 + (modk/q0)**2)
+	end if
+
+end function epsilon_penn
