@@ -511,7 +511,9 @@ subroutine dielbseptemp(nthread,dimse,excitonvec,hopt1,hopt2,fdeh,activity)
 
 
 	! $OMP DO PRIVATE(actaux)
-	!$OMP PARALLEL DO PRIVATE(actaux,actaux2)
+	!$OMP PARALLEL DO DEFAULT(NONE) &
+	!$OMP& SHARED(dimse,excitonvec,hopt1,hopt2,fdeh,activity) &
+	!$OMP& PRIVATE(i,j,actaux,actaux2) SCHEDULE(STATIC)
 	do i=1,dimse
 
 

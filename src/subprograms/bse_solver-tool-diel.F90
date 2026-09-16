@@ -413,7 +413,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
      allocate(eaux(w90basis),vaux(w90basis,w90basis))
      write(300,*) "We are going to perform independent particle calculations in serial for now"
 
-	!$omp parallel do default(shared) private(i,j,l,h,eaux,vaux)
+	!$omp parallel do default(shared) private(i,j,l,h,eaux,vaux) reduction(min:egap)
 	do i=1,ngkpt
 
 #ifdef MKL

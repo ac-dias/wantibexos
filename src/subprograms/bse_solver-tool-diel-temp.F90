@@ -396,7 +396,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
         
 #endif
 
-	!$omp parallel do default(shared) private(i,j,l,h,eaux,vaux)
+	!$omp parallel do default(shared) private(i,j,l,h,eaux,vaux) reduction(min:egap)
 	do i=1,ngkpt
 
 		call eigsys(nthreads,dft,systype,scs+tcor,exc,nocpk(i),ffactor,kpt(i,1),kpt(i,2),kpt(i,3),w90basis,nvec,&
@@ -532,9 +532,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	end if	
 
 
-	 ! $omp parallel default(shared) private(i,ec,ev)
-	
-	 !$omp parallel do	
+	 !$omp parallel do default(shared) private(i,ec,ev)
 
 	do i=1,dimbse
 
@@ -633,8 +631,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	else
 		hbse=0.0
 
-		!$omp parallel do
-!collapse(2)
+		!$omp parallel do default(shared) private(i,j)
 
 		do i=1,dimbse
 

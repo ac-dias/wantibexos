@@ -520,9 +520,9 @@ else
 	
 	allocate(qpqeigv(ngqpt,ngqpt,w90basis))
 	
-	!$omp parallel do default(shared) private(i,j,k,l,h,eaux,vaux)
+	!$omp parallel do default(shared) private(i,j,k,l,h,eaux,vaux,nocpaux)
 	do i=1,ngqpt
-	 do j=1,ngqpt		
+	 do j=1,ngqpt
 
 #ifdef MKL
 		call MKL_SET_NUM_THREADS(1)
@@ -608,9 +608,9 @@ else
 	
 
 	
-	!$omp parallel do default(shared) private(i,j,k,l,h,eaux,vaux)
+	!$omp parallel do default(shared) private(i,j,k,l,h,eaux,vaux,nocpaux)
 	do i=1,nkpt
-	 do j=1,ngqpt		
+	 do j=1,ngqpt
 
 #ifdef MKL
 		call MKL_SET_NUM_THREADS(1)
@@ -682,7 +682,7 @@ else
 	
 	allocate(pol(ngqpt,nomega))	
 	
-	!$omp parallel do default(shared) private(i)
+	!$omp parallel do default(shared) private(i,j)
 	do i=1,ngqpt
 	 do j=1,nomega
 	
