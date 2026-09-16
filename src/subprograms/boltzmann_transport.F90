@@ -152,10 +152,11 @@ subroutine boltztransport(nthreads,outputfolder,ngrid,nsteps,smeboltz,params,exc
    	allocate(vaux(w90basis,w90basis),eaux(w90basis))
    	
    	
-   	e0= 0.0
-   	ef= 0.0
+	e0= huge(e0)
+	ef= -huge(ef)
    	
-   	!$omp parallel do default(shared) private(j,i,k1,eaux,vaux)
+	!$omp parallel do default(shared) private(j,i,k1,eaux,vaux) &
+	!$omp& reduction(min:e0) reduction(max:ef)
    	do j=1,ngkpt
    	
 #ifdef MKL

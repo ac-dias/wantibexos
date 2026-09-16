@@ -163,7 +163,7 @@ function matrizelbsetemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1
 	
 		end if
 	
-		matrizelbsetemp=  vcoul1*vc*vv*fermidisteh(ec1,ev1,temp)
+		matrizelbsetemp=  vcoul1*vc*vv*sqrt(fermidisteh(ec1,ev1,temp)*fermidisteh(ec2,ev2,temp))
 
 
 	end if
@@ -354,10 +354,10 @@ if (modq .eq. 0.) then
 		 
 		  call sandwich_average(w90basis,vbc1,sk,skp,vbc2,vc)
 		  call sandwich_average(w90basis,vbv1,sk,skp,vbv2,vv)
-		 
-		  matrizelbsekqtemp= vcoulk*vc*vv*fermidisteh(ec1,ev1,temp)		
-		
-		case default	
+
+		  matrizelbsekqtemp= vcoulk*vc*vv*sqrt(fermidisteh(ec1,ev1,temp)*fermidisteh(ec2,ev2,temp))
+
+		case default
 
 	
 		 call vecconjg(vbc1,w90basis,vbc)
@@ -369,8 +369,8 @@ if (modq .eq. 0.) then
 		 call prodintsq(vbv,vbv2,w90basis,vv)
 
 
-		 matrizelbsekqtemp= vcoulk*vc*vv*fermidisteh(ec1,ev1,temp)
-		 
+		 matrizelbsekqtemp= vcoulk*vc*vv*sqrt(fermidisteh(ec1,ev1,temp)*fermidisteh(ec2,ev2,temp))
+
 		 end select
 
 
@@ -447,8 +447,8 @@ else
 		  call sandwich_average(w90basis,vbv2,skp,skpq,vbc2,vvc)
 	
 
-		   matrizelbsekqtemp= (vcoulk*vc*vv- vcoulq*vcv*vvc)*fermidisteh(ec1,ev1,temp)
-	
+		   matrizelbsekqtemp= (vcoulk*vc*vv- vcoulq*vcv*vvc)*sqrt(fermidisteh(ec1,ev1,temp)*fermidisteh(ec2,ev2,temp))
+
 		case default
 
 		 call vecconjg(vbc1,w90basis,vbc)
@@ -467,8 +467,8 @@ else
 
 		 call prodintsq(vbvkp,vbc2,w90basis,vvc)
 
-		 matrizelbsekqtemp= (vcoulk*vc*vv- vcoulq*vcv*vvc)*fermidisteh(ec1,ev1,temp)
-		
+		 matrizelbsekqtemp= (vcoulk*vc*vv- vcoulq*vcv*vvc)*sqrt(fermidisteh(ec1,ev1,temp)*fermidisteh(ec2,ev2,temp))
+
 		end select		
 
 

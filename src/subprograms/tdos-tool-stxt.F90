@@ -202,10 +202,12 @@ subroutine dostool(nthreads,outputfolder,ngrid,numdos, &
 
 	end if
 
-	edos0= 0.0
-	edosf= 0.0
+	edos0= huge(edos0)
+	edosf= -huge(edosf)
 
-	!$omp parallel do default(shared) private(j,i,kx,ky,kz,eigv,autovetores,ovptb,spinx,spiny,spinz,cup,cdown,tdos)
+	!$omp parallel do default(shared) &
+	!$omp& private(j,i,kx,ky,kz,eigv,autovetores,ovptb,spinx,spiny,spinz,cup,cdown,tdos,wdos) &
+	!$omp& reduction(min:edos0) reduction(max:edosf)
 	do j=1,ngkpt
 
 		kx= kpts(j,1)
@@ -452,4 +454,3 @@ subroutine dostool(nthreads,outputfolder,ngrid,numdos, &
 
 
 end subroutine dostool
-
