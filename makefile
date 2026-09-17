@@ -23,6 +23,7 @@ SUBROUTINE_NAMES := \
     bse_hamiltonian_io \
     bse_subs \
     bse_subs_kpath \
+    bse_q_optics \
     bse_subs_temp \
     special_funct \
     ei_spec_funct \
@@ -74,6 +75,8 @@ MODULE_OBJECTS  := $(SUBROUTINE_OBJS) $(SUBPROGRAM_OBJS)
 INPUT_MODULE_OBJ := $(BUILD_DIR)/subroutines/module_input_read.o 
 $(filter-out $(INPUT_MODULE_OBJ),$(MODULE_OBJECTS)): $(INPUT_MODULE_OBJ)
 
+$(BUILD_DIR)/subprograms/bse_solver-tool-diel.o: $(BUILD_DIR)/subroutines/bse_q_optics.o
+
 MAIN_SRC  := $(SRC_DIR)/wtb_main.F90
 MAIN_EXEC := $(BIN_DIR)/wtb.x
 LIB_FILE  := $(BUILD_DIR)/libwtb.a
@@ -87,6 +90,20 @@ all: $(MAIN_EXEC) pp
 
 main: $(MAIN_EXEC)
 	@echo "--- Main Executable Build Complete ---"
+
+test-bse-q-optics: $(BUILD_DIR)/tests/test_bse_q_optics.x
+	@$(BUILD_DIR)/tests/test_bse_q_optics.x
+
+$(BUILD_DIR)/tests/test_bse_q_optics.x: tests/test_bse_q_optics.F90 $(BUILD_DIR)/subroutines/bse_q_optics.o makefile.inc
+	@mkdir -p $(dir $@)
+	$(FOR) $< $(BUILD_DIR)/subroutines/bse_q_optics.o -o $@ $(L_FLAGS)
+
+test-bse-q0-optics: $(BUILD_DIR)/tests/test_bse_q0_optics.x
+	@$(BUILD_DIR)/tests/test_bse_q0_optics.x
+
+$(BUILD_DIR)/tests/test_bse_q0_optics.x: tests/test_bse_q0_optics.F90 $(BUILD_DIR)/subroutines/bse_q_optics.o makefile.inc
+	@mkdir -p $(dir $@)
+	$(FOR) $< $(BUILD_DIR)/subroutines/bse_q_optics.o -o $@ $(L_FLAGS)
 
 $(MAIN_EXEC): $(LIB_FILE) $(MAIN_SRC) makefile.inc
 	@mkdir -p $(BIN_DIR)
@@ -151,4 +168,4 @@ clean:
 
 #$(BUILD_DIR)/subroutines/coulomb_pot.o: $(BUILD_DIR)/subroutines/ei_spec_funct.o
 
-.PHONY: all pp clean main
+.PHONY: all pp clean main test-bse-q-optics test-bse-q0-optics

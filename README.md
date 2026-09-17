@@ -45,6 +45,32 @@ For distributed MPI BSE runs, the checkpoint is a single global matrix written
 with MPI-IO.  It can be restarted with a different MPI rank count or
 process-grid layout; each rank reads its own block-cyclic part of the matrix.
 
+Q=0 Wannier position-matrix vertex
+-----------------------------------
+
+The zero-temperature optical BSE solver can include the Wannier90 position
+matrix <0m|r|Rn> in its vertical optical vertex. Enable the Wannier90
+`write_rmn` output and pass its `seedname_r.dat` file explicitly:
+
+```
+BSE_RMAT_FILE= seedname_r.dat
+```
+
+When this setting is absent, the legacy derivative-only optical matrix element
+is retained unchanged. When it is present, the code reconstructs
+`A(k) = sum_R exp(i k.R) <0|r|R>` exactly at each BSE k point and uses
+`dH/dk - i[A,H]` for Q=0 transitions. This changes IPA and BSE oscillator
+strengths but does not modify the BSE Hamiltonian or exciton energies.
+
+This is currently the zero-temperature `BSE= T` path only; finite-Q and
+finite-temperature optical vertices remain unchanged. It requires the
+orthonormal Wannier representation (`DFT=W`), not the nonorthogonal `DFT=S`
+path. The path is also intentionally rejected when the companion
+`seedname_wsvec.dat` is present: Wannier90 `use_ws_distance` requires its
+additional Wigner-Seitz correction, which has not yet been implemented.
+`BSE_RMAT_FILE` is resolved from the run directory, and all MPI ranks must be
+able to read it.
+
 ELPA BSE diagonalization
 -------------------------
 

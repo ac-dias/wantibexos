@@ -104,6 +104,7 @@ call MPI_BCAST(ta,2,MPI_CHARACTER,root,MPI_COMM_WORLD,ierr)
 call MPI_BCAST(ses,6,MPI_CHARACTER,root,MPI_COMM_WORLD,ierr)
 call MPI_BCAST(emfile,70,MPI_CHARACTER,root,MPI_COMM_WORLD,ierr)
 call MPI_BCAST(bsehamfile,70,MPI_CHARACTER,root,MPI_COMM_WORLD,ierr)
+call MPI_BCAST(bsermatfile,70,MPI_CHARACTER,root,MPI_COMM_WORLD,ierr)
 
 call MPI_BCAST(bsealgo,12,MPI_CHARACTER,root,MPI_COMM_WORLD,ierr)
 call MPI_BCAST(bsekpathmpi,12,MPI_CHARACTER,root,MPI_COMM_WORLD,ierr)
