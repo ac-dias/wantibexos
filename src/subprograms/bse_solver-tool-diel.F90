@@ -977,8 +977,10 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 			call elpa_check(elpa_status, 'set omp_threads', MPI_COMM_WORLD)
 			elpa_status = elpa_instance%setup()
 			call elpa_check(elpa_status, 'elpa setup', MPI_COMM_WORLD)
-			call elpa_instance%set('solver', ELPA_SOLVER_2STAGE, elpa_status)
-			call elpa_check(elpa_status, 'set ELPA 2-stage solver', MPI_COMM_WORLD)
+			! The local ELPA 2025.06 two-stage complex solver returns incorrect
+			! eigenpairs for the BSE matrix while reporting success.
+			call elpa_instance%set('solver', ELPA_SOLVER_1STAGE, elpa_status)
+			call elpa_check(elpa_status, 'set ELPA 1-stage solver', MPI_COMM_WORLD)
 			call elpa_instance%eigenvectors(hbse_dist, W, elpa_eigenvectors, elpa_status)
 			call elpa_check(elpa_status, 'ELPA eigenvectors', MPI_COMM_WORLD)
 			call elpa_deallocate(elpa_instance, elpa_status)

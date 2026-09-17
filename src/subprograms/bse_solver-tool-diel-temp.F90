@@ -1,9 +1,20 @@
+#ifdef ELPA
+#ifndef ELPA_API_VERSION
+#define ELPA_API_VERSION 20211125
+#endif
+#endif
 
 subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		     ebse0,ebsef,numbse,sme,ktol,params,kpaths,kpathsbse,orbw,ediel, &
 		     exc,mshift,coultype,ez,w1,r0,lc,rk,meshtype,bsewf,excwf0,excwff,&
 		     dtfull,cpol,tmcoef,st,phavg,ta,temp,nocpf,fermishift,bsealgo,bsehamwrite,bsehamread,bsehamfile,dft,mag)
 
+#ifdef MPI
+	use mpi
+#endif
+#ifdef ELPA
+	use elpa
+#endif
 	use omp_lib
 	use hamiltonian_input_variables
 
@@ -53,6 +64,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	!variaveis relacionadas a marcacao do tempo
 
 	real:: t0,tf
+	double precision :: task_start,task_elapsed,task_elapsed_max
 	integer,dimension(8) :: values,values2
 
 	integer,allocatable,dimension(:) :: nocpk
@@ -72,13 +84,20 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	real,parameter :: ABSTOL=1.0e-6
 	INTEGER          INFO
 	real,allocatable,dimension(:) :: W,RWORK
-	COMPLEX,allocatable,dimension(:,:) :: hbse
+	COMPLEX,allocatable,dimension(:,:) :: hbse,hbse_dist,hbse_eigenvectors
+	COMPLEX,allocatable,dimension(:) :: eigvec_dist,hopt_fdeh
 
         INTEGER ::          LWMAX
    	INTEGER ::         LWORK
 	INTEGER ::         LIWORK, LRWORK
 	INTEGER,allocatable,dimension(:) :: IWORK
-        complex,allocatable,dimension (:) :: WORK
+	complex,allocatable,dimension (:) :: WORK
+
+#ifdef ELPA
+	class(elpa_t), pointer :: elpa_instance
+	complex,allocatable,dimension(:,:) :: elpa_eigenvectors
+	integer :: elpa_status
+#endif
 
         !zheevr definitions
         real :: VL,VU
@@ -124,7 +143,17 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	real :: st,phavg,temp
 	real :: gapcortemp,gapcortemp2
 	real :: fermidisteh,tcor
-	real,allocatable,dimension(:) :: fdeh	
+	real,allocatable,dimension(:) :: fdeh
+
+	integer :: MPIError, Node, Nodes
+	integer :: blacs_ctxt, nprow, npcol, myrow, mycol
+	integer :: mb, nb, locr, locc, lld, ig, jg, li, lj
+	integer :: desca(9), descz(9)
+	integer :: numroc, indxl2g
+#ifdef MPI
+	integer,parameter :: bse_mpi_block_elements=16777216
+	integer(kind=8) :: mpi_transfer_elements
+#endif
 
 	!call input_read
 
@@ -132,8 +161,18 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	!OPEN(UNIT=203, FILE= orbw,STATUS='old', IOSTAT=erro)
     	!if (erro/=0) stop "Erro na abertura do arquivo de entrada orb weight"
 
+#ifdef MPI
+	call MPI_COMM_RANK(MPI_COMM_WORLD, Node, MPIError)
+	call MPI_COMM_SIZE(MPI_COMM_WORLD, Nodes, MPIError)
+#else
+	Node = 0
+	Nodes = 1
+	MPIError = 0
+#endif
+
 	!OUTPUT
 
+	if (Node == 0) then
 	OPEN(UNIT=300, FILE=trim(outputfolder)//"log_bse_optics.dat",STATUS='unknown', IOSTAT=erro)
     	if (erro/=0) stop "Error opening log_bse-diel output file"
 	OPEN(UNIT=301, FILE=trim(outputfolder)//"bse_oscf.dat",STATUS='unknown', IOSTAT=erro)
@@ -155,8 +194,9 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
     	 continue
     	end if    
     	
-    	OPEN(UNIT=403, FILE=trim(outputfolder)//"ipa_oscf-pol.dat",STATUS='unknown', IOSTAT=erro)
-    	if (erro/=0) stop "Error opening ipa_oscf-pol output file"	
+	OPEN(UNIT=403, FILE=trim(outputfolder)//"ipa_oscf-pol.dat",STATUS='unknown', IOSTAT=erro)
+		if (erro/=0) stop "Error opening ipa_oscf-pol output file"
+	end if
 
 	!OPEN(UNIT=500, FILE=trim(outputfolder)//"log_bse-matrix.dat",STATUS='unknown', IOSTAT=erro)
     	!if (erro/=0) stop "Error opening bse hamiltonian matrix progress output file"
@@ -198,8 +238,10 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	!cpol = .true.
 
 
-	write(301,*) "#","  ", "exciton energy","  ","xx","  ","yy","  ","zz"," ","xy","  ","xz","  ","yz"
-	write(302,*) "#","  ", "exciton energy","  ","xx","  ","yy","  ","zz"," ","sp","  ","sm"	
+	if (Node == 0) then
+		write(301,*) "#","  ", "exciton energy","  ","xx","  ","yy","  ","zz"," ","xy","  ","xz","  ","yz"
+		write(302,*) "#","  ", "exciton energy","  ","xx","  ","yy","  ","zz"," ","sp","  ","sm"
+	end if
 
 
 	!termino parametros calculo 
@@ -219,6 +261,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	!end if
 
 
+	if (Node == 0) then
 	!Informações para o arquivo de log do calculo
 	write(300,*)
 	write(300,*)
@@ -263,6 +306,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	write(300,*) 
 
 	call flush(300)
+	end if
 
 	allocate(kpt(ngkpt,3))
 
@@ -270,7 +314,6 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	call monhkhorst_pack(ngrid(1),ngrid(2),ngrid(3),mshift,rlat(1,:),rlat(2,:),rlat(3,:),kpt)
 
 
-	allocate(eaux(w90basis),vaux(w90basis,w90basis))
 	! Keep the orbital index first so BSE eigenvector arguments are contiguous.
 	allocate(eigv(ngkpt,nc+nv),vector(w90basis,nc+nv,ngkpt))
 	allocate(nocpk(ngkpt))
@@ -279,16 +322,12 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	allocate(hrx(dimbse),hry(dimbse),hrz(dimbse),hrsp(dimbse),hrsm(dimbse))
 	allocate(fdeh(dimbse))
 
-	call bse_hamiltonian_memory_report(300,'BSE Hamiltonian',dimbse,dimbse)
-	allocate(hbse(dimbse,dimbse))
-
-
-
 	allocate(actxx(dimbse),actyy(dimbse),actzz(dimbse),actxy(dimbse))
 	allocate(actxz(dimbse),actyz(dimbse))
 	allocate(actsp(dimbse),actsm(dimbse))	
 	
 	
+	if (Nodes == 1) then
 	select case (bsealgo)
 		
 		case ("cheev")
@@ -343,6 +382,11 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		allocate(W(dimbse),WORK(2*dimbse + dimbse**2))
 		allocate (IWORK(3 + 5*dimbse))
 		allocate (RWORK(1 + 5*dimbse + 2*dimbse**2))
+
+		case ("elpa")
+
+		write(*,*) "BSE_ALGO=elpa requires an MPI run with at least two ranks"
+		stop
 		
 		case default
 		
@@ -350,6 +394,11 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		 stop
 		
 	end select
+	end if
+
+	if (Nodes > 1) then
+		allocate(W(dimbse))
+	end if
 
 	!allocate(orbweight(w90basis))
 	
@@ -381,9 +430,12 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	
 	end select
 
+	if (Node == 0) then
+		allocate(eaux(w90basis),vaux(w90basis,w90basis))
+		write(300,*) "We are going to perform independent particle calculations in serial for now"
 
 #ifdef MKL
-        call MKL_SET_NUM_THREADS(1)
+	        call MKL_SET_NUM_THREADS(1)
 #endif
 
 
@@ -471,24 +523,42 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	write(300,*) 'direct gap:', egap
 	write(300,*) 'eigenvalues and eigenvectors calculated'
 	call flush(300)
+	end if
+
+#ifdef MPI
+	call MPI_BCAST(nocpk, ngkpt, MPI_INTEGER, 0, MPI_COMM_WORLD, MPIError)
+	if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('single-particle band indices',MPIError)
+	mpi_transfer_elements=int(ngkpt,kind=8)*int(nc+nv,kind=8)
+	call bse_mpi_bcast_real_blocks(eigv,mpi_transfer_elements,0,MPI_COMM_WORLD,MPIError,bse_mpi_block_elements)
+	if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('single-particle eigenvalues',MPIError)
+	mpi_transfer_elements=mpi_transfer_elements*int(w90basis,kind=8)
+	call bse_mpi_bcast_complex_blocks(vector,mpi_transfer_elements,0,MPI_COMM_WORLD,MPIError,bse_mpi_block_elements)
+	if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('single-particle eigenvectors',MPIError)
+	call MPI_BCAST(egap, 1, MPI_REAL, 0, MPI_COMM_WORLD, MPIError)
+	if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('direct gap',MPIError)
+#endif
 
 
+	allocate(sk(w90basis,w90basis,ngkpt))
 	if (dft .eq. "S") then
 	
 		! Keep each overlap matrix contiguous when it is passed to matrizelbsetemp.
-		allocate(sk(w90basis,w90basis,ngkpt))
-		
 		do i=1,ngkpt
 		
 			call overlap(w90basis,nvec,rvec,ovp,kpt(i,1),kpt(i,2),kpt(i,3),sk(:,:,i))
 		
 		end do
-		write(300,*) 'overlap matrices calculated'
-		call flush(300)	
+		if (Node == 0) then
+			write(300,*) 'overlap matrices calculated'
+			call flush(300)
+		end if
 	else
-	
-		continue
-	
+		sk = 0.0
+		do i=1,ngkpt
+			do j=1,w90basis
+				sk(j,j,i) = 1.0
+			end do
+		end do
 	end if
 
 
@@ -503,13 +573,16 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 	!allocate(hrx(dimbse),hry(dimbse),hrz(dimbse))
 
-	write(300,*) 'quantum numbers for exciton basis set finished'
-	call flush(300)
+	if (Node == 0) then
+		write(300,*) 'quantum numbers for exciton basis set finished'
+		call flush(300)
+	end if
 
 
 	
 	allocate(vecres(dimbse,17))	
 	
+	if (Node == 0) then
 	write(401,*) "#","  ", "energy","  ","xx","  ","yy","  ","zz","  ","xy","  ","xz","  ","yz"
 	write(403,*) "#","  ", "energy","  ","xx","  ","yy","  ","zz","  ","sp","  ","sm"
 	
@@ -530,7 +603,19 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	
 	 continue
 	end if	
+	end if
 
+
+	if (Node == 0) then
+		write(300,*) 'IPA transitions: begin'
+		call flush(300)
+	end if
+#ifdef MPI
+	call MPI_BARRIER(MPI_COMM_WORLD,MPIError)
+	task_start = MPI_WTIME()
+#else
+	call cpu_time(task_start)
+#endif
 
 	 !$omp parallel do default(shared) private(i,ec,ev)
 
@@ -577,7 +662,16 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	
 	
 	call Bubblem(7,15,vecres, dimbse)
+
+#ifdef MPI
+	task_elapsed = MPI_WTIME() - task_start
+	call MPI_REDUCE(task_elapsed,task_elapsed_max,1,MPI_DOUBLE_PRECISION,MPI_MAX,0,MPI_COMM_WORLD,MPIError)
+#else
+	call cpu_time(task_elapsed)
+	task_elapsed_max = task_elapsed - task_start
+#endif
 	
+	if (Node == 0) then
 	do i=1,dimbse
 	
 		write(401,"(7F15.6)") vecres(i,7),vecres(i,8),vecres(i,9),vecres(i,10),vecres(i,11),vecres(i,12),vecres(i,13)
@@ -598,8 +692,11 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	
 	end do	
 
-	write(300,*) 'single particle optics finished'
+	write(300,*) 'IPA transitions: finished'
+	write(300,"(A,F12.3,A)") 'IPA transitions wall time: ',task_elapsed_max,' s'
+	write(300,*) 'IPA single particle optics finished'
 	call flush(300)
+	end if
 
 	deallocate(vecres)
 	allocate(stt_bse(4,dimbse),kpt_bse(3,ngkpt))
@@ -616,51 +713,163 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	
 	!go to 789
 
-	!allocate(hbse(dimbse,dimbse),W(dimbse))
-
-	! The second field identifies the temperature-dependent BSE Hamiltonian.
-	bseham_metadata = (/ dimbse,2,1 /)
-	bseham_path = trim(outputfolder)//trim(bsehamfile)
-	if (bsehamread) then
-		call bse_hamiltonian_read(bseham_path,bseham_metadata,dimbse,dimbse,hbse,bseham_ok)
-		if (.not. bseham_ok) then
-			write(*,*) 'Unable to read a compatible BSE Hamiltonian: ',trim(bseham_path)
-			stop
+	if (Node == 0) then
+		if (bsehamread) then
+			write(300,*) 'BSE Hamiltonian restart read: begin'
+		else
+			write(300,*) 'BSE Hamiltonian construction: begin'
 		end if
-		write(300,*) 'BSE Hamiltonian restart read: finished'
-	else
-		hbse=0.0
+		call flush(300)
+	end if
+#ifdef MPI
+	call MPI_BARRIER(MPI_COMM_WORLD,MPIError)
+	task_start = MPI_WTIME()
+#else
+	call cpu_time(task_start)
+#endif
 
-		!$omp parallel do default(shared) private(i,j)
+	if (Node == 0) then
+		call bse_hamiltonian_memory_report(300,'BSE Hamiltonian, global dense equivalent',dimbse,dimbse)
+	end if
 
-		do i=1,dimbse
-
-			do j=i,dimbse
-
-  hbse(i,j)= matrizelbsetemp(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,rlat,stt_bse(:,i),eigv(stt_bse(4,i)&
-	    ,stt_bse(3,i)),eigv(stt_bse(4,i),stt_bse(2,i)),vector(:,stt_bse(3,i),stt_bse(4,i)),&
-            vector(:,stt_bse(2,i),stt_bse(4,i)),kpt_bse(:,stt_bse(4,i)),stt_bse(:,j),eigv(stt_bse(4,j),stt_bse(3,j))&
-	    ,eigv(stt_bse(4,j),stt_bse(2,j)) &
-            ,vector(:,stt_bse(3,j),stt_bse(4,j)),vector(:,stt_bse(2,j),stt_bse(4,j)),kpt_bse(:,stt_bse(4,j)),temp,dft,nvec,rvec,&
-            sk(:,:,stt_bse(4,i)),sk(:,:,stt_bse(4,j)))
-
-			end do
-		end do
-
-		!$omp end parallel do
-
-		if (bsehamwrite) then
-			call bse_hamiltonian_write(bseham_path,bseham_metadata,dimbse,dimbse,hbse,bseham_ok)
+	if (Nodes == 1) then
+		! The second field identifies the temperature-dependent BSE Hamiltonian.
+		bseham_metadata = (/ dimbse,2,1 /)
+		bseham_path = trim(outputfolder)//trim(bsehamfile)
+		allocate(hbse(dimbse,dimbse))
+		if (bsehamread) then
+			call bse_hamiltonian_read(bseham_path,bseham_metadata,dimbse,dimbse,hbse,bseham_ok)
 			if (.not. bseham_ok) then
-				write(*,*) 'Unable to save BSE Hamiltonian: ',trim(bseham_path)
+				write(*,*) 'Unable to read a compatible BSE Hamiltonian: ',trim(bseham_path)
 				stop
 			end if
+		else
+			hbse=0.0
+			!$omp parallel do private(i,j) schedule(dynamic)
+			do j=1,dimbse
+				do i=1,j
+					hbse(i,j)= matrizelbsetemp(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,rlat,stt_bse(:,i),&
+					    eigv(stt_bse(4,i),stt_bse(3,i)),eigv(stt_bse(4,i),stt_bse(2,i)),&
+					    vector(:,stt_bse(3,i),stt_bse(4,i)),vector(:,stt_bse(2,i),stt_bse(4,i)),&
+					    kpt_bse(:,stt_bse(4,i)),stt_bse(:,j),eigv(stt_bse(4,j),stt_bse(3,j)),&
+					    eigv(stt_bse(4,j),stt_bse(2,j)),vector(:,stt_bse(3,j),stt_bse(4,j)),&
+					    vector(:,stt_bse(2,j),stt_bse(4,j)),kpt_bse(:,stt_bse(4,j)),temp,dft,nvec,rvec,&
+					    sk(:,:,stt_bse(4,i)),sk(:,:,stt_bse(4,j)))
+				end do
+			end do
+			!$omp end parallel do
+			if (bsehamwrite) then
+				call bse_hamiltonian_write(bseham_path,bseham_metadata,dimbse,dimbse,hbse,bseham_ok)
+				if (.not. bseham_ok) then
+					write(*,*) 'Unable to save BSE Hamiltonian: ',trim(bseham_path)
+					stop
+				end if
+			end if
 		end if
-		write(300,*) 'exciton Hamiltonian matrix finished'
-	end if
-	call flush(300)
+	else
+#ifdef MPI
+		mb = 64
+		nb = 64
+		nprow = int(sqrt(real(Nodes)))
+		do while (mod(Nodes,nprow) /= 0)
+			nprow = nprow - 1
+		end do
+		npcol = Nodes/nprow
 
-	select case (bsealgo)
+		call BLACS_GET(-1, 0, blacs_ctxt)
+		call BLACS_GRIDINIT(blacs_ctxt, 'R', nprow, npcol)
+		call BLACS_GRIDINFO(blacs_ctxt, nprow, npcol, myrow, mycol)
+
+		locr = numroc(dimbse, mb, myrow, 0, nprow)
+		locc = numroc(dimbse, nb, mycol, 0, npcol)
+		lld = max(1,locr)
+		if (Node == 0) then
+			call bse_hamiltonian_memory_report(300,'BSE Hamiltonian on MPI rank 0',lld,max(1,locc))
+		end if
+		allocate(hbse_dist(lld,max(1,locc)))
+		call DESCINIT(desca, dimbse, dimbse, mb, nb, 0, 0, blacs_ctxt, lld, INFO)
+		call DESCINIT(descz, dimbse, dimbse, mb, nb, 0, 0, blacs_ctxt, lld, INFO)
+		bseham_metadata = (/ dimbse,2,1 /)
+		if (trim(bsealgo) == 'elpa') bseham_metadata(3) = 2
+		bseham_path = trim(outputfolder)//trim(bsehamfile)
+
+		if (bsehamread) then
+			call bse_hamiltonian_read_parallel(bseham_path,bseham_metadata,dimbse,hbse_dist,locr,locc,lld, &
+									  mb,nb,nprow,npcol,myrow,mycol,MPI_COMM_WORLD,bseham_ok)
+			if (.not. bseham_ok) then
+				write(*,*) 'Unable to read a compatible BSE Hamiltonian: ',trim(bseham_path)
+				call MPI_ABORT(MPI_COMM_WORLD, 1, MPIError)
+			end if
+		else
+			hbse_dist = 0.0
+			!$omp parallel do private(li,ig,lj,jg) schedule(dynamic)
+			do lj=1,locc
+				jg = indxl2g(lj, nb, mycol, 0, npcol)
+				do li=1,locr
+					ig = indxl2g(li, mb, myrow, 0, nprow)
+
+#ifdef ELPA
+					if (ig <= jg .or. trim(bsealgo) == "elpa") then
+#else
+					if (ig <= jg) then
+#endif
+						hbse_dist(li,lj)= matrizelbsetemp(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,rlat,&
+						    stt_bse(:,ig),eigv(stt_bse(4,ig),stt_bse(3,ig)),eigv(stt_bse(4,ig),stt_bse(2,ig)),&
+						    vector(:,stt_bse(3,ig),stt_bse(4,ig)),vector(:,stt_bse(2,ig),stt_bse(4,ig)),&
+						    kpt_bse(:,stt_bse(4,ig)),stt_bse(:,jg),eigv(stt_bse(4,jg),stt_bse(3,jg)),&
+						    eigv(stt_bse(4,jg),stt_bse(2,jg)),vector(:,stt_bse(3,jg),stt_bse(4,jg)),&
+						    vector(:,stt_bse(2,jg),stt_bse(4,jg)),kpt_bse(:,stt_bse(4,jg)),temp,dft,nvec,rvec,&
+						    sk(:,:,stt_bse(4,ig)),sk(:,:,stt_bse(4,jg)))
+					end if
+				end do
+			end do
+			!$omp end parallel do
+			if (bsehamwrite) then
+				call bse_hamiltonian_write_parallel(bseham_path,bseham_metadata,dimbse,hbse_dist,locr,locc,lld, &
+									   mb,nb,nprow,npcol,myrow,mycol,MPI_COMM_WORLD,bseham_ok)
+				if (.not. bseham_ok) then
+					write(*,*) 'Unable to save BSE Hamiltonian: ',trim(bseham_path)
+					call MPI_ABORT(MPI_COMM_WORLD, 1, MPIError)
+				end if
+			end if
+		end if
+#else
+		stop "MPI/ScaLAPACK path requested without MPI support"
+#endif
+	end if
+
+#ifdef MPI
+	task_elapsed = MPI_WTIME() - task_start
+	call MPI_REDUCE(task_elapsed,task_elapsed_max,1,MPI_DOUBLE_PRECISION,MPI_MAX,0,MPI_COMM_WORLD,MPIError)
+#else
+	call cpu_time(task_elapsed)
+	task_elapsed_max = task_elapsed - task_start
+#endif
+
+	if (Node == 0) then
+		if (bsehamread) then
+			write(300,*) 'BSE Hamiltonian restart read: finished'
+			write(300,"(A,F12.3,A)") 'BSE Hamiltonian restart read wall time: ',task_elapsed_max,' s'
+		else
+			write(300,*) 'BSE Hamiltonian construction: finished'
+			write(300,"(A,F12.3,A)") 'BSE Hamiltonian construction wall time: ',task_elapsed_max,' s'
+		end if
+		call flush(300)
+	end if
+
+	if (Node == 0) then
+		write(300,*) 'BSE diagonalization: begin'
+		call flush(300)
+	end if
+#ifdef MPI
+	call MPI_BARRIER(MPI_COMM_WORLD,MPIError)
+	task_start = MPI_WTIME()
+#else
+	call cpu_time(task_start)
+#endif
+
+	if (Nodes == 1) then
+		select case (bsealgo)
 		
 		case ("cheev")
 
@@ -732,19 +941,121 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
                 STOP
          	END IF  
          	
-         	IF( W(dimbse) .eq. 0 ) THEN
-                WRITE(*,*)'The algorithm failed to compute eigenvalues. Change BSE_ALGO to cheev'
-                STOP
-         	END IF           	
+			IF( W(dimbse) .eq. 0 ) THEN
+	                WRITE(*,*)'The algorithm failed to compute eigenvalues. Change BSE_ALGO to cheev'
+	                STOP
+			END IF
+
+		case ("elpa")
+
+			write(*,*) "BSE_ALGO=elpa requires an MPI run with at least two ranks"
+			stop
 		
 		case default
 		
 		 write(*,*) "please select a subroutine for diagonalization"
 		 stop
 		
-	end select
+		end select
+	else
+#ifdef MPI
 
- 
+#ifdef ELPA
+		if (trim(bsealgo) == "elpa") then
+			allocate(elpa_eigenvectors(lld,max(1,locc)),stat=erro)
+			if (erro /= 0) then
+				write(*,*) 'Could not allocate ELPA eigenvector storage'
+				call MPI_ABORT(MPI_COMM_WORLD, 1, MPIError)
+			end if
+
+			elpa_status = elpa_init(ELPA_API_VERSION)
+			call elpa_check(elpa_status, 'elpa_init', MPI_COMM_WORLD)
+			elpa_instance => elpa_allocate(elpa_status)
+			call elpa_check(elpa_status, 'elpa_allocate', MPI_COMM_WORLD)
+
+			call elpa_instance%set('na', dimbse, elpa_status)
+			call elpa_check(elpa_status, 'set na', MPI_COMM_WORLD)
+			call elpa_instance%set('nev', dimbse, elpa_status)
+			call elpa_check(elpa_status, 'set nev', MPI_COMM_WORLD)
+			call elpa_instance%set('local_nrows', locr, elpa_status)
+			call elpa_check(elpa_status, 'set local_nrows', MPI_COMM_WORLD)
+			call elpa_instance%set('local_ncols', locc, elpa_status)
+			call elpa_check(elpa_status, 'set local_ncols', MPI_COMM_WORLD)
+			call elpa_instance%set('nblk', mb, elpa_status)
+			call elpa_check(elpa_status, 'set nblk', MPI_COMM_WORLD)
+			call elpa_instance%set('mpi_comm_parent', MPI_COMM_WORLD, elpa_status)
+			call elpa_check(elpa_status, 'set mpi_comm_parent', MPI_COMM_WORLD)
+			call elpa_instance%set('process_row', myrow, elpa_status)
+			call elpa_check(elpa_status, 'set process_row', MPI_COMM_WORLD)
+			call elpa_instance%set('process_col', mycol, elpa_status)
+			call elpa_check(elpa_status, 'set process_col', MPI_COMM_WORLD)
+			call elpa_instance%set('omp_threads', nthreads, elpa_status)
+			call elpa_check(elpa_status, 'set omp_threads', MPI_COMM_WORLD)
+			elpa_status = elpa_instance%setup()
+			call elpa_check(elpa_status, 'elpa setup', MPI_COMM_WORLD)
+			! The local ELPA 2025.06 two-stage complex solver returns incorrect
+			! eigenpairs for the BSE matrix while reporting success.
+			call elpa_instance%set('solver', ELPA_SOLVER_1STAGE, elpa_status)
+			call elpa_check(elpa_status, 'set ELPA 1-stage solver', MPI_COMM_WORLD)
+			call elpa_instance%eigenvectors(hbse_dist, W, elpa_eigenvectors, elpa_status)
+			call elpa_check(elpa_status, 'ELPA eigenvectors', MPI_COMM_WORLD)
+			call elpa_deallocate(elpa_instance, elpa_status)
+			call elpa_check(elpa_status, 'elpa_deallocate', MPI_COMM_WORLD)
+			call elpa_uninit(elpa_status)
+			call elpa_check(elpa_status, 'elpa_uninit', MPI_COMM_WORLD)
+
+			deallocate(hbse_dist)
+			call move_alloc(elpa_eigenvectors, hbse_dist)
+		else
+#else
+		if (trim(bsealgo) == "elpa") then
+			write(*,*) 'BSE_ALGO=elpa was requested, but this executable was built without ELPA support'
+			call MPI_ABORT(MPI_COMM_WORLD, 1, MPIError)
+		end if
+#endif
+		LWORK = -1
+		LRWORK = -1
+		! PCHEEV needs distinct input and eigenvector arrays during back transformation.
+		allocate(hbse_eigenvectors(lld,max(1,locc)),stat=erro)
+		if (erro /= 0) then
+			write(*,*) 'Could not allocate distributed BSE eigenvector storage'
+			call MPI_ABORT(MPI_COMM_WORLD, 1, MPIError)
+		end if
+		allocate(WORK(1),RWORK(1))
+		call PCHEEV('V','U',dimbse,hbse_dist,1,1,desca,W,hbse_eigenvectors,1,1,descz, &
+		            WORK,LWORK,RWORK,LRWORK,INFO)
+		LWORK = max(1,int(real(WORK(1))))
+		LRWORK = max(1,int(RWORK(1)))
+		deallocate(WORK,RWORK)
+		allocate(WORK(LWORK),RWORK(LRWORK))
+		call PCHEEV('V','U',dimbse,hbse_dist,1,1,desca,W,hbse_eigenvectors,1,1,descz, &
+		            WORK,LWORK,RWORK,LRWORK,INFO)
+		if (INFO .ne. 0) then
+			write(*,*) 'ScaLAPACK PCHEEV failed with INFO = ', INFO
+			call MPI_ABORT(MPI_COMM_WORLD, INFO, MPIError)
+		end if
+		deallocate(hbse_dist)
+		call move_alloc(hbse_eigenvectors,hbse_dist)
+#ifdef ELPA
+		end if
+#endif
+#endif
+	end if
+
+#ifdef MPI
+	task_elapsed = MPI_WTIME() - task_start
+	call MPI_REDUCE(task_elapsed,task_elapsed_max,1,MPI_DOUBLE_PRECISION,MPI_MAX,0,MPI_COMM_WORLD,MPIError)
+#else
+	call cpu_time(task_elapsed)
+	task_elapsed_max = task_elapsed - task_start
+#endif
+	if (Node == 0) then
+		write(300,*) 'BSE diagonalization: finished'
+		write(300,"(A,F12.3,A)") 'BSE diagonalization wall time: ',task_elapsed_max,' s'
+		call flush(300)
+	end if
+
+
 
 	!allocate(pinter(dimbse),pintra(dimbse))
 
@@ -765,29 +1076,8 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 	!end if 
 	
-	if (bsewf) then
-	
-	      	do i=excwf0,excwff
-      	
-      			call excwf(outputfolder,ngkpt,kpt,nc,nv,nocpk,stt,W(i),i,hbse(:,i))
-      	
-      		end do
-	
-	else
-	
-	 continue
-	
-	end if
-
-	write(300,*) 'exciton Hamiltonian diagonalized'
-	call flush(300)
-	write(300,*) "exciton ground state",W(1)
-
-	deallocate(eigv,vector)
-	deallocate(rvec,hopmatrices)
-	deallocate(ihopmatrices,ffactor)
-
-	select case (bsealgo)
+	if (Nodes == 1) then
+		select case (bsealgo)
 	
 		case ("cheev")
 		
@@ -810,141 +1100,179 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		 write(*,*) "please select a subroutine for diagonalization"
 		 go to 789	
 		 	
-	end select	
+		end select
+	else
+		if (allocated(WORK)) deallocate(WORK)
+		if (allocated(RWORK)) deallocate(RWORK)
+	end if
 	!deallocate (IWORK)
 
 	!allocate(actxx(dimbse),actyy(dimbse),actzz(dimbse),actxy(dimbse))
 	!allocate(actxz(dimbse),actyz(dimbse))
 
-	call dielbseptemp(nthreads,dimbse,hbse,hrx,hrx,fdeh,actxx)
-	write(300,*) 'xx tensor component'
-	call flush(300)
-		
-	call dielbseptemp(nthreads,dimbse,hbse,hry,hry,fdeh,actyy)
-	write(300,*) 'yy tensor component'
-	call flush(300)
-		
-	call dielbseptemp(nthreads,dimbse,hbse,hrz,hrz,fdeh,actzz)
-	write(300,*) 'zz tensor component'
-	call flush(300)
-	
-	if (dtfull) then
-	
-	call dielbseptemp(nthreads,dimbse,hbse,hrx,hry,fdeh,actxy)
-	write(300,*) 'xy tensor component'
-	call flush(300)
-	
-	call dielbseptemp(nthreads,dimbse,hbse,hrx,hrz,fdeh,actxz)
-	write(300,*) 'xz tensor component'
-	call flush(300)
-		
-	call dielbseptemp(nthreads,dimbse,hbse,hry,hrz,fdeh,actyz)
-	write(300,*) 'yz tensor component'
-	call flush(300)
-	
+	if (Nodes == 1) then
+		if (Node == 0) then
+			if (bsewf) then
+				do i=excwf0,excwff
+					call excwf(outputfolder,ngkpt,kpt,nc,nv,nocpk,stt,W(i),i,hbse(:,i))
+				end do
+			end if
+
+			call dielbseptemp(nthreads,dimbse,hbse,hrx,hrx,fdeh,actxx)
+			call dielbseptemp(nthreads,dimbse,hbse,hry,hry,fdeh,actyy)
+			call dielbseptemp(nthreads,dimbse,hbse,hrz,hrz,fdeh,actzz)
+
+			if (dtfull) then
+				call dielbseptemp(nthreads,dimbse,hbse,hrx,hry,fdeh,actxy)
+				call dielbseptemp(nthreads,dimbse,hbse,hrx,hrz,fdeh,actxz)
+				call dielbseptemp(nthreads,dimbse,hbse,hry,hrz,fdeh,actyz)
+			else
+				actxy = 0.0
+				actxz = 0.0
+				actyz = 0.0
+			end if
+
+			if (cpol) then
+				call dielbseptemp(nthreads,dimbse,hbse,hrsp,hrsp,fdeh,actsp)
+				call dielbseptemp(nthreads,dimbse,hbse,hrsm,hrsm,fdeh,actsm)
+			else
+				actsp = 0.0
+				actsm = 0.0
+			end if
+		end if
 	else
-	
-	actxy = 0.0000
-	write(300,*) 'xy tensor component set to 0'
-	call flush(300)
-	
-	actxz = 0.0000
-	write(300,*) 'xz tensor component set to 0'
-	call flush(300)
-		
-	actyz = 0.0000
-	write(300,*) 'yz tensor component set to 0'
-	call flush(300)
-	
-	end if
-	
-	if (cpol) then
-	
-	call dielbseptemp(nthreads,dimbse,hbse,hrsp,hrsp,fdeh,actsp)
-	write(300,*) 'sp polarization'
-	call flush(300)
-		
-	call dielbseptemp(nthreads,dimbse,hbse,hrsm,hrsm,fdeh,actsm)
-	write(300,*) 'sm polarization'
-	call flush(300)
-	
-	else 
-	
-	actsp = 0.0000
-	write(300,*) 'sp polarization set to 0'
-	call flush(300)
-		
-	actsm = 0.0000
-	write(300,*) 'sm polarization set to 0'
-	call flush(300)
-	
-	end if	
-
-	write(300,*) 'optics finished'
-	call flush(300)
-
-
-
-	! $omp do ordered
-	do i=1,dimbse
-		! $omp ordered
-		write(301,"(7F15.6)") W(i),actxx(i),actyy(i),actzz(i),actxy(i),actxz(i),actyz(i)
-		call flush(301)
-		
-		if (cpol) then
-		write(302,"(6F15.6)") W(i),actxx(i),actyy(i),actzz(i),actsp(i),actsm(i)
-		call flush(302)		
+#ifdef MPI
+		if (bsewf) then
+			allocate(eigvec_dist(dimbse))
+			do i=excwf0,excwff
+				call bse_eigenvector_column_dist(dimbse,hbse_dist,lld,locr,locc,mb,nb,myrow,mycol, &
+				                                     nprow,npcol,i,eigvec_dist,MPIError)
+				if (Node == 0) call excwf(outputfolder,ngkpt,kpt,nc,nv,nocpk,stt,W(i),i,eigvec_dist)
+			end do
+			deallocate(eigvec_dist)
 		end if
 
-		! $omp end ordered
-	end do
-	! $omp end do
+		allocate(hopt_fdeh(dimbse))
+		hopt_fdeh = hrx*fdeh
+		call dielbsep_dist(dimbse,hbse_dist,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol, &
+		                   hrx,hopt_fdeh,actxx,MPIError)
+		hopt_fdeh = hry*fdeh
+		call dielbsep_dist(dimbse,hbse_dist,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol, &
+		                   hry,hopt_fdeh,actyy,MPIError)
+		hopt_fdeh = hrz*fdeh
+		call dielbsep_dist(dimbse,hbse_dist,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol, &
+		                   hrz,hopt_fdeh,actzz,MPIError)
+
+		if (dtfull) then
+			hopt_fdeh = hry*fdeh
+			call dielbsep_dist(dimbse,hbse_dist,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol, &
+			                   hrx,hopt_fdeh,actxy,MPIError)
+			hopt_fdeh = hrz*fdeh
+			call dielbsep_dist(dimbse,hbse_dist,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol, &
+			                   hrx,hopt_fdeh,actxz,MPIError)
+			call dielbsep_dist(dimbse,hbse_dist,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol, &
+			                   hry,hopt_fdeh,actyz,MPIError)
+		else
+			actxy = 0.0
+			actxz = 0.0
+			actyz = 0.0
+		end if
+
+		if (cpol) then
+			hopt_fdeh = hrsp*fdeh
+			call dielbsep_dist(dimbse,hbse_dist,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol, &
+			                   hrsp,hopt_fdeh,actsp,MPIError)
+			hopt_fdeh = hrsm*fdeh
+			call dielbsep_dist(dimbse,hbse_dist,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol, &
+			                   hrsm,hopt_fdeh,actsm,MPIError)
+		else
+			actsp = 0.0
+			actsm = 0.0
+		end if
+		deallocate(hopt_fdeh)
+#endif
+	end if
+
+	if (Node == 0) then
+		write(300,*) 'exciton Hamiltonian diagonalized'
+		call flush(300)
+		write(300,*) "exciton ground state",W(1)
+		write(300,*) 'xx tensor component'
+		write(300,*) 'yy tensor component'
+		write(300,*) 'zz tensor component'
+		if (dtfull) then
+			write(300,*) 'xy tensor component'
+			write(300,*) 'xz tensor component'
+			write(300,*) 'yz tensor component'
+		else
+			write(300,*) 'xy tensor component set to 0'
+			write(300,*) 'xz tensor component set to 0'
+			write(300,*) 'yz tensor component set to 0'
+		end if
+		if (cpol) then
+			write(300,*) 'sp polarization'
+			write(300,*) 'sm polarization'
+		else
+			write(300,*) 'sp polarization set to 0'
+			write(300,*) 'sm polarization set to 0'
+		end if
+		write(300,*) 'optics finished'
+		call flush(300)
+
+		do i=1,dimbse
+			write(301,"(7F15.6)") W(i),actxx(i),actyy(i),actzz(i),actxy(i),actxz(i),actyz(i)
+			call flush(301)
+			if (cpol) then
+				write(302,"(6F15.6)") W(i),actxx(i),actyy(i),actzz(i),actsp(i),actsm(i)
+				call flush(302)
+			end if
+		end do
+	end if
+
+	deallocate(eigv,vector)
+	deallocate(rvec,hopmatrices)
+	deallocate(ihopmatrices,ffactor)
 	
 	deallocate(hrx,hry,hrz,hrsp,hrsm)
 	deallocate(actxx,actxy,actxz,actyy,actyz,actzz)
 	deallocate(actsp,actsm)
 
-	deallocate(hbse,W,stt,stt_bse,nocpk)
+	if (Nodes == 1) then
+		deallocate(hbse)
+	else
+#ifdef MPI
+		call BLACS_GRIDEXIT(blacs_ctxt)
+		deallocate(hbse_dist)
+#endif
+	end if
+	deallocate(W,stt,stt_bse,nocpk)
 	deallocate(fdeh)
 	deallocate(ovp)	
 
 	deallocate(kpt,kpt_bse)
-	
-	if (dft .eq. "S") then
-	
 	deallocate(sk)
-	
-	else
-	
-	continue
-	
-	end if		
 
 789     continue
 
 	call cpu_time(tf)
 	call date_and_time(VALUES=values2)
 
-	write(300,*)
-	write(300,*) 'end','   ','month',values2(2),'day',values2(3),'',values2(5),'hours',values2(6),'min',values2(7),'seg'
-	write(300,*)
+	if (Node == 0) then
+		write(300,*)
+		write(300,*) 'end','   ','month',values2(2),'day',values2(3),'',values2(5),'hours',values2(6),'min',values2(7),'seg'
+		write(300,*)
 
+		close(200)
+		!close(203)
 
-
-
-	close(200)
-	!close(203)
-
-
-
-	close(300)
-	close(301)
-	close(302)
-	
-	close(401)
-	close(402)
-	close(403)
-	close(404)
+		close(300)
+		close(301)
+		close(302)
+		close(401)
+		close(402)
+		close(403)
+		close(404)
+	end if
 	
 	!close(500)			
 

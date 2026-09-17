@@ -310,15 +310,9 @@ program main
      		  call flush(2077)
 		endif
 
-		else
-#ifdef MPI
-            if (Nodes /= 1) then
-             write(2077,*) "Not implemented in parallel yet"
-             call mpi_abort(MPI_Comm_World,1, MPIError)
-            endif
-#endif
+			else
 
-		call bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
+			call bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		     ebse0,ebsef,numbse,cshift,ktol,params,kpaths,kpathsbse,orbw,ediel, &
 		     exc,mshift,coultype,ez,w,r0,lc,rk,meshtype,bsewf,excwf0,excwff,dtfull,&
 		     cpol,tmcoef,st,phavg,ta,temp,nocpf,fermishift,bsealgo,bsehamwrite,bsehamread,bsehamfile,dft,mag)
