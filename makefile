@@ -24,6 +24,7 @@ SUBROUTINE_NAMES := \
     bse_subs \
     bse_subs_kpath \
     bse_q_optics \
+    bse_eph_subs \
     bse_subs_temp \
     special_funct \
     ei_spec_funct \
@@ -75,7 +76,8 @@ MODULE_OBJECTS  := $(SUBROUTINE_OBJS) $(SUBPROGRAM_OBJS)
 INPUT_MODULE_OBJ := $(BUILD_DIR)/subroutines/module_input_read.o 
 $(filter-out $(INPUT_MODULE_OBJ),$(MODULE_OBJECTS)): $(INPUT_MODULE_OBJ)
 
-$(BUILD_DIR)/subprograms/bse_solver-tool-diel.o: $(BUILD_DIR)/subroutines/bse_q_optics.o
+$(BUILD_DIR)/subprograms/bse_solver-tool-diel.o: $(BUILD_DIR)/subroutines/bse_q_optics.o $(BUILD_DIR)/subroutines/bse_eph_subs.o
+$(BUILD_DIR)/subprograms/bse_solver-tool-diel-temp.o: $(BUILD_DIR)/subroutines/bse_eph_subs.o
 
 MAIN_SRC  := $(SRC_DIR)/wtb_main.F90
 MAIN_EXEC := $(BIN_DIR)/wtb.x

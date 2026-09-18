@@ -19,8 +19,10 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 #endif
 	use omp_lib
 	use hamiltonian_input_variables
-	use input_variables, only: bsermatfile
+	use input_variables, only: bsermatfile, bse_eph_file, bse_eph_eta, bse_eph_temp
 	use bse_q_optics, only: rmn_data, rmn_read, rmn_destroy, rmn_apply_q0_optical_correction
+	use bse_eph, only: eph_data, eph_read, eph_destroy, eph_build_kplusq, &
+	                   exciton_phonon_linewidth, exciton_phonon_phassist
 
 	implicit none
 
@@ -155,6 +157,18 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 #endif
 
 	!fim modificacoes versao 2.1
+
+	! EPH variables
+	type(eph_data) :: eph
+	logical :: eph_ok
+	character(len=256) :: eph_message
+	integer, allocatable :: kplusq_idx(:,:)
+	real,    allocatable :: Gamma_eph(:)
+	real,    allocatable :: chi2_xx_eph(:), chi2_yy_eph(:), chi2_zz_eph(:)
+	real,    allocatable :: omega_grid_eph(:)
+	complex, allocatable :: mu_x_eph(:), mu_y_eph(:), mu_z_eph(:)
+	complex, allocatable :: hbse_work(:,:)
+	integer :: io_eph, iomega
 
 	!call input_read
 
@@ -1217,7 +1231,99 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 				end if
 			end do
 		end if
-			
+
+		! --- Exciton-phonon coupling post-processing ---
+		! MPI: q-points are distributed round-robin inside the EPH subroutines.
+		! OMP: inner lam loops are threaded inside the EPH subroutines.
+		! The eigenvector matrix is first replicated on all ranks (one MPI_ALLREDUCE)
+		! so the existing EPH routines (which expect a full hbse) work unchanged.
+		if (len_trim(bse_eph_file) > 0) then
+			call eph_read(trim(bse_eph_file), eph, eph_ok, eph_message)
+			if (.not. eph_ok) then
+				if (Node == 0) write(*,*) trim(eph_message)
+				stop
+			end if
+			allocate(kplusq_idx(ngkpt, eph%nq))
+			call eph_build_kplusq(kpt_bse, ngkpt, eph%qpts, eph%nq, rlat, ktol, kplusq_idx)
+
+			! Gather distributed eigenvectors to all ranks
+			allocate(hbse_work(dimbse, dimbse))
+			if (Nodes == 1) then
+				hbse_work = hbse
+			else
+#ifdef MPI
+				hbse_work = cmplx(0.0, 0.0)
+				do lj = 1, locc
+					jg = indxl2g(lj, nb, mycol, 0, npcol)
+					do li = 1, locr
+						ig = indxl2g(li, mb, myrow, 0, nprow)
+						if (ig <= dimbse .and. jg <= dimbse) hbse_work(ig, jg) = hbse_dist(li, lj)
+					end do
+				end do
+				call bse_mpi_allreduce_complex_sum_blocks(hbse_work(1,1), &
+					int(dimbse,kind=8)*int(dimbse,kind=8), MPI_COMM_WORLD, MPIError, 16777216)
+#endif
+			end if
+
+			! Exciton optical matrix elements mu(lam) = sum_j A^lam_j * hopt_j
+			allocate(mu_x_eph(dimbse), mu_y_eph(dimbse), mu_z_eph(dimbse))
+			do i = 1, dimbse
+				mu_x_eph(i) = sum(hbse_work(:,i) * hrx)
+				mu_y_eph(i) = sum(hbse_work(:,i) * hry)
+				mu_z_eph(i) = sum(hbse_work(:,i) * hrz)
+			end do
+
+			! Linewidth: Gamma(lam) = pi * sum_{q,nu,lp} |gex(lam,lp)|^2 * Bose-Einstein weights
+			allocate(Gamma_eph(dimbse))
+			Gamma_eph = 0.0
+			call exciton_phonon_linewidth(eph, vector, w90basis, nc, nv, ngkpt, &
+			                              hbse_work, stt_bse, dimbse, W, kplusq_idx, &
+			                              bse_eph_temp, bse_eph_eta, Gamma_eph, Node, Nodes)
+			if (Node == 0) then
+				open(newunit=io_eph, file=trim(outputfolder)//'exc_eph_linewidth.dat', status='replace', action='write')
+				write(io_eph,'(A)') '# state   E_lambda(eV)   Gamma(meV)   lifetime(ps)'
+				do i = 1, dimbse
+					write(io_eph,'(I8,3F18.8)') i, W(i), Gamma_eph(i)*1000.0, &
+					                             0.6582119569 / (Gamma_eph(i) + 1.0e-30)
+				end do
+				close(io_eph)
+				write(300,*) 'EPH linewidth written to exc_eph_linewidth.dat'
+				call flush(300)
+			end if
+			deallocate(Gamma_eph)
+
+			! Phonon-assisted absorption spectrum
+			allocate(omega_grid_eph(int(numbse)), chi2_xx_eph(int(numbse)), &
+			         chi2_yy_eph(int(numbse)), chi2_zz_eph(int(numbse)))
+			do iomega = 1, int(numbse)
+				omega_grid_eph(iomega) = ebse0 + (ebsef - ebse0) * (iomega - 1) / max(int(numbse) - 1, 1)
+			end do
+			chi2_xx_eph = 0.0;  chi2_yy_eph = 0.0;  chi2_zz_eph = 0.0
+			call exciton_phonon_phassist(eph, vector, w90basis, nc, nv, ngkpt, &
+			                             hbse_work, stt_bse, dimbse, W, &
+			                             mu_x_eph, mu_y_eph, mu_z_eph, kplusq_idx, &
+			                             bse_eph_temp, bse_eph_eta, &
+			                             omega_grid_eph, int(numbse), &
+			                             chi2_xx_eph, chi2_yy_eph, chi2_zz_eph, Node, Nodes)
+			if (Node == 0) then
+				open(newunit=io_eph, file=trim(outputfolder)//'exc_eph_phassist.dat', status='replace', action='write')
+				write(io_eph,'(A)') '# omega(eV)   Im_chi_xx   Im_chi_yy   Im_chi_zz'
+				do iomega = 1, int(numbse)
+					write(io_eph,'(4F18.8)') omega_grid_eph(iomega), &
+					    chi2_xx_eph(iomega), chi2_yy_eph(iomega), chi2_zz_eph(iomega)
+				end do
+				close(io_eph)
+				write(300,*) 'Phonon-assisted spectrum written to exc_eph_phassist.dat'
+				call flush(300)
+			end if
+			deallocate(omega_grid_eph, chi2_xx_eph, chi2_yy_eph, chi2_zz_eph)
+
+			deallocate(mu_x_eph, mu_y_eph, mu_z_eph)
+			deallocate(hbse_work)
+			deallocate(kplusq_idx)
+			call eph_destroy(eph)
+		end if
+
 		deallocate(eigv,vector)
 		deallocate(rvec,hopmatrices)
 		deallocate(ihopmatrices,ffactor)

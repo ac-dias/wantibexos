@@ -278,7 +278,10 @@ module input_variables
 	character(len=70) :: bsehamfile
 	character(len=70) :: bsekpathcheckpointfile
 	character(len=70) :: bsermatfile
-		
+	character(len=160) :: bse_eph_file
+	real :: bse_eph_eta
+	real :: bse_eph_temp
+
 
 	logical :: bandscalc,doscalc
 	logical :: bse,bsepol,bsekpath
@@ -448,6 +451,9 @@ subroutine input_read
 	bsehamread = .false.
 	bsehamfile = "bse_hamiltonian.bin"
 	bsermatfile = ""
+	bse_eph_file = ""
+	bse_eph_eta = 0.01
+	bse_eph_temp = 300.0
 	bsekpathcheckpoint = .false.
 	bsekpathcheckpointfile = "bse_kpath_checkpoint"
 	
@@ -625,7 +631,19 @@ subroutine input_read
 	case ("BSE_RMAT_FILE=")
 
 		bsermatfile = b
-	
+
+	case ("BSE_EPH_FILE=")
+
+		bse_eph_file = b
+
+	case ("BSE_EPH_ETA=")
+
+		read(b,*) bse_eph_eta
+
+	case ("BSE_EPH_TEMP=")
+
+		read(b,*) bse_eph_temp
+
 	case ("dK=")
 
 		read(b,*) dk
