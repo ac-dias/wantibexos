@@ -13,6 +13,9 @@ module bse_q_optics
 	public :: rmn_read
 	public :: rmn_destroy
 	public :: rmn_bloch
+	public :: rmn_centers
+	public :: center_phase_build
+	public :: center_phase_direct_vertices
 	public :: rmn_apply_q0_optical_correction
 
 contains
@@ -149,6 +152,126 @@ subroutine rmn_read(filename,data,ok,message)
 	message=''
 
 end subroutine rmn_read
+
+
+subroutine rmn_centers(data,centers,ok,message)
+
+	! Extract the Wannier centres t_m=<0,m|r|0,m> from the R=0 block of
+	! seedname_r.dat.  The full r-matrix remains available for the optical
+	! position correction; this routine only provides its diagonal centres to
+	! the G=0 Coulomb embedding.
+
+	type(rmn_data),intent(in) :: data
+	real,dimension(:,:),intent(out) :: centers
+	logical,intent(out) :: ok
+	character(len=*),intent(out) :: message
+
+	integer :: ir,irzero,m
+	real,parameter :: imaginary_tolerance=1.0e-5
+
+	ok=.false.
+	message=''
+	centers=0.0
+
+	if (.not. allocated(data%rvec) .or. .not. allocated(data%rmn) .or. &
+		data%num_wann <= 0 .or. data%nrpts <= 0) then
+		message='Wannier90 r-matrix table has not been initialized'
+		return
+	end if
+	if (size(centers,1) /= 3 .or. size(centers,2) /= data%num_wann) then
+		message='Incompatible output dimensions for Wannier centres'
+		return
+	end if
+
+	irzero=0
+	do ir=1,data%nrpts
+		if (all(data%rvec(:,ir) == 0)) then
+			if (irzero /= 0) then
+				message='Wannier90 r-matrix table contains duplicate R=0 blocks'
+				return
+			end if
+			irzero=ir
+		end if
+	end do
+	if (irzero == 0) then
+		message='Wannier90 r-matrix table has no R=0 block for Wannier centres'
+		return
+	end if
+
+	do m=1,data%num_wann
+		if (maxval(abs(aimag(data%rmn(:,m,m,irzero)))) > imaginary_tolerance) then
+			message='Wannier90 R=0 diagonal position matrix is not real within tolerance'
+			return
+		end if
+		centers(:,m)=real(data%rmn(:,m,m,irzero))
+	end do
+
+	ok=.true.
+
+end subroutine rmn_centers
+
+
+subroutine center_phase_build(centers,kpoints,phases,ok,message)
+
+	! P_m(k)=exp(+i k.t_m), using the same positive Fourier convention as
+	! hamiltonian() and rmn_bloch().  Precomputing this table avoids evaluating
+	! exponentials inside every BSE Hamiltonian matrix element.
+
+	real,dimension(:,:),intent(in) :: centers,kpoints
+	complex,dimension(:,:),intent(out) :: phases
+	logical,intent(out) :: ok
+	character(len=*),intent(out) :: message
+
+	integer :: ik,m
+	real :: angle
+
+	ok=.false.
+	message=''
+	phases=cmplx(1.0,0.0)
+
+	if (size(centers,1) /= 3 .or. size(kpoints,2) /= 3 .or. &
+		size(phases,1) /= size(centers,2) .or. size(phases,2) /= size(kpoints,1)) then
+		message='Incompatible dimensions for Wannier-centre phase table'
+		return
+	end if
+
+	do ik=1,size(kpoints,1)
+		do m=1,size(centers,2)
+			angle=dot_product(kpoints(ik,:),centers(:,m))
+			phases(m,ik)=cmplx(cos(angle),sin(angle))
+		end do
+	end do
+
+	ok=.true.
+
+end subroutine center_phase_build
+
+
+subroutine center_phase_direct_vertices(c1,c2,v1,v2,phase1,phase2,vc,vv)
+
+	! For q=k1-k2, construct the two vertices whose product gives
+	!
+	!   sum_ij c1_i^* c2_i v1_j^* v2_j
+	!          exp(+i q.t_i) exp(-i q.t_j).
+	!
+	! This is the G=0 centre-resolved direct kernel.  The screened Coulomb
+	! scalar, normalization, and sign remain in the existing Coulomb routines.
+
+	complex,dimension(:),intent(in) :: c1,c2,v1,v2,phase1,phase2
+	complex,intent(out) :: vc,vv
+
+	integer :: m
+	complex :: relative_phase
+
+	vc=cmplx(0.0,0.0)
+	vv=cmplx(0.0,0.0)
+	do m=1,size(c1)
+		relative_phase=phase1(m)*conjg(phase2(m))
+		vc=vc+conjg(c1(m))*c2(m)*relative_phase
+		vv=vv+conjg(v1(m))*v2(m)*conjg(relative_phase)
+	end do
+
+end subroutine center_phase_direct_vertices
 
 
 subroutine rmn_bloch(data,kpoint,rlat,connection,ok,message)

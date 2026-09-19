@@ -1,6 +1,9 @@
 
 function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1,ev1,vbc1 &
-         ,vbv1,kpt1,est2,ec2,ev2,vbc2,vbv2,kpt2,dft,nvec,rvec,sk,skp) !funcao para calcular o elemento de matriz da matriz bse
+	         ,vbv1,kpt1,est2,ec2,ev2,vbc2,vbv2,kpt2,dft,nvec,rvec,sk,skp, &
+	         use_center_phase,center_phase1,center_phase2) !funcao para calcular o elemento de matriz da matriz bse
+
+	use bse_q_optics, only: center_phase_direct_vertices
 
 	implicit none
 
@@ -10,6 +13,7 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 	integer,dimension(3) :: ngrid
 
 	integer :: w90basis,nvec
+	logical :: use_center_phase
 	real :: a,vcell1
 	real :: ez,w
 	
@@ -17,6 +21,7 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 	!real,dimension(nvec,w90basis,w90basis) :: ovp
 	
 	complex,dimension(w90basis,w90basis) :: sk,skp
+	complex,dimension(w90basis) :: center_phase1,center_phase2
 
 	integer, dimension(4) :: est1,est2
 	real :: ec1,ec2,ev1,ev2
@@ -155,13 +160,22 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 		
 		case default
 	
-		 call vecconjg(vbc1,w90basis,vbc)
+		 if (use_center_phase) then
 
-		 call vecconjg(vbv1,w90basis,vbv)
+			call center_phase_direct_vertices(vbc1,vbc2,vbv1,vbv2, &
+				center_phase1,center_phase2,vc,vv)
 
-		 call prodintsq(vbc,vbc2,w90basis,vc)
+		 else
 
-		 call prodintsq(vbv,vbv2,w90basis,vv)
+			call vecconjg(vbc1,w90basis,vbc)
+
+			call vecconjg(vbv1,w90basis,vbv)
+
+			call prodintsq(vbc,vbc2,w90basis,vc)
+
+			call prodintsq(vbv,vbv2,w90basis,vv)
+
+		 end if
 	
 	         matrizelbse=  vcoul1*vc*vv
 	         
@@ -791,7 +805,6 @@ subroutine excwfi(outputfolder,ngkpt,kpt,qpt,nc,nv,nocp,stt,excenergy,excnum,qpt
 	close(800+excnum*qptnum)
 
 end subroutine excwfi
-
 
 
 

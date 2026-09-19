@@ -277,7 +277,8 @@ module input_variables
 	character(len=70) :: emfile
 	character(len=70) :: bsehamfile
 	character(len=70) :: bsekpathcheckpointfile
-	character(len=70) :: bsermatfile
+	character(len=70) :: bsecenterfile
+	logical :: bsecenterkernel
 		
 
 	logical :: bandscalc,doscalc
@@ -447,7 +448,8 @@ subroutine input_read
 	bsehamwrite = .false.
 	bsehamread = .false.
 	bsehamfile = "bse_hamiltonian.bin"
-	bsermatfile = ""
+	bsecenterfile = ""
+	bsecenterkernel = .false.
 	bsekpathcheckpoint = .false.
 	bsekpathcheckpointfile = "bse_kpath_checkpoint"
 	
@@ -622,9 +624,16 @@ subroutine input_read
 
 		bsehamfile = b
 
+	case ("BSE_CENTER_FILE=")
+
+		bsecenterfile = b
+		bsecenterkernel = .true.
+
 	case ("BSE_RMAT_FILE=")
 
-		bsermatfile = b
+		! Backward-compatible optical-only alias.  Existing inputs using the
+		! old name must not silently acquire a different BSE Hamiltonian.
+		bsecenterfile = b
 	
 	case ("dK=")
 

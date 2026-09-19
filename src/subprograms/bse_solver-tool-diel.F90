@@ -19,8 +19,9 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 #endif
 	use omp_lib
 	use hamiltonian_input_variables
-	use input_variables, only: bsermatfile
-	use bse_q_optics, only: rmn_data, rmn_read, rmn_destroy, rmn_apply_q0_optical_correction
+	use input_variables, only: bsecenterfile, bsecenterkernel
+	use bse_q_optics, only: rmn_data, rmn_read, rmn_destroy, rmn_centers, &
+		center_phase_build, rmn_apply_q0_optical_correction
 
 	implicit none
 
@@ -30,6 +31,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 	real,allocatable,dimension(:,:) :: eigv
 	complex,allocatable,dimension(:,:,:) :: vector
+	complex,allocatable,dimension(:,:) :: center_phase
 
 	real,allocatable,dimension(:,:) :: kpt !pontos k do grid
 	real,allocatable,dimension(:,:) :: kpt_bse
@@ -82,8 +84,9 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	
 	complex,allocatable,dimension(:,:,:) :: sk
 	type(rmn_data) :: rmn
-	logical :: use_rmn,rmn_ok
+	logical :: use_rmn,use_center_phase,rmn_ok
 	character(len=256) :: rmn_message
+	real,allocatable,dimension(:,:) :: wannier_centers
 
 	!definicoes diagonalizacao 
 	INTEGER   ::       ifail
@@ -252,21 +255,37 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
       call bcast_hamil()
 #endif
 
-	use_rmn=len_trim(bsermatfile) > 0
+	use_rmn=len_trim(bsecenterfile) > 0
+	use_center_phase=bsecenterkernel
+	if (use_center_phase .and. .not. use_rmn) stop 'BSE_CENTER_FILE requires a Wannier90 r-matrix filename'
+	allocate(wannier_centers(3,w90basis))
+	wannier_centers=0.0
 	if (use_rmn) then
-		if (dft == 'S') stop 'BSE_RMAT_FILE currently requires the orthonormal Wannier representation'
-		call rmn_read(trim(bsermatfile),rmn,rmn_ok,rmn_message)
+		if (dft == 'S') stop 'Wannier position data currently require the orthonormal Wannier representation'
+		call rmn_read(trim(bsecenterfile),rmn,rmn_ok,rmn_message)
 		if (.not. rmn_ok) then
 			write(*,*) trim(rmn_message)
-			stop 'Unable to initialize the Q=0 Wannier position matrix'
+			stop 'Unable to initialize the Wannier position data'
 		end if
 		if (rmn%num_wann /= w90basis) then
 			write(*,*) 'Wannier position matrix basis:',rmn%num_wann,' Hamiltonian basis:',w90basis
 			stop 'Incompatible Wannier position and Hamiltonian bases'
 		end if
+		if (use_center_phase) then
+			call rmn_centers(rmn,wannier_centers,rmn_ok,rmn_message)
+			if (.not. rmn_ok) then
+				write(*,*) trim(rmn_message)
+				stop 'Unable to initialize the Wannier centres'
+			end if
+		end if
 		if (Node == 0) then
-			write(300,*) 'Q=0 optical position matrix:',trim(bsermatfile)
+			write(300,*) 'Wannier position data:',trim(bsecenterfile)
 			write(300,*) 'Q=0 position-matrix treatment: dH/dk - i[A,H]'
+			if (use_center_phase) then
+				write(300,*) 'G=0 direct Coulomb embedding: Wannier-centre phases enabled'
+			else
+				write(300,*) 'G=0 direct Coulomb embedding: legacy scalar kernel'
+			end if
 		end if
 	end if
 
@@ -331,10 +350,19 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	call flush(300)
     endif
 
-    allocate(kpt(ngkpt,3))
+	allocate(kpt(ngkpt,3))
 
 	!shift = 0.0
 	call monhkhorst_pack(ngrid(1),ngrid(2),ngrid(3),mshift,rlat(1,:),rlat(2,:),rlat(3,:),kpt)
+	allocate(center_phase(w90basis,ngkpt))
+	center_phase=cmplx(1.0,0.0)
+	if (use_center_phase) then
+		call center_phase_build(wannier_centers,kpt,center_phase,rmn_ok,rmn_message)
+		if (.not. rmn_ok) then
+			write(*,*) trim(rmn_message)
+			stop 'Unable to build Wannier-centre phase table'
+		end if
+	end if
 
 	! Keep the orbital index first so every eigenvector passed to the BSE
 	! kernel is a contiguous column.
@@ -739,6 +767,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
     if (Nodes == 1) then
 		bseham_metadata = (/ dimbse,1,1 /)
+		if (use_center_phase) bseham_metadata(3) = 3
 		bseham_path = trim(outputfolder)//trim(bsehamfile)
 		allocate(hbse(dimbse,dimbse))
 		if (bsehamread) then
@@ -757,7 +786,8 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 					    vector(:,stt_bse(2,i),stt_bse(4,i)),kpt_bse(:,stt_bse(4,i)),stt_bse(:,j),eigv(stt_bse(4,j),stt_bse(3,j))&
 					    ,eigv(stt_bse(4,j),stt_bse(2,j)) &
 					    ,vector(:,stt_bse(3,j),stt_bse(4,j)),vector(:,stt_bse(2,j),stt_bse(4,j)),kpt_bse(:,stt_bse(4,j)),dft,nvec,rvec,&
-					    sk(:,:,stt_bse(4,i)),sk(:,:,stt_bse(4,j)))
+					    sk(:,:,stt_bse(4,i)),sk(:,:,stt_bse(4,j)),use_center_phase, &
+					    center_phase(:,stt_bse(4,i)),center_phase(:,stt_bse(4,j)))
 				end do
 			end do
 			!$omp end parallel do
@@ -796,6 +826,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		call DESCINIT(descz, dimbse, dimbse, mb, nb, 0, 0, blacs_ctxt, lld, INFO)
 		bseham_metadata = (/ dimbse,1,1 /)
 		if (trim(bsealgo) == 'elpa') bseham_metadata(3) = 2
+		if (use_center_phase) bseham_metadata(3) = bseham_metadata(3)+2
 		bseham_path = trim(outputfolder)//trim(bsehamfile)
 
 		if (bsehamread) then
@@ -825,7 +856,8 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 						    eigv(stt_bse(4,ig),stt_bse(3,ig)),eigv(stt_bse(4,ig),stt_bse(2,ig)),vector(:,stt_bse(3,ig),stt_bse(4,ig)),&
 						    vector(:,stt_bse(2,ig),stt_bse(4,ig)),kpt_bse(:,stt_bse(4,ig)),stt_bse(:,jg),eigv(stt_bse(4,jg),stt_bse(3,jg)),&
 						    eigv(stt_bse(4,jg),stt_bse(2,jg)),vector(:,stt_bse(3,jg),stt_bse(4,jg)),vector(:,stt_bse(2,jg),stt_bse(4,jg)),&
-						    kpt_bse(:,stt_bse(4,jg)),dft,nvec,rvec,sk(:,:,stt_bse(4,ig)),sk(:,:,stt_bse(4,jg)))
+						    kpt_bse(:,stt_bse(4,jg)),dft,nvec,rvec,sk(:,:,stt_bse(4,ig)),sk(:,:,stt_bse(4,jg)), &
+						    use_center_phase,center_phase(:,stt_bse(4,ig)),center_phase(:,stt_bse(4,jg)))
 					end if
 				end do
 			end do
@@ -1235,7 +1267,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		deallocate(W,stt,stt_bse,nocpk)
 	deallocate(ovp)
 
-	deallocate(kpt,kpt_bse)
+	deallocate(kpt,kpt_bse,center_phase,wannier_centers)
 	
 		deallocate(sk)
 		call rmn_destroy(rmn)

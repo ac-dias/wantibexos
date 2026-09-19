@@ -45,22 +45,35 @@ For distributed MPI BSE runs, the checkpoint is a single global matrix written
 with MPI-IO.  It can be restarted with a different MPI rank count or
 process-grid layout; each rank reads its own block-cyclic part of the matrix.
 
-Q=0 Wannier position-matrix vertex
------------------------------------
+Q=0 Wannier position data
+--------------------------
 
-The zero-temperature optical BSE solver can include the Wannier90 position
-matrix <0m|r|Rn> in its vertical optical vertex. Enable the Wannier90
-`write_rmn` output and pass its `seedname_r.dat` file explicitly:
+The zero-temperature optical BSE solver can use the Wannier90 position matrix
+<0m|r|Rn> both in its vertical optical vertex and in the G=0 direct Coulomb
+kernel. Enable the Wannier90 `write_rmn` output and pass its `seedname_r.dat`
+file explicitly:
 
 ```
-BSE_RMAT_FILE= seedname_r.dat
+BSE_CENTER_FILE= seedname_r.dat
 ```
 
 When this setting is absent, the legacy derivative-only optical matrix element
-is retained unchanged. When it is present, the code reconstructs
+and scalar Coulomb kernel are retained unchanged. When it is present, the code
+reconstructs
 `A(k) = sum_R exp(i k.R) <0|r|R>` exactly at each BSE k point and uses
-`dH/dk - i[A,H]` for Q=0 transitions. This changes IPA and BSE oscillator
-strengths but does not modify the BSE Hamiltonian or exciton energies.
+`dH/dk - i[A,H]` for Q=0 transitions. It also extracts the Wannier centres
+`t_m=<0m|r|0m>` from the R=0 diagonal and replaces the direct-kernel vertices by
+
+```
+sum_m C1_m^* C2_m exp[+i (k1-k2).t_m]
+sum_n V1_n^* V2_n exp[-i (k1-k2).t_n].
+```
+
+This is the centre-resolved G=0 approximation
+`V_mn(q)=V(q) exp[i q.(t_m-t_n)]`. It changes the BSE Hamiltonian, exciton
+energies, and oscillator strengths. The screened scalar Coulomb potential and
+its q=0 averaging are otherwise unchanged. The finite-Q direct and exchange
+kernels are not modified.
 
 This is currently the zero-temperature `BSE= T` path only; finite-Q and
 finite-temperature optical vertices remain unchanged. It requires the
@@ -68,8 +81,14 @@ orthonormal Wannier representation (`DFT=W`), not the nonorthogonal `DFT=S`
 path. The path is also intentionally rejected when the companion
 `seedname_wsvec.dat` is present: Wannier90 `use_ws_distance` requires its
 additional Wigner-Seitz correction, which has not yet been implemented.
-`BSE_RMAT_FILE` is resolved from the run directory, and all MPI ranks must be
+`BSE_CENTER_FILE` is resolved from the run directory, and all MPI ranks must be
 able to read it.
+
+The former `BSE_RMAT_FILE` input name remains available as an optical-only
+compatibility alias. It applies `dH/dk - i[A,H]` but deliberately retains the
+legacy scalar BSE kernel, so existing inputs do not silently acquire different
+exciton energies. New calculations using the centre-resolved direct kernel
+should use `BSE_CENTER_FILE`.
 
 ELPA BSE diagonalization
 -------------------------
