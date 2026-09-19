@@ -404,8 +404,10 @@ subroutine imagrenorm(ndim,nelux,exciton,dielf)
 	
 	end do	
 	
-130 	continue	
-		
+130 	continue
+
+	if (ibegin >= nelux) go to 131
+
 	aux3 = dielf(ibegin+1,3)
 		
 	do i=1,ibegin
