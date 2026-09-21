@@ -604,6 +604,91 @@ real(kind=8) function v2dtavg_cell(ngrid,rlat)
 end function v2dtavg_cell
 
 
+! Slab-truncated 2D potential with the q=0 value averaged over the
+! reciprocal-space sampling cell (geometrically identical to V2DTAVG),
+! but screened by the q-dependent Trolle-Pedersen-Veniard dielectric
+! function (dielectric_models.F90) instead of the constant EDIEL.
+!
+! ediel is still threaded through as in v2dtavg: an ediel(2) within 0.001
+! of 1.0 is the legacy bare/unscreened marker used by the callers for the
+! e-h exchange term (see ediel_bare in bse_subs_temp.F90/bse_subs_kpath.F90),
+! and is honored here by skipping the dielectric model entirely, exactly
+! as v2dtavg does with a constant ed=1.0.
+function v2davgtpv(kpt1,kpt2,ediel,ngrid,rlat,tolr)
+
+	use dielectric_models, only: trolle_pedersen_veniard_dielectric
+	use input_variables, only: tpv_kappa,tpv_qtf,tpv_hwp,tpv_thickness,tpv_alpha
+
+	implicit none
+
+	real,parameter :: cic=-(0.0904756)*10**3
+	real,dimension(3) :: kpt1,kpt2,vkpt
+	real,dimension(3,3) :: rlat
+	integer,dimension(3) :: ngrid
+	real :: tolr,modk,v2davgtpv
+	real :: vc,vbz,factor,gpar,gz,rc
+	real :: aux1,aux2,aux3,aux4,aux5
+	real(kind=8) :: v2dtavg_cell
+	real,dimension(3) :: ediel
+	real :: ed
+
+	logical,save :: cache_valid=.false.
+	integer,dimension(3),save :: cached_ngrid=(/0,0,0/)
+	real,dimension(3,3),save :: cached_rlat=0.0
+	real,save :: cached_value=0.0
+
+	call vcell3D(rlat,vc)
+	call modvec(kpt1,kpt2,modk)
+
+	vbz=1.0/((ngrid(1)*ngrid(2)*ngrid(3))*vc)
+	vkpt=kpt1-kpt2
+	gz=abs(vkpt(3))
+	gpar=sqrt(vkpt(1)*vkpt(1)+vkpt(2)*vkpt(2))
+	rc=0.5*rlat(3,3)
+
+		if (abs(ediel(2)-1.0) .lt. 0.001) then
+			ed = 1.0
+		else
+			ed = trolle_pedersen_veniard_dielectric(modk,tpv_thickness,tpv_kappa, &
+			                                         tpv_qtf,tpv_hwp,ediel(1),ediel(3),tpv_alpha)
+		end if
+		factor=2.0/ed
+
+	if ((gpar .lt. tolr) .and. (gz .lt. tolr)) then
+		! Bare-kernel cell average: independent of ediel/epsilon(q), so it
+		! is cached here just as in v2dtavg (its own, separate cache).
+		!$omp critical (v2davgtpv_cache)
+		if (.not. cache_valid) then
+			cached_value=real(v2dtavg_cell(ngrid,rlat))
+			cached_ngrid=ngrid
+			cached_rlat=rlat
+			cache_valid=.true.
+		else if (any(cached_ngrid .ne. ngrid) .or. any(cached_rlat .ne. rlat)) then
+			cached_value=real(v2dtavg_cell(ngrid,rlat))
+			cached_ngrid=ngrid
+			cached_rlat=rlat
+		end if
+		v2davgtpv=factor*cached_value
+		!$omp end critical (v2davgtpv_cache)
+
+	else if ((gpar .lt. tolr) .and. (gz .ge. tolr)) then
+		v2davgtpv=(vbz*cic)*(factor/(modk*modk)) &
+		         *(1.0-cos(gz*rc)-(gz*rc*sin(gz*rc)))
+
+	else
+		aux1=gz/gpar
+		aux2=gpar*rc
+		aux3=gz*rc
+		aux4=aux1*sin(aux3)
+		aux5=cos(aux3)
+		v2davgtpv=(vbz*cic)*(factor/(modk*modk)) &
+		         *(1.0+exp(-aux2)*(aux4-aux5))
+	end if
+
+
+end function v2davgtpv
+
+
 !potencial 0D truncado (DOI: 10.1103/PhysRevB.73.205119)
 
 function v0dt(kpt1,kpt2,ngrid,rlat,tolr)

@@ -1,13 +1,14 @@
 
 function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1,ev1,vbc1 &
 	         ,vbv1,kpt1,est2,ec2,ev2,vbc2,vbv2,kpt2,dft,nvec,rvec,sk,skp, &
-	         use_center_phase,center_phase1,center_phase2) !funcao para calcular o elemento de matriz da matriz bse
+	         use_center_phase,center_phase1,center_phase2, &
+	         use_center_grad,w90dat) !funcao para calcular o elemento de matriz da matriz bse
 
-	use bse_q_optics, only: center_phase_direct_vertices
+	use bse_q_optics, only: rmn_data, rmn_bloch, center_phase_direct_vertices, center_phase_gradient_correction
 
 	implicit none
 
-	character(len=7) :: coultype
+	character(len=10) :: coultype
 	character(len=1) :: dft
 
 	integer,dimension(3) :: ngrid
@@ -22,6 +23,8 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 	
 	complex,dimension(w90basis,w90basis) :: sk,skp
 	complex,dimension(w90basis) :: center_phase1,center_phase2
+	logical :: use_center_grad
+	type(rmn_data),intent(in) :: w90dat
 
 	integer, dimension(4) :: est1,est2
 	real :: ec1,ec2,ev1,ev2
@@ -47,14 +50,19 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 
 	real :: lc
 
-	complex :: vc,vv
+	complex :: vc,vv,delta_k
+
+	complex :: a_od_p(3,w90basis,w90basis),a_od_m(3,w90basis,w90basis)
+	logical :: bloch_ok
+	character(len=256) :: bloch_msg
+	integer :: idiag
 
 	real :: vcoul1
 
 	real :: vcoul,v2dk,v3diel,v3davg,v2dt,v2dtavg,v0dt,v2dt2
-	real :: v2dohono,v2drk,v1dt,v2d,v2diel
+	real :: v2dohono,v2drk,v1dt,v2d,v2diel,v2davgtpv
 	real :: v1d,v1diel
-	
+
 	real :: r0
 
 
@@ -95,6 +103,10 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 	case("V2DTAVG")
 
 		vcoul1= v2dtavg(kpt1,kpt2,ediel,ngrid,rlat,tolr)
+
+	case("V2DAVGTPV")
+
+		vcoul1= v2davgtpv(kpt1,kpt2,ediel,ngrid,rlat,tolr)
 
 	case("V2DT2")
 
@@ -165,6 +177,20 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 			call center_phase_direct_vertices(vbc1,vbc2,vbv1,vbv2, &
 				center_phase1,center_phase2,vc,vv)
 
+			if (use_center_grad) then
+				call rmn_bloch(w90dat,kpt1-kpt2,rlat,a_od_p,bloch_ok,bloch_msg)
+				call rmn_bloch(w90dat,kpt2-kpt1,rlat,a_od_m,bloch_ok,bloch_msg)
+				do idiag=1,w90basis
+					a_od_p(:,idiag,idiag)=cmplx(0.0,0.0)
+					a_od_m(:,idiag,idiag)=cmplx(0.0,0.0)
+				end do
+				call center_phase_gradient_correction(vbc1,vbc2,vbv1,vbv2, &
+					a_od_p,a_od_m,w90basis,kpt1-kpt2,vc,vv,delta_k)
+				matrizelbse=vcoul1*(vc*vv+delta_k)
+			else
+				matrizelbse=vcoul1*vc*vv
+			end if
+
 		 else
 
 			call vecconjg(vbc1,w90basis,vbc)
@@ -175,9 +201,9 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 
 			call prodintsq(vbv,vbv2,w90basis,vv)
 
+			matrizelbse=vcoul1*vc*vv
+
 		 end if
-	
-	         matrizelbse=  vcoul1*vc*vv
 	         
 		end select
 	

@@ -4,7 +4,7 @@ function matrizelbsetemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1
 
 	implicit none
 
-	character(len=7) :: coultype
+	character(len=10) :: coultype
 	character(len=1) :: dft
 
 	integer,dimension(3) :: ngrid
@@ -12,10 +12,10 @@ function matrizelbsetemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1
 	integer :: w90basis,nvec
 	real :: a,vcell1
 	real :: ez,w
-	
+
 	real,dimension(nvec,3) :: rvec
 	!real,dimension(nvec,w90basis,w90basis) :: ovp
-	
+
 	complex,dimension(w90basis,w90basis) :: sk,skp
 
 	integer, dimension(4) :: est1,est2
@@ -47,7 +47,7 @@ function matrizelbsetemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1
 	real :: vcoul1
 
 	real :: vcoul,v2dk,v3diel,v3davg,v2dt,v2dtavg,v0dt,v2dt2
-	real :: v2dohono,v2drk,v1dt,v2d,v2diel
+	real :: v2dohono,v2drk,v1dt,v2d,v2diel,v2davgtpv
 	real :: v1d,v1diel
 	
 	real :: r0
@@ -92,6 +92,10 @@ function matrizelbsetemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1
 	case("V2DTAVG")
 
 		vcoul1= v2dtavg(kpt1,kpt2,ediel,ngrid,rlat,tolr)
+
+	case("V2DAVGTPV")
+
+		vcoul1= v2davgtpv(kpt1,kpt2,ediel,ngrid,rlat,tolr)
 
 	case("V2DT2")
 
@@ -178,13 +182,13 @@ function matrizelbsekqtemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,
 
 	implicit none
 
-	character(len=7) :: coultype
+	character(len=10) :: coultype
 	character(len=1) :: dft
 
 	integer,dimension(3) :: ngrid
 
 	real,dimension(3,3) :: rlat
-	real :: ez,w	
+	real :: ez,w
 
 	integer :: w90basis,nvec
 	real :: a,vcell1
@@ -220,7 +224,7 @@ function matrizelbsekqtemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,
 	real :: vcoulk,vcoulq
 
 	real :: v2dk,vcoul,v3diel,v3davg,v2dt,v2dtavg,v0dt,v2dt2
-	real :: v2dohono,v2drk,v1dt,v2d,v2diel
+	real :: v2dohono,v2drk,v1dt,v2d,v2diel,v2davgtpv
 	real :: v1d,v1diel
 
 	real :: r0
@@ -285,6 +289,11 @@ function matrizelbsekqtemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,
 
 		vcoulk= v2dtavg(kpt1,kpt2,ediel,ngrid,rlat,tolr)
 		vcoulq= v2dtavg(vq,v0,ediel_bare,ngrid,rlat,tolr)
+
+	case("V2DAVGTPV")
+
+		vcoulk= v2davgtpv(kpt1,kpt2,ediel,ngrid,rlat,tolr)
+		vcoulq= v2davgtpv(vq,v0,ediel_bare,ngrid,rlat,tolr)
 
 	case("V2DT2")
 

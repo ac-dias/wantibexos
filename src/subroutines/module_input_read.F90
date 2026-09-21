@@ -269,7 +269,7 @@ module input_variables
 	character(len=70) :: calcparms
 	character(len=70) :: meshtype
         character(len=70) :: meshgen
-	character(len=7) :: coultype
+	character(len=10) :: coultype
 	character(len=5) :: sysdim
 	character(len=1) :: dft
 	character(len=2) :: ta
@@ -279,6 +279,7 @@ module input_variables
 	character(len=70) :: bsekpathcheckpointfile
 	character(len=70) :: bsecenterfile
 	logical :: bsecenterkernel
+	logical :: bsecentgrad
 		
 
 	logical :: bandscalc,doscalc
@@ -301,8 +302,9 @@ module input_variables
 	
 	
 	integer :: excwf0,excwff
-	
+
 	real :: ez,w,lc,r0
+	real :: tpv_kappa,tpv_qtf,tpv_hwp,tpv_thickness,tpv_alpha
 	real :: st,phavg,temp
 	
 	real :: ctemp,tmax,eg,egd
@@ -450,6 +452,7 @@ subroutine input_read
 	bsehamfile = "bse_hamiltonian.bin"
 	bsecenterfile = ""
 	bsecenterkernel = .false.
+	bsecentgrad = .false.
 	bsekpathcheckpoint = .false.
 	bsekpathcheckpointfile = "bse_kpath_checkpoint"
 	
@@ -482,8 +485,16 @@ subroutine input_read
 	ez = 1.0
 	w = 0.0
 	lc = 1.0
-	r0 = 1.0	
-	
+	r0 = 1.0
+
+	! Defaults reduce to no screening (vacuum layer, EDIEL_T=EDIEL_B=1.0)
+	! when V2DAVGTPV is selected without setting these explicitly.
+	tpv_kappa = 1.0
+	tpv_qtf = 1.0
+	tpv_hwp = 1.0
+	tpv_thickness = 0.0
+	tpv_alpha = 1.5
+
 	st = 0.0 
 	phavg = 0.0 
 	temp = 0.0
@@ -634,7 +645,11 @@ subroutine input_read
 		! Backward-compatible optical-only alias.  Existing inputs using the
 		! old name must not silently acquire a different BSE Hamiltonian.
 		bsecenterfile = b
-	
+
+	case ("BSE_CENTER_GRAD=")
+
+		read(b,*) bsecentgrad
+
 	case ("dK=")
 
 		read(b,*) dk
@@ -736,13 +751,33 @@ subroutine input_read
 		read(b,*) lc	
 	
 	case ("EDIEL_Z=")
-	
+
 		read(b,*) ez
-	
+
 	case ("W_COUL=")
-	
+
 		read(b,*) w
-	
+
+	case ("TPV_KAPPA=")
+
+		read(b,*) tpv_kappa
+
+	case ("TPV_QTF=")
+
+		read(b,*) tpv_qtf
+
+	case ("TPV_HWP=")
+
+		read(b,*) tpv_hwp
+
+	case ("TPV_THICKNESS=")
+
+		read(b,*) tpv_thickness
+
+	case ("TPV_ALPHA=")
+
+		read(b,*) tpv_alpha
+
 	case ("TMCOEF=")
 	
 		read(b,*) tmcoef
@@ -1085,6 +1120,7 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 #ifdef MPI
         use mpi
 #endif
+	use input_variables, only: tpv_kappa,tpv_qtf,tpv_hwp,tpv_thickness,tpv_alpha
 	implicit none
 	integer :: unitout
 
@@ -1114,8 +1150,8 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	character(len=70) :: outputfolder    !pasta saida
 	character(len=70) :: calcparms
 	character(len=70) :: meshtype
-	character(len=70) :: meshgen	
-	character(len=7) :: coultype
+	character(len=70) :: meshgen
+	character(len=10) :: coultype
 	character(len=5) :: sysdim
 	character(len=1) :: dft
 	character(len=2) :: ta	
@@ -1253,7 +1289,7 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	write(unitout,"(A6,F8.4)") "KTOL= ", ktol
 	write(unitout,"(A10,I0)") "EXC_WF_I= ",excwf0
 	write(unitout,"(A10,I0)") "EXC_WF_F= ",excwff
-	write(unitout,"(A13,A7)") "COULOMB_POT= ",coultype
+	write(unitout,"(A13,A10)") "COULOMB_POT= ",coultype
 	write(unitout,"(A8,F8.4)") "CSHIFT= ", cshift	
 	write(unitout,"(A6,L1)") "RNMD= ",renorm
 	write(unitout,"(A4,F8.4)") "NI= ",ni
@@ -1267,8 +1303,13 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	write(unitout,"(A5,F8.4)") "R_0= ",r0
 	write(unitout,"(A9,F8.4)") "EDIEL_T= ", ediel(1)
 	write(unitout,"(A9,F8.4)") "EDIEL_B= ", ediel(3)
-	write(unitout,"(A7,F8.4)") "EDIEL= ", ediel(2)	
-	write(unitout,*)	
+	write(unitout,"(A7,F8.4)") "EDIEL= ", ediel(2)
+	write(unitout,"(A11,F8.4)") "TPV_KAPPA= ",tpv_kappa
+	write(unitout,"(A9,F8.4)") "TPV_QTF= ",tpv_qtf
+	write(unitout,"(A9,F8.4)") "TPV_HWP= ",tpv_hwp
+	write(unitout,"(A15,F8.4)") "TPV_THICKNESS= ",tpv_thickness
+	write(unitout,"(A11,F8.4)") "TPV_ALPHA= ",tpv_alpha
+	write(unitout,*)
 	write(unitout,*) "PARAMETERS FOR BSE with Temperature Effects"
 	write(unitout,*)
 	write(unitout,"(A4,A2)") "TA= ",ta			

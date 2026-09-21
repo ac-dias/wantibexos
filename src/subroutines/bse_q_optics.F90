@@ -14,8 +14,10 @@ module bse_q_optics
 	public :: rmn_destroy
 	public :: rmn_bloch
 	public :: rmn_centers
+	public :: rmn_r0_block
 	public :: center_phase_build
 	public :: center_phase_direct_vertices
+	public :: center_phase_gradient_correction
 	public :: rmn_apply_q0_optical_correction
 
 contains
@@ -375,5 +377,106 @@ subroutine rmn_apply_q0_optical_correction(data,kpoint,rlat,ev,vv,ec,vc,sme,hrx,
 	ok=.true.
 
 end subroutine rmn_apply_q0_optical_correction
+
+
+subroutine rmn_r0_block(data,r0,ok,message)
+
+	! Extract the full R=0 block of the r-matrix as a (3,num_wann,num_wann)
+	! complex array.  The diagonal elements equal the Wannier centres; off-diagonal
+	! elements are the position matrix elements between distinct Wannier functions.
+	! Used by center_phase_gradient_correction to compute the first-order kernel.
+
+	type(rmn_data),intent(in) :: data
+	complex,dimension(:,:,:),intent(out) :: r0
+	logical,intent(out) :: ok
+	character(len=*),intent(out) :: message
+
+	integer :: ir,irzero
+
+	ok=.false.
+	message=''
+	r0=cmplx(0.0,0.0)
+
+	if (.not. allocated(data%rvec) .or. .not. allocated(data%rmn) .or. &
+		data%num_wann <= 0 .or. data%nrpts <= 0) then
+		message='Wannier90 r-matrix table has not been initialized'
+		return
+	end if
+	if (size(r0,1) /= 3 .or. size(r0,2) /= data%num_wann .or. &
+		size(r0,3) /= data%num_wann) then
+		message='Incompatible output dimensions for R=0 r-matrix block'
+		return
+	end if
+
+	irzero=0
+	do ir=1,data%nrpts
+		if (all(data%rvec(:,ir) == 0)) then
+			if (irzero /= 0) then
+				message='Wannier90 r-matrix table contains duplicate R=0 blocks'
+				return
+			end if
+			irzero=ir
+		end if
+	end do
+	if (irzero == 0) then
+		message='Wannier90 r-matrix table has no R=0 block'
+		return
+	end if
+
+	r0=data%rmn(:,:,:,irzero)
+	ok=.true.
+
+end subroutine rmn_r0_block
+
+
+subroutine center_phase_gradient_correction(c1,c2,v1,v2, &
+	a_od_p,a_od_m,w90basis,qcart,vc0,vv0,delta_k)
+
+	! First-order gradient correction to the centre-phase direct kernel.
+	! Returns delta_k such that the corrected kernel element is V(q)*(vc0*vv0 + delta_k).
+	!
+	!   delta_k = iq.(A_c*vv0 - vc0*A_v)
+	!   (A_c)_a = sum_{m/=m'} c1_m* c2_m' A_od_p(a,m,m')   [full FT at +q]
+	!   (A_v)_a = sum_{n/=n'} v1_n* v2_n' A_od_m(a,n,n')   [full FT at -q]
+	!
+	! A_od_p = sum_R exp(+iq.R) r^od(R) and A_od_m = sum_R exp(-iq.R) r^od(R)
+	! are the off-diagonal Fourier-transformed position matrices (diagonal zeroed).
+	! Using the full FT instead of the R=0 approximation makes the BSE kernel Hermitian.
+
+	complex,dimension(w90basis),intent(in) :: c1,c2,v1,v2
+	complex,dimension(3,w90basis,w90basis),intent(in) :: a_od_p,a_od_m
+	integer,intent(in) :: w90basis
+	real,dimension(3),intent(in) :: qcart
+	complex,intent(in) :: vc0,vv0
+	complex,intent(out) :: delta_k
+
+	integer :: m,mp,alpha
+	complex :: dotc,dotv
+	complex,dimension(3) :: ac,av
+
+	ac=cmplx(0.0,0.0)
+	av=cmplx(0.0,0.0)
+
+	do m=1,w90basis
+		do mp=1,w90basis
+			if (m == mp) cycle
+			do alpha=1,3
+				ac(alpha)=ac(alpha)+conjg(c1(m))*c2(mp)*a_od_p(alpha,m,mp)
+				av(alpha)=av(alpha)+conjg(v1(m))*v2(mp)*a_od_m(alpha,m,mp)
+			end do
+		end do
+	end do
+
+	dotc=cmplx(0.0,0.0)
+	dotv=cmplx(0.0,0.0)
+	do alpha=1,3
+		dotc=dotc+cmplx(0.0,qcart(alpha))*ac(alpha)
+		dotv=dotv+cmplx(0.0,qcart(alpha))*av(alpha)
+	end do
+
+	delta_k=dotc*vv0-vc0*dotv
+
+end subroutine center_phase_gradient_correction
+
 
 end module bse_q_optics

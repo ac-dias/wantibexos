@@ -19,7 +19,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 #endif
 	use omp_lib
 	use hamiltonian_input_variables
-	use input_variables, only: bsecenterfile, bsecenterkernel
+	use input_variables, only: bsecenterfile, bsecenterkernel, bsecentgrad
 	use bse_q_optics, only: rmn_data, rmn_read, rmn_destroy, rmn_centers, &
 		center_phase_build, rmn_apply_q0_optical_correction
 
@@ -84,7 +84,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	
 	complex,allocatable,dimension(:,:,:) :: sk
 	type(rmn_data) :: rmn
-	logical :: use_rmn,use_center_phase,rmn_ok
+	logical :: use_rmn,use_center_phase,use_center_grad,rmn_ok
 	character(len=256) :: rmn_message
 	real,allocatable,dimension(:,:) :: wannier_centers
 
@@ -136,7 +136,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	character(len=70) :: outputfolder    !pasta saida
 	character(len=70) :: calcparms
 	character(len=70) :: meshtype
-	character(len=7) :: coultype
+	character(len=10) :: coultype
 	real,dimension(3) :: ediel
 	logical :: bsewf
 	integer :: excwf0,excwff
@@ -257,7 +257,9 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 	use_rmn=len_trim(bsecenterfile) > 0
 	use_center_phase=bsecenterkernel
+	use_center_grad=bsecentgrad .and. use_center_phase
 	if (use_center_phase .and. .not. use_rmn) stop 'BSE_CENTER_FILE requires a Wannier90 r-matrix filename'
+	if (bsecentgrad .and. .not. use_center_phase) stop 'BSE_CENTER_GRAD requires BSE_CENTER_FILE and BSE_CENTER_KERNEL'
 	allocate(wannier_centers(3,w90basis))
 	wannier_centers=0.0
 	if (use_rmn) then
@@ -282,14 +284,18 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 			write(300,*) 'Wannier position data:',trim(bsecenterfile)
 			write(300,*) 'Q=0 position-matrix treatment: dH/dk - i[A,H]'
 			if (use_center_phase) then
-				write(300,*) 'G=0 direct Coulomb embedding: Wannier-centre phases enabled'
+				if (use_center_grad) then
+					write(300,*) 'G=0 direct Coulomb embedding: Wannier-centre phases + off-diagonal dipole (full FT)'
+				else
+					write(300,*) 'G=0 direct Coulomb embedding: Wannier-centre phases enabled'
+				end if
 			else
 				write(300,*) 'G=0 direct Coulomb embedding: legacy scalar kernel'
 			end if
 		end if
 	end if
 
-	!termino parametros calculo 
+	!termino parametros calculo
 
 	ngkpt = ngrid(1)*ngrid(2)*ngrid(3)
 	dimbse = ngkpt*nc*nv
@@ -768,6 +774,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
     if (Nodes == 1) then
 		bseham_metadata = (/ dimbse,1,1 /)
 		if (use_center_phase) bseham_metadata(3) = 3
+		if (use_center_grad) bseham_metadata(3) = 5
 		bseham_path = trim(outputfolder)//trim(bsehamfile)
 		allocate(hbse(dimbse,dimbse))
 		if (bsehamread) then
@@ -787,7 +794,8 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 					    ,eigv(stt_bse(4,j),stt_bse(2,j)) &
 					    ,vector(:,stt_bse(3,j),stt_bse(4,j)),vector(:,stt_bse(2,j),stt_bse(4,j)),kpt_bse(:,stt_bse(4,j)),dft,nvec,rvec,&
 					    sk(:,:,stt_bse(4,i)),sk(:,:,stt_bse(4,j)),use_center_phase, &
-					    center_phase(:,stt_bse(4,i)),center_phase(:,stt_bse(4,j)))
+					    center_phase(:,stt_bse(4,i)),center_phase(:,stt_bse(4,j)), &
+					    use_center_grad,rmn)
 				end do
 			end do
 			!$omp end parallel do
@@ -827,6 +835,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		bseham_metadata = (/ dimbse,1,1 /)
 		if (trim(bsealgo) == 'elpa') bseham_metadata(3) = 2
 		if (use_center_phase) bseham_metadata(3) = bseham_metadata(3)+2
+		if (use_center_grad) bseham_metadata(3) = bseham_metadata(3)+2
 		bseham_path = trim(outputfolder)//trim(bsehamfile)
 
 		if (bsehamread) then
@@ -857,7 +866,8 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 						    vector(:,stt_bse(2,ig),stt_bse(4,ig)),kpt_bse(:,stt_bse(4,ig)),stt_bse(:,jg),eigv(stt_bse(4,jg),stt_bse(3,jg)),&
 						    eigv(stt_bse(4,jg),stt_bse(2,jg)),vector(:,stt_bse(3,jg),stt_bse(4,jg)),vector(:,stt_bse(2,jg),stt_bse(4,jg)),&
 						    kpt_bse(:,stt_bse(4,jg)),dft,nvec,rvec,sk(:,:,stt_bse(4,ig)),sk(:,:,stt_bse(4,jg)), &
-						    use_center_phase,center_phase(:,stt_bse(4,ig)),center_phase(:,stt_bse(4,jg)))
+						    use_center_phase,center_phase(:,stt_bse(4,ig)),center_phase(:,stt_bse(4,jg)), &
+						    use_center_grad,rmn)
 					end if
 				end do
 			end do
