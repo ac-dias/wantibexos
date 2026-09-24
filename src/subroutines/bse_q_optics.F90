@@ -443,9 +443,10 @@ subroutine center_phase_gradient_correction(c1,c2,v1,v2, &
 	! are the off-diagonal Fourier-transformed position matrices (diagonal zeroed).
 	! Using the full FT instead of the R=0 approximation makes the BSE kernel Hermitian.
 
+    integer,intent(in) :: w90basis
+
 	complex,dimension(w90basis),intent(in) :: c1,c2,v1,v2
 	complex,dimension(3,w90basis,w90basis),intent(in) :: a_od_p,a_od_m
-	integer,intent(in) :: w90basis
 	real,dimension(3),intent(in) :: qcart
 	complex,intent(in) :: vc0,vv0
 	complex,intent(out) :: delta_k
