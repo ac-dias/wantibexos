@@ -50,7 +50,7 @@ sptype2=sptype[5:-1]
 
 if sptype2 == 'unpolarized' :
 
- f = open("system-info-NP.txt", "a")
+ f = open("system-info-NP.txt", "w")
  print(tshs, file=f)
  f.close()
 
@@ -59,7 +59,7 @@ if sptype2 == 'unpolarized' :
  sptype=str(tshs.spin)
 
 
- f = open("tb-NP.dat", "a")
+ f = open("tb-NP.dat", "w")
 
  print(calctype(sptype2),file=f,flush=True)
  print(ncases(scs),file=f,flush=True)
@@ -72,10 +72,11 @@ if sptype2 == 'unpolarized' :
  print(ncell,file=f)
  print('#rcell x',' ','rcell y',' ','rcell z',' ','i',' ','j',' ','ReH',' ','ImH',' ','S',file=f)
 
+ #row index j runs fastest (Wannier90 _hr order), as hamiltonian_nort_input_read expects
  for i in range(0,ncell):
-  for j in range(0,nbasis): 
-   for k in range(0,nbasis):
-  	
+  for k in range(0,nbasis):
+   for j in range(0,nbasis):
+
     a = tshs.geometry.o2sc(k+i*nbasis)[0]
     b = tshs.geometry.o2sc(k+i*nbasis)[1]
     c = tshs.geometry.o2sc(k+i*nbasis)[2]
@@ -88,7 +89,7 @@ if sptype2 == 'unpolarized' :
 
  f.close()
 
- f = open("basis_set-NP", "a")
+ f = open("basis_set-NP", "w")
 
  print('bindex aspecie ax ay az l m spin',file=f)
 
@@ -106,7 +107,7 @@ if sptype2 == 'unpolarized' :
 
 if sptype2 == 'polarized' :
 
- f = open("system-info-sp.txt", "a")
+ f = open("system-info-sp.txt", "w")
  print(tshs, file=f)
  f.close()
 
@@ -115,7 +116,7 @@ if sptype2 == 'polarized' :
  sptype=str(tshs.spin)
 
 
- f = open("basis_set-sp", "a")
+ f = open("basis_set-sp", "w")
 
  print('#bindex aspecie ax ay az l m spin',file=f)
 
@@ -136,7 +137,7 @@ if sptype2 == 'polarized' :
  f.close()
 
 
- f = open("tb-sp.dat", "a")
+ f = open("tb-sp.dat", "w")
 
  print(calctype(sptype2),file=f,flush=True)
  print(ncases(scs),file=f,flush=True)
@@ -204,9 +205,10 @@ if sptype2 == 'polarized' :
    c[i+1,(k+1)+nbasis] = tshs.geometry.o2sc(k+i*nbasis)[2]
 	
 
+ #row index j runs fastest (Wannier90 _hr order), as hamiltonian_nort_input_read expects
  for i in range(1,ncell+1):
-  for j in range(1,(2*nbasis)+1): 
-   for k in range(1,(2*nbasis)+1):
+  for k in range(1,(2*nbasis)+1):
+   for j in range(1,(2*nbasis)+1):
   	
 #   a = tshs.geometry.o2sc(k+i*nbasis)[0]
 #   b = tshs.geometry.o2sc(k+i*nbasis)[1]
@@ -224,7 +226,7 @@ if sptype2 == 'polarized' :
 
 if sptype2 == 'non-colinear' :
 
- f = open("system-info-nc.txt", "a")
+ f = open("system-info-nc.txt", "w")
  print(tshs, file=f)
  f.close()
 
@@ -233,7 +235,7 @@ if sptype2 == 'non-colinear' :
  sptype=str(tshs.spin)
 
 
- f = open("basis_set-nc", "a")
+ f = open("basis_set-nc", "w")
 
  print('#bindex aspecie ax ay az l m spin',file=f)
 
@@ -254,7 +256,7 @@ if sptype2 == 'non-colinear' :
  f.close()
 
 
- f = open("tb-nc.dat", "a")
+ f = open("tb-nc.dat", "w")
 
  print(calctype(sptype2),file=f,flush=True)
  print(ncases(scs),file=f,flush=True)
@@ -291,16 +293,16 @@ if sptype2 == 'non-colinear' :
 
     
 
-#parte up-dn
+#parte up-dn (sisl: H_ud = D2 + i D3, H_du = D2 - i D3)
 
      reH[i+1,(j+1),(k+1)+nbasis] = tshs[j,k+i*nbasis][2]
-    #imH[i+1,(j+1),(k+1)+nbasis] = tshs[j,k+i*nbasis][3]
+     imH[i+1,(j+1),(k+1)+nbasis] = tshs[j,k+i*nbasis][3]
      S[i+1,(j+1),(k+1)+nbasis] = 0.0
 
 #parte dn-up
 
-     reH[i+1,(j+1)+nbasis,(k+1)] = tshs[j,k+i*nbasis][3]
-    #imH[i+1,(j+1)+nbasis,(k+1)] = tshs[j,k+i*nbasis][7]
+     reH[i+1,(j+1)+nbasis,(k+1)] = tshs[j,k+i*nbasis][2]
+     imH[i+1,(j+1)+nbasis,(k+1)] = -tshs[j,k+i*nbasis][3]
      S[i+1,(j+1)+nbasis,(k+1)] = 0.0
 
 #parte dn-dn
@@ -323,9 +325,10 @@ if sptype2 == 'non-colinear' :
    c[i+1,(k+1)+nbasis] = tshs.geometry.o2sc(k+i*nbasis)[2]
 	
 
+ #row index j runs fastest (Wannier90 _hr order), as hamiltonian_nort_input_read expects
  for i in range(1,ncell+1):
-  for j in range(1,(2*nbasis)+1): 
-   for k in range(1,(2*nbasis)+1):
+  for k in range(1,(2*nbasis)+1):
+   for j in range(1,(2*nbasis)+1):
   	
 #   a = tshs.geometry.o2sc(k+i*nbasis)[0]
 #   b = tshs.geometry.o2sc(k+i*nbasis)[1]
@@ -343,7 +346,7 @@ if sptype2 == 'non-colinear' :
 
 if sptype2 == 'spin-orbit' :
 
- f = open("system-info-soc.txt", "a")
+ f = open("system-info-soc.txt", "w")
  print(tshs, file=f)
  f.close()
  
@@ -351,7 +354,7 @@ if sptype2 == 'spin-orbit' :
  ncell=  tshs.nsc[0]*tshs.nsc[1]*tshs.nsc[2]
  sptype=str(tshs.spin)
 
- f = open("basis_set-soc", "a")
+ f = open("basis_set-soc", "w")
 
  print('#bindex aspecie ax ay az l m spin',file=f)
 
@@ -372,7 +375,7 @@ if sptype2 == 'spin-orbit' :
  f.close()
 
 
- f = open("tb-soc.dat", "a")
+ f = open("tb-soc.dat", "w")
 
  print(calctype(sptype2),file=f,flush=True)
  print(ncases(scs),file=f,flush=True)
@@ -441,9 +444,10 @@ if sptype2 == 'spin-orbit' :
    c[i+1,(k+1)+nbasis] = tshs.geometry.o2sc(k+i*nbasis)[2]
 	
 
+ #row index j runs fastest (Wannier90 _hr order), as hamiltonian_nort_input_read expects
  for i in range(1,ncell+1):
-  for j in range(1,(2*nbasis)+1): 
-   for k in range(1,(2*nbasis)+1):
+  for k in range(1,(2*nbasis)+1):
+   for j in range(1,(2*nbasis)+1):
   	
 #   a = tshs.geometry.o2sc(k+i*nbasis)[0]
 #   b = tshs.geometry.o2sc(k+i*nbasis)[1]

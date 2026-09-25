@@ -226,9 +226,10 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	
 	case default
 	
-	allocate(ovp(nvec,w90basis,w90basis))
-
 	call hamiltonian_input_read(200,params)
+
+	allocate(ovp(nvec,w90basis,w90basis))
+	ovp = 0.0
 	
 
 	end select

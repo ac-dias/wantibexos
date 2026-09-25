@@ -119,10 +119,9 @@ subroutine spin_x_matrix(w90basis,dft,systype,ovptp,spmx)
 	 
 	 if (dft .eq. "S") then
 	 
-	 	spmx(1:w2,w2+1:w90basis) = cmplx(1.,0.)
-	 	spmx(w2+1:w90basis,1:w2) = cmplx(1.,0.)	 
-	 	
-	 	call applyovp(w90basis,ovptp,spmx)	
+	 	!sigma_x (x) S_orb: the spin off-diagonal blocks of ovptp are zero
+	 	spmx(1:w2,w2+1:w90basis) = ovptp(1:w2,1:w2)
+	 	spmx(w2+1:w90basis,1:w2) = ovptp(1:w2,1:w2)
 	 
 	 
 	 else
@@ -148,10 +147,8 @@ subroutine spin_x_matrix(w90basis,dft,systype,ovptp,spmx)
 
 	  else if (dft .eq. "S") then
 	  
-	  	spmx(1:w2,w2+1:w90basis) = cmplx(1.,0.)
-	 	spmx(w2+1:w90basis,1:w2) = cmplx(1.,0.)	 
-	 	
-	 	call applyovp(w90basis,ovptp,spmx)
+	  	spmx(1:w2,w2+1:w90basis) = ovptp(1:w2,1:w2)
+	 	spmx(w2+1:w90basis,1:w2) = ovptp(1:w2,1:w2)
 	  
 	  else
 	  
@@ -197,10 +194,8 @@ subroutine spin_y_matrix(w90basis,dft,systype,ovptp,spmy)
 	 
 	 if (dft .eq. "S") then
 	 
-	 	spmy(1:w2,w2+1:w90basis) = cmplx(0.,-1.)
-	 	spmy(w2+1:w90basis,1:w2) = cmplx(0.,1.)
-	 
-	 	call applyovp(w90basis,ovptp,spmy)
+	 	spmy(1:w2,w2+1:w90basis) = cmplx(0.,-1.)*ovptp(1:w2,1:w2)
+	 	spmy(w2+1:w90basis,1:w2) = cmplx(0.,1.)*ovptp(1:w2,1:w2)
 	 
 	 else
 	 
@@ -225,10 +220,8 @@ subroutine spin_y_matrix(w90basis,dft,systype,ovptp,spmy)
 	  
 	  else if (dft .eq. "S") then
 	  
-	 	spmy(1:w2,w2+1:w90basis) = cmplx(0.,-1.)
-	 	spmy(w2+1:w90basis,1:w2) = cmplx(0.,1.)
-	 
-	 	call applyovp(w90basis,ovptp,spmy)
+	 	spmy(1:w2,w2+1:w90basis) = cmplx(0.,-1.)*ovptp(1:w2,1:w2)
+	 	spmy(w2+1:w90basis,1:w2) = cmplx(0.,1.)*ovptp(1:w2,1:w2)
 	 		  
 	  else
 	  

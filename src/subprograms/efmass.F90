@@ -50,9 +50,10 @@ subroutine efmass_num(nthreads,dft,outputfolder,params,emfile,h,nocpf,fermishift
 	
 	case default
 	
-	allocate(ovp(nvec,w90basis,w90basis))
-
 	call hamiltonian_input_read(200,params)
+
+	allocate(ovp(nvec,w90basis,w90basis))
+	ovp = 0.0
 
 	end select	
 	
@@ -181,9 +182,10 @@ subroutine efmass(nthreads,dft,outputfolder,params,emfile,nocpf,fermishift,exc,m
 	
 	case default
 	
-	allocate(ovp(nvec,w90basis,w90basis))
-
 	call hamiltonian_input_read(200,params)
+
+	allocate(ovp(nvec,w90basis,w90basis))
+	ovp = 0.0
 
 	end select	
 	
