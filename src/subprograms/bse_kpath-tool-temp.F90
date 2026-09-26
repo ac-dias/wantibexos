@@ -559,7 +559,7 @@ subroutine bsebndstemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		deallocate(eaux,vaux)
 
 
-		allocate(hbse(dimbse,dimbse),W(dimbse))
+		allocate(hbse(dimbse,dimbse))
 
 		hbse=0.
 
