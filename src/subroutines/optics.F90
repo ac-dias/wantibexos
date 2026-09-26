@@ -154,6 +154,83 @@ subroutine optsp(ev,vv,ec,vc,kx,ky,kz,ffactor,sme,&
 end subroutine optsp
 
 
+subroutine hlm_s(kx,ky,kz,w90basis,nvec,rvec,hopmatrices,ihopmatrices,ovp,tau,&
+		 hx,hy,hz,sx,sy,sz)
+
+	implicit none
+
+	integer :: i,a,b
+	integer :: w90basis,nvec
+	real :: kx,ky,kz
+	real,dimension(nvec,3) :: rvec
+	real,dimension(nvec,w90basis,w90basis) :: hopmatrices,ihopmatrices,ovp
+	real,dimension(w90basis,3) :: tau
+	complex,dimension(w90basis,w90basis) :: hx,hy,hz,sx,sy,sz
+	complex :: ph,hab,dx,dy,dz
+
+	! dH/dk and dS/dk of the non-orthogonal DFT=S basis in the atomic
+	! gauge: element ab of the R term carries i(R+tau_b-tau_a), the vector
+	! from orbital a to orbital b in cell R, where hlm has iR. Between the
+	! lattice-gauge eigenvectors this is the derivative for the
+	! coefficients c_a(k) exp(-i k.tau_a) of sandwich_phase.
+	hx = 0.0
+	hy = 0.0
+	hz = 0.0
+	sx = 0.0
+	sy = 0.0
+	sz = 0.0
+	do i=1,nvec
+		ph = exp(cmplx(0.0,kx*rvec(i,1)+ky*rvec(i,2)+kz*rvec(i,3)))
+		do b=1,w90basis
+			do a=1,w90basis
+				dx = cmplx(0.0,rvec(i,1)+tau(b,1)-tau(a,1))*ph
+				dy = cmplx(0.0,rvec(i,2)+tau(b,2)-tau(a,2))*ph
+				dz = cmplx(0.0,rvec(i,3)+tau(b,3)-tau(a,3))*ph
+				hab = cmplx(hopmatrices(i,a,b),ihopmatrices(i,a,b))
+				hx(a,b) = hx(a,b)+dx*hab
+				hy(a,b) = hy(a,b)+dy*hab
+				hz(a,b) = hz(a,b)+dz*hab
+				sx(a,b) = sx(a,b)+dx*ovp(i,a,b)
+				sy(a,b) = sy(a,b)+dy*ovp(i,a,b)
+				sz(a,b) = sz(a,b)+dz*ovp(i,a,b)
+			end do
+		end do
+	end do
+
+end subroutine hlm_s
+
+
+subroutine optsp_s(ev,vv,ec,vc,kx,ky,kz,sme,w90basis,nvec,rvec,&
+		   hopmatrices,ihopmatrices,ovp,tau,hrx,hry,hrz)
+
+	implicit none
+
+	integer :: w90basis,nvec
+	real :: kx,ky,kz
+	real :: ev,ec,sme
+	real,dimension(nvec,3) :: rvec
+	real,dimension(nvec,w90basis,w90basis) :: hopmatrices,ihopmatrices,ovp
+	real,dimension(w90basis,3) :: tau
+	complex,dimension(w90basis) :: vc,vv
+	complex :: hrx,hry,hrz
+
+	! optsp for the non-orthogonal DFT=S basis:
+	!   hr = <c| dH/dk - (ec+ev)/2 dS/dk |v> / (ec - ev + i sme)
+	! with both derivatives in the atomic gauge (hlm_s). For the
+	! S-orthonormal eigenvectors of CHEGV, i<c|dH - (ec+ev)/2 dS|v> =
+	! (ev-ec) A_cv, A_cv = i<c|S dv> + (i/2)<c|dS|v> the (Hermitian)
+	! interband connection, up to the dipoles <a|r-(r_a+r_b)/2|b> between
+	! basis orbitals, which are neglected. optsp's lattice-gauge dH/dk alone
+	! breaks C3 (eps_xx /= eps_yy and eps_xy /= 0 for h-BN) and lacks dS/dk.
+	call optspbz_s(ev,vv,ec,vc,kx,ky,kz,w90basis,nvec,rvec,hopmatrices,&
+		       ihopmatrices,ovp,tau,hrx,hry,hrz)
+	hrx = hrx/cmplx(ec-ev,sme)
+	hry = hry/cmplx(ec-ev,sme)
+	hrz = hrz/cmplx(ec-ev,sme)
+
+end subroutine optsp_s
+
+
 
 subroutine optdiel(rtype,vc,dimse,ngrid,elux,exciton,fosc,sme,rpart,ipart)
 
@@ -345,6 +422,39 @@ subroutine optspbz(vv,vc,kx,ky,kz,ffactor,w90basis,nvec,rlat,rvec,hopmatrices,ih
 
 
 end subroutine optspbz
+
+
+subroutine optspbz_s(ev,vv,ec,vc,kx,ky,kz,w90basis,nvec,rvec,hopmatrices,&
+		     ihopmatrices,ovp,tau,hxsp,hysp,hzsp)
+
+	implicit none
+
+	integer :: w90basis,nvec
+	real :: kx,ky,kz
+	real :: ev,ec,ebar
+	real,dimension(nvec,3) :: rvec
+	real,dimension(nvec,w90basis,w90basis) :: hopmatrices,ihopmatrices,ovp
+	real,dimension(w90basis,3) :: tau
+	complex,dimension(w90basis) :: vc,vv
+	complex :: hxsp,hysp,hzsp,sxsp,sysp,szsp
+	complex,dimension(w90basis,w90basis) :: hx,hy,hz,sx,sy,sz
+
+	! optspbz for the non-orthogonal DFT=S basis (see optsp_s):
+	! <c| dH/dk - (ec+ev)/2 dS/dk |v>, atomic gauge
+	call hlm_s(kx,ky,kz,w90basis,nvec,rvec,hopmatrices,ihopmatrices,ovp,tau,&
+		   hx,hy,hz,sx,sy,sz)
+	ebar = 0.5*(ec+ev)
+	call sandwich(w90basis,vc,hx,vv,hxsp)
+	call sandwich(w90basis,vc,hy,vv,hysp)
+	call sandwich(w90basis,vc,hz,vv,hzsp)
+	call sandwich(w90basis,vc,sx,vv,sxsp)
+	call sandwich(w90basis,vc,sy,vv,sysp)
+	call sandwich(w90basis,vc,sz,vv,szsp)
+	hxsp = hxsp-ebar*sxsp
+	hysp = hysp-ebar*sysp
+	hzsp = hzsp-ebar*szsp
+
+end subroutine optspbz_s
 
 subroutine avgsme(ndim,energyvec,smeavg)
 

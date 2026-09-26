@@ -29,6 +29,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 
 	real,allocatable,dimension(:,:) :: eigv
+	real,allocatable,dimension(:,:) :: tau !DFT=S orbital centres
 	complex,allocatable,dimension(:,:,:) :: vector
 
 	real,allocatable,dimension(:,:) :: kpt !pontos k do grid
@@ -669,6 +670,11 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	call cpu_time(task_start)
 #endif
 
+	! DFT=S: orbital centres for the atomic-gauge optical vertex
+	allocate(tau(w90basis,3))
+	tau = 0.0
+	if (dft .eq. "S") call orbital_centres(w90basis,tau)
+
 	 !$omp parallel do default(shared) private(i,ec,ev,rmn_ok,rmn_message)
 
 	do i=1,dimbse
@@ -677,11 +683,19 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		ev = eigv(stt(i,4),stt(i,2))
 		fdeh(i) = fermidisteh(ec,ev,temp)
 
+		if (dft .eq. "S") then
+		call optsp_s(eigv(stt(i,4),stt(i,2)),vector(:,stt(i,2),stt(i,4)),&
+		     eigv(stt(i,4),stt(i,3)),vector(:,stt(i,3),stt(i,4)),&
+		     kpt(stt(i,4),1),kpt(stt(i,4),2),kpt(stt(i,4),3),sme,&
+		     w90basis,nvec,rvec,hopmatrices,ihopmatrices,ovp,tau,&
+		     hrx(i),hry(i),hrz(i))
+		else
 		call optsp(eigv(stt(i,4),stt(i,2)),vector(:,stt(i,2),stt(i,4)),&
 		     eigv(stt(i,4),stt(i,3)),vector(:,stt(i,3),stt(i,4)),&
 		     kpt(stt(i,4),1),kpt(stt(i,4),2),kpt(stt(i,4),3),ffactor,sme,&
 		     w90basis,nvec,rlat,rvec,hopmatrices,&
 		     ihopmatrices,hrx(i),hry(i),hrz(i))
+		end if
 		if (use_rmn) then
 			call rmn_apply_q0_optical_correction(rmn,kpt(stt(i,4),:),rlat,&
 				eigv(stt(i,4),stt(i,2)),vector(:,stt(i,2),stt(i,4)),&
@@ -1314,6 +1328,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	end if
 	deallocate(W,stt,stt_bse,nocpk)
 	deallocate(fdeh)
+	deallocate(tau)
 	deallocate(ovp)	
 
 	deallocate(kpt,kpt_bse,center_phase,wannier_centers)

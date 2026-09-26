@@ -30,6 +30,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	integer :: dimbse !=ngrid*ngrid*nc*nv ! dimensão da matriz bse
 
 	real,allocatable,dimension(:,:) :: eigv
+	real,allocatable,dimension(:,:) :: tau !DFT=S orbital centres
 	complex,allocatable,dimension(:,:,:) :: vector
 	complex,allocatable,dimension(:,:) :: center_phase
 
@@ -639,6 +640,11 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	end if	
     endif
 
+	! DFT=S: orbital centres for the atomic-gauge optical vertex
+	allocate(tau(w90basis,3))
+	tau = 0.0
+	if (dft .eq. "S") call orbital_centres(w90basis,tau)
+
 		if (Node == 0) then
 			write(300,*) 'IPA transitions: begin'
 			call flush(300)
@@ -658,11 +664,19 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		!ec = eigv(stt(i,4),stt(i,3))
 		!ev = eigv(stt(i,4),stt(i,2))
 
+		if (dft .eq. "S") then
+		call optsp_s(eigv(stt(i,4),stt(i,2)),vector(:,stt(i,2),stt(i,4)),&
+		     eigv(stt(i,4),stt(i,3)),vector(:,stt(i,3),stt(i,4)),&
+		     kpt(stt(i,4),1),kpt(stt(i,4),2),kpt(stt(i,4),3),sme,&
+		     w90basis,nvec,rvec,hopmatrices,ihopmatrices,ovp,tau,&
+		     hrx(i),hry(i),hrz(i))
+		else
 		call optsp(eigv(stt(i,4),stt(i,2)),vector(:,stt(i,2),stt(i,4)),&
 		     eigv(stt(i,4),stt(i,3)),vector(:,stt(i,3),stt(i,4)),&
 		     kpt(stt(i,4),1),kpt(stt(i,4),2),kpt(stt(i,4),3),ffactor,sme,&
 		     w90basis,nvec,rlat,rvec,hopmatrices,&
 		     ihopmatrices,hrx(i),hry(i),hrz(i))
+		end if
 		if (use_rmn) then
 			call rmn_apply_q0_optical_correction(rmn,kpt(stt(i,4),:),rlat,&
 				eigv(stt(i,4),stt(i,2)),vector(:,stt(i,2),stt(i,4)),&
@@ -1276,6 +1290,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 #endif
 		end if
 		deallocate(W,stt,stt_bse,nocpk)
+	deallocate(tau)
 	deallocate(ovp)
 
 	deallocate(kpt,kpt_bse,center_phase,wannier_centers)

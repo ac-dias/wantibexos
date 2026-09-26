@@ -14,6 +14,7 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 
 
 	real,allocatable,dimension(:,:) :: eigv
+	real,allocatable,dimension(:,:) :: tau !DFT=S orbital centres
 	complex,allocatable,dimension(:,:,:) :: vector
 
 	real,allocatable,dimension(:,:) :: kpt !pontos k do grid
@@ -271,6 +272,11 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 	 continue
 	end if
 	
+	! DFT=S: orbital centres for the atomic-gauge optical vertex
+	allocate(tau(w90basis,3))
+	tau = 0.0
+	if (dft .eq. "S") call orbital_centres(w90basis,tau)
+
 	!$omp parallel do default(shared) private(i,ec,ev,hrsp,hrsm,hxsp,hysp,hzsp)
 
 	do i=1,dimsp
@@ -278,11 +284,19 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 		ec = eigv(stt(i,4),stt(i,3))
 		ev = eigv(stt(i,4),stt(i,2))
 		     
+		if (dft .eq. "S") then
+		call optsp_s(eigv(stt(i,4),stt(i,2)),vector(stt(i,4),stt(i,2),:),&
+		     eigv(stt(i,4),stt(i,3)),vector(stt(i,4),stt(i,3),:),&
+		     kpt(stt(i,4),1),kpt(stt(i,4),2),kpt(stt(i,4),3),sme,&
+		     w90basis,nvec,rvec,hopmatrices,ihopmatrices,ovp,tau,&
+		     hxsp,hysp,hzsp)
+		else
 	       call optsp(eigv(stt(i,4),stt(i,2)),vector(stt(i,4),stt(i,2),:),&
 		     eigv(stt(i,4),stt(i,3)),vector(stt(i,4),stt(i,3),:),&
 		     kpt(stt(i,4),1),kpt(stt(i,4),2),kpt(stt(i,4),3),ffactor,sme,&
 		     w90basis,nvec,rlat,rvec,hopmatrices,&
 		     ihopmatrices,hxsp,hysp,hzsp)  
+		end if
 		
 		hrsp = (hxsp+cmplx(0.,1.)*hysp)*(1.0/sqrt(2.))
 		hrsm = (hxsp-cmplx(0.,1.)*hysp)*(1.0/sqrt(2.))
@@ -337,6 +351,7 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 
 	deallocate(eigv,vector)
 	deallocate(rvec,hopmatrices,ihopmatrices,ffactor)
+	deallocate(tau)
 	deallocate(ovp)
 
 	!deallocate(auxx,auxy,auxz,auyy,auyz,auzz)

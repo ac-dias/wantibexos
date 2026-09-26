@@ -17,6 +17,7 @@ subroutine spoptpolbz(nthreads,dft,outputfolder,ngrid,nc,nv, &
 
 
 	real,allocatable,dimension(:,:) :: eigv
+	real,allocatable,dimension(:,:) :: tau !DFT=S orbital centres
 	complex,allocatable,dimension(:,:,:) :: vector
 
 	real,allocatable,dimension(:,:) :: kpt !pontos k do grid
@@ -284,6 +285,11 @@ end do
 	
 	output = 0.0
 
+	! DFT=S: orbital centres for the atomic-gauge optical vertex
+	allocate(tau(w90basis,3))
+	tau = 0.0
+	if (dft .eq. "S") call orbital_centres(w90basis,tau)
+
 	!$omp parallel do default(shared) private(j,hxsp,hysp,hzsp)
 	do j=1,ngkpt
 
@@ -296,10 +302,18 @@ end do
 	! $omp parallel do reduction(+:auxx, auxy, auxz, auxsp, auxsm) private(i)
 	do i=1,dimrpa
 
+		if (dft .eq. "S") then
+		call optspbz_s(eigv(j,stto(j,i,2)),vector(j,stto(j,i,2),:),&
+		     eigv(j,stto(j,i,3)),vector(j,stto(j,i,3),:),&
+		     kpt(j,1),kpt(j,2),kpt(j,3),&
+		     w90basis,nvec,rvec,hopmatrices,ihopmatrices,ovp,tau,&
+		     hxsp,hysp,hzsp)
+		else
 		call optspbz(vector(j,stto(j,i,2),:),vector(j,stto(j,i,3),:),&
 		     kpt(j,1),kpt(j,2),kpt(j,3),&
 		     ffactor,w90basis,nvec,rlat,rvec,hopmatrices,&
 		     ihopmatrices,hxsp,hysp,hzsp)
+		end if
 		     
 		    
 
@@ -372,6 +386,7 @@ end do
 
 	deallocate(eigv,vector)
 	deallocate(rvec,hopmatrices,ihopmatrices,ffactor)
+	deallocate(tau)
 	deallocate(ovp)
 	!deallocate(hoptxf,hoptyf,hoptspf,hoptsmf)
 	deallocate(stto)
