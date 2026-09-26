@@ -66,11 +66,12 @@ reconstructs
 
 ```
 sum_m C1_m^* C2_m exp[+i (k1-k2).t_m]
-sum_n V1_n^* V2_n exp[-i (k1-k2).t_n].
+sum_n V2_n^* V1_n exp[-i (k1-k2).t_n].
 ```
 
 This is the centre-resolved G=0 approximation
-`V_mn(q)=V(q) exp[i q.(t_m-t_n)]`. It changes the BSE Hamiltonian, exciton
+`V_mn(q)=V(q) exp[i q.(t_m-t_n)]`, with q the shortest image of k1-k2 (see
+BSE kernel conventions below). It changes the BSE Hamiltonian, exciton
 energies, and oscillator strengths. The screened scalar Coulomb potential and
 its q=0 averaging are otherwise unchanged. The finite-Q direct and exchange
 kernels are not modified.
@@ -89,6 +90,33 @@ compatibility alias. It applies `dH/dk - i[A,H]` but deliberately retains the
 legacy scalar BSE kernel, so existing inputs do not silently acquire different
 exciton energies. New calculations using the centre-resolved direct kernel
 should use `BSE_CENTER_FILE`.
+
+BSE kernel conventions
+----------------------
+
+All BSE kernels (Q=0 and finite Q, zero and finite temperature, `DFT=W` and
+`DFT=S`) use the standard direct term
+
+```
+W(q) <c1|c2> <v2|v1>,    q = k1 - k2 - G,
+```
+
+with the hole overlap `<v2|v1>` (earlier versions used its complex conjugate
+`<v1|v2>`), and with q the shortest image of the grid difference k1-k2: the
+screened potential and the Wannier-centre phases are not periodic in q, and
+the raw difference made the kernel depend on how the k-grid cell is chosen.
+Where several images are equally short (the zone boundary), the Q=0 kernel
+averages over them; the finite-Q exchange term takes the shortest image of Q
+in the same way. Exciton oscillator strengths are contracted as
+`|sum_j A_j^* <c|r|v>_j|^2`, consistent with these overlaps (earlier versions
+used `A_j`).
+
+Together with the Wannier-centre phases of `BSE_CENTER_FILE`, this keeps the
+lattice symmetry of the kernel: in monolayer h-BN the lowest bright exciton is
+the degenerate, in-plane isotropic E' doublet, independent of the k-grid cell,
+where the earlier kernel split it by 145 meV (36x36 grid). BSE Hamiltonians
+(`BSE_HAM_SAVE`) and q-path checkpoints written by earlier builds hold the
+earlier kernel and must be regenerated.
 
 ELPA BSE diagonalization
 -------------------------

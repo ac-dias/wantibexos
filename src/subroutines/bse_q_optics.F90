@@ -270,7 +270,7 @@ subroutine center_phase_direct_vertices(c1,c2,v1,v2,phase1,phase2,vc,vv)
 	do m=1,size(c1)
 		relative_phase=phase1(m)*conjg(phase2(m))
 		vc=vc+conjg(c1(m))*c2(m)*relative_phase
-		vv=vv+conjg(v1(m))*v2(m)*conjg(relative_phase)
+		vv=vv+conjg(v2(m))*v1(m)*conjg(relative_phase)   ! hole: <v2|v1>
 	end do
 
 end subroutine center_phase_direct_vertices
@@ -437,7 +437,8 @@ subroutine center_phase_gradient_correction(c1,c2,v1,v2, &
 	!
 	!   delta_k = iq.(A_c*vv0 - vc0*A_v)
 	!   (A_c)_a = sum_{m/=m'} c1_m* c2_m' A_od_p(a,m,m')   [full FT at +q]
-	!   (A_v)_a = sum_{n/=n'} v1_n* v2_n' A_od_m(a,n,n')   [full FT at -q]
+	!   (A_v)_a = sum_{n/=n'} v2_n* v1_n' A_od_m(a,n,n')   [full FT at -q]
+	!   (the hole overlap is <v2|v1>, as in center_phase_direct_vertices)
 	!
 	! A_od_p = sum_R exp(+iq.R) r^od(R) and A_od_m = sum_R exp(-iq.R) r^od(R)
 	! are the off-diagonal Fourier-transformed position matrices (diagonal zeroed).
@@ -463,7 +464,7 @@ subroutine center_phase_gradient_correction(c1,c2,v1,v2, &
 			if (m == mp) cycle
 			do alpha=1,3
 				ac(alpha)=ac(alpha)+conjg(c1(m))*c2(mp)*a_od_p(alpha,m,mp)
-				av(alpha)=av(alpha)+conjg(v1(m))*v2(mp)*a_od_m(alpha,m,mp)
+				av(alpha)=av(alpha)+conjg(v2(m))*v1(mp)*a_od_m(alpha,m,mp)
 			end do
 		end do
 	end do

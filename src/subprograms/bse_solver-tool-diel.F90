@@ -796,7 +796,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 					    ,vector(:,stt_bse(3,j),stt_bse(4,j)),vector(:,stt_bse(2,j),stt_bse(4,j)),kpt_bse(:,stt_bse(4,j)),dft,nvec,rvec,&
 					    sk(:,:,stt_bse(4,i)),sk(:,:,stt_bse(4,j)),use_center_phase, &
 					    center_phase(:,stt_bse(4,i)),center_phase(:,stt_bse(4,j)), &
-					    use_center_grad,rmn)
+					    use_center_grad,rmn,wannier_centers)
 				end do
 			end do
 			!$omp end parallel do
@@ -868,7 +868,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 						    eigv(stt_bse(4,jg),stt_bse(2,jg)),vector(:,stt_bse(3,jg),stt_bse(4,jg)),vector(:,stt_bse(2,jg),stt_bse(4,jg)),&
 						    kpt_bse(:,stt_bse(4,jg)),dft,nvec,rvec,sk(:,:,stt_bse(4,ig)),sk(:,:,stt_bse(4,jg)), &
 						    use_center_phase,center_phase(:,stt_bse(4,ig)),center_phase(:,stt_bse(4,jg)), &
-						    use_center_grad,rmn)
+						    use_center_grad,rmn,wannier_centers)
 					end if
 				end do
 			end do

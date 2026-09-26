@@ -21,6 +21,9 @@ function matrizelbsetemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1
 	integer, dimension(4) :: est1,est2
 	real :: ec1,ec2,ev1,ev2
 	real,dimension(3) :: kpt1,kpt2
+	real,dimension(3) :: kpt2f
+	real,dimension(3,27) :: gshift
+	integer :: nimg
 	complex, dimension(w90basis) :: vbc1,vbc2,vbv1,vbv2
 
 	complex, dimension(w90basis) :: vbc,vbv
@@ -55,76 +58,81 @@ function matrizelbsetemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1
 	real :: temp, fermidisteh
 
 
+	! Fold q = kpt1-kpt2 to its shortest image q+G: V(q) is not periodic
+	! in q. (Equally short boundary images give the same V here.)
+	call bse_q_images(kpt1,kpt2,rlat,nimg,gshift)
+	kpt2f=kpt2+gshift(:,1)
+
 	select case (coultype)
 
 	case("V2DK")
 
-		vcoul1= v2dk(kpt1,kpt2,ediel,rlat,ngrid,lc,tolr)
+		vcoul1= v2dk(kpt1,kpt2f,ediel,rlat,ngrid,lc,tolr)
 
 	case("V3D")
 
-		vcoul1= vcoul(kpt1,kpt2,rlat,ngrid,tolr)
+		vcoul1= vcoul(kpt1,kpt2f,rlat,ngrid,tolr)
 
 	case("V3DL")
 
-		vcoul1= v3diel(kpt1,kpt2,ediel,rlat,ngrid,tolr)
+		vcoul1= v3diel(kpt1,kpt2f,ediel,rlat,ngrid,tolr)
 
 	case("V3DAVG")
 
-		vcoul1= v3davg(kpt1,kpt2,1.0,rlat,ngrid,tolr)
+		vcoul1= v3davg(kpt1,kpt2f,1.0,rlat,ngrid,tolr)
 
 	case("V3DLAVG")
 
-		vcoul1= v3davg(kpt1,kpt2,ediel(2),rlat,ngrid,tolr)
+		vcoul1= v3davg(kpt1,kpt2f,ediel(2),rlat,ngrid,tolr)
 		
 	case("V2D")
 
-		vcoul1= v2d(kpt1,kpt2,rlat,ngrid,tolr)
+		vcoul1= v2d(kpt1,kpt2f,rlat,ngrid,tolr)
 
 	case("V2DL")
 
-		vcoul1= v2diel(kpt1,kpt2,ediel,rlat,ngrid,tolr)		
+		vcoul1= v2diel(kpt1,kpt2f,ediel,rlat,ngrid,tolr)		
 
 	case("V2DT")
 
-		vcoul1= v2dt(kpt1,kpt2,ngrid,rlat,tolr)
+		vcoul1= v2dt(kpt1,kpt2f,ngrid,rlat,tolr)
 
 	case("V2DTAVG")
 
-		vcoul1= v2dtavg(kpt1,kpt2,ediel,ngrid,rlat,tolr)
+		vcoul1= v2dtavg(kpt1,kpt2f,ediel,ngrid,rlat,tolr)
 
 	case("V2DAVGTPV")
 
-		vcoul1= v2davgtpv(kpt1,kpt2,ediel,ngrid,rlat,tolr)
+		vcoul1= v2davgtpv(kpt1,kpt2f,ediel,ngrid,rlat,tolr)
 
 	case("V2DT2")
 
-		vcoul1= v2dt2(kpt1,kpt2,ngrid,rlat,lc,tolr)
+		vcoul1= v2dt2(kpt1,kpt2f,ngrid,rlat,lc,tolr)
 		
 	case("V2DOH")
 
-		vcoul1= v2dohono(kpt1,kpt2,ngrid,rlat,ediel,w,ez,tolr)
+		vcoul1= v2dohono(kpt1,kpt2f,ngrid,rlat,ediel,w,ez,tolr)
 		
 	case("V2DRK")
 
-		vcoul1= v2drk(kpt1,kpt2,ngrid,rlat,ediel,lc,ez,w,r0,tolr)
+		vcoul1= v2drk(kpt1,kpt2f,ngrid,rlat,ediel,lc,ez,w,r0,tolr)
 		
 	case("V1D")
 
-		vcoul1= v1d(kpt1,kpt2,ngrid,rlat,lc,tolr)
+		vcoul1= v1d(kpt1,kpt2f,ngrid,rlat,lc,tolr)
 
 	case("V1DL")
 
-		vcoul1= v1diel(kpt1,kpt2,ngrid,rlat,lc,ediel,tolr)		
+		vcoul1= v1diel(kpt1,kpt2f,ngrid,rlat,lc,ediel,tolr)		
 		
 	case("V1DT")
 	
-		vcoul1= v1dt(kpt1,kpt2,ngrid,rlat,tolr,lc)	
+		vcoul1= v1dt(kpt1,kpt2f,ngrid,rlat,tolr,lc)	
 		
 		
 	case("V0DT")
 
-		vcoul1= v0dt(kpt1,kpt2,ngrid,rlat,tolr)
+		vcoul1= v0dt(kpt1,kpt2f,ngrid,rlat,tolr)
 
 	case default
 
@@ -152,17 +160,17 @@ function matrizelbsetemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1
 		 !call overlap(w90basis,nvec,rvec,ovp,kpt2(1),kpt2(2),kpt2(3),skp)
 		 
 		 call sandwich_average(w90basis,vbc1,sk,skp,vbc2,vc)
-		 call sandwich_average(w90basis,vbv1,sk,skp,vbv2,vv)
+		 call sandwich_average(w90basis,vbv2,sk,skp,vbv1,vv)
 		
 		else
 	
 		 call vecconjg(vbc1,w90basis,vbc)
 
-		 call vecconjg(vbv1,w90basis,vbv)
+		 call vecconjg(vbv2,w90basis,vbv)
 
 		 call prodintsq(vbc,vbc2,w90basis,vc)
 
-		 call prodintsq(vbv,vbv2,w90basis,vv)
+		 call prodintsq(vbv,vbv1,w90basis,vv)
 	
 	
 		end if
@@ -201,6 +209,9 @@ function matrizelbsekqtemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,
 	integer, dimension(4) :: est1,est2
 	real :: ec1,ec2,ev1,ev2
 	real,dimension(3) :: kpt1,kpt2
+	real,dimension(3) :: kpt2f
+	real,dimension(3,27) :: gshift
+	integer :: nimg
 	real,dimension(4) :: q
 	real,dimension(3) :: vq,v0
 	complex, dimension(w90basis) :: vbc1,vbc2,vbv1,vbv2
@@ -237,97 +248,101 @@ function matrizelbsekqtemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,
 	vq = q(2:4)
 
 
-	call modvec(kpt1,kpt2,modk)
-
-	call modvecq(q,modq)
-
-
+	! Fold q = kpt1-kpt2 to its shortest image q+G: V(q) is not periodic
+	! in q. (Equally short boundary images give the same V here.)
+	call bse_q_images(kpt1,kpt2,rlat,nimg,gshift)
+	kpt2f=kpt2+gshift(:,1)
+	! the exchange term needs Q itself as its shortest image too
+	call bse_q_images(vq,v0,rlat,nimg,gshift)
+	vq=vq-gshift(:,1)
+	modq=sqrt(dot_product(vq,vq))
+	call modvec(kpt1,kpt2f,modk)
 
 	select case (coultype)
 
 	case("V2DK")
 
-		vcoulk= v2dk(kpt1,kpt2,ediel,rlat,ngrid,lc,tolr)
+		vcoulk= v2dk(kpt1,kpt2f,ediel,rlat,ngrid,lc,tolr)
 		vcoulq= v2dk(vq,v0,ediel,rlat,ngrid,lc,tolr)
 
 	case("V3D")
 
-		vcoulk= vcoul(kpt1,kpt2,rlat,ngrid,tolr)
+		vcoulk= vcoul(kpt1,kpt2f,rlat,ngrid,tolr)
 		vcoulq= vcoul(vq,v0,rlat,ngrid,tolr)
 
 	case("V3DL")
 
-		vcoulk= v3diel(kpt1,kpt2,ediel,rlat,ngrid,tolr)
+		vcoulk= v3diel(kpt1,kpt2f,ediel,rlat,ngrid,tolr)
 		vcoulq= v3diel(vq,v0,ediel,rlat,ngrid,tolr)
 
 	case("V3DAVG")
 
-		vcoulk= v3davg(kpt1,kpt2,1.0,rlat,ngrid,tolr)
+		vcoulk= v3davg(kpt1,kpt2f,1.0,rlat,ngrid,tolr)
 		vcoulq= v3davg(vq,v0,1.0,rlat,ngrid,tolr)
 
 	case("V3DLAVG")
 
-		vcoulk= v3davg(kpt1,kpt2,ediel(2),rlat,ngrid,tolr)
+		vcoulk= v3davg(kpt1,kpt2f,ediel(2),rlat,ngrid,tolr)
 		vcoulq= v3davg(vq,v0,ediel(2),rlat,ngrid,tolr)
 		
 	case("V2D")
 
-		vcoulk= v2d(kpt1,kpt2,rlat,ngrid,tolr)
+		vcoulk= v2d(kpt1,kpt2f,rlat,ngrid,tolr)
 		vcoulq= v2d(vq,v0,rlat,ngrid,tolr)		
 
 	case("V2DL")
 
-		vcoulk= v2diel(kpt1,kpt2,ediel,rlat,ngrid,tolr)
+		vcoulk= v2diel(kpt1,kpt2f,ediel,rlat,ngrid,tolr)
 		vcoulq= v2diel(vq,v0,ediel,rlat,ngrid,tolr)			
 
 	case("V2DT")
 
-		vcoulk= v2dt(kpt1,kpt2,ngrid,rlat,tolr)
+		vcoulk= v2dt(kpt1,kpt2f,ngrid,rlat,tolr)
 		vcoulq= v2dt(vq,v0,ngrid,rlat,tolr)
 
 	case("V2DTAVG")
 
-		vcoulk= v2dtavg(kpt1,kpt2,ediel,ngrid,rlat,tolr)
+		vcoulk= v2dtavg(kpt1,kpt2f,ediel,ngrid,rlat,tolr)
 		vcoulq= v2dtavg(vq,v0,ediel_bare,ngrid,rlat,tolr)
 
 	case("V2DAVGTPV")
 
-		vcoulk= v2davgtpv(kpt1,kpt2,ediel,ngrid,rlat,tolr)
+		vcoulk= v2davgtpv(kpt1,kpt2f,ediel,ngrid,rlat,tolr)
 		vcoulq= v2davgtpv(vq,v0,ediel_bare,ngrid,rlat,tolr)
 
 	case("V2DT2")
 
-		vcoulk= v2dt2(kpt1,kpt2,ngrid,rlat,lc,tolr)
+		vcoulk= v2dt2(kpt1,kpt2f,ngrid,rlat,lc,tolr)
 		vcoulq= v2dt2(vq,v0,ngrid,rlat,lc,tolr)
 		
 	case("V2DOH")
 
-		vcoulk= v2dohono(kpt1,kpt2,ngrid,rlat,ediel,w,ez,tolr)
+		vcoulk= v2dohono(kpt1,kpt2f,ngrid,rlat,ediel,w,ez,tolr)
 		vcoulq= v2dohono(vq,v0,ngrid,rlat,ediel,w,ez,tolr)
 		
 	case("V2DRK")
 
-		vcoulk= v2drk(kpt1,kpt2,ngrid,rlat,ediel,lc,ez,w,r0,tolr)
+		vcoulk= v2drk(kpt1,kpt2f,ngrid,rlat,ediel,lc,ez,w,r0,tolr)
 		vcoulq= v2drk(vq,v0,ngrid,rlat,ediel,lc,ez,w,r0,tolr)
 		
 	case("V1D")
 
-		vcoulk= v1d(kpt1,kpt2,ngrid,rlat,lc,tolr)
+		vcoulk= v1d(kpt1,kpt2f,ngrid,rlat,lc,tolr)
 		vcoulq= v1d(vq,v0,ngrid,rlat,lc,tolr)
 
 	case("V1DL")
 
-		vcoulk= v1diel(kpt1,kpt2,ngrid,rlat,lc,ediel,tolr)
+		vcoulk= v1diel(kpt1,kpt2f,ngrid,rlat,lc,ediel,tolr)
 		vcoulq= v1diel(vq,v0,ngrid,rlat,lc,ediel,tolr)		
 		
 	case("V1DT")
 	
-		vcoulk= v1dt(kpt1,kpt2,ngrid,rlat,tolr,lc)	
+		vcoulk= v1dt(kpt1,kpt2f,ngrid,rlat,tolr,lc)	
 		vcoulq= v1dt(vq,v0,ngrid,rlat,tolr,lc)
 		
 	case("V0DT")
 
-		vcoulk= v0dt(kpt1,kpt2,ngrid,rlat,tolr)
+		vcoulk= v0dt(kpt1,kpt2f,ngrid,rlat,tolr)
 		vcoulq= v0dt(vq,v0,ngrid,rlat,tolr)
 
 	case default
@@ -362,7 +377,7 @@ if (modq .eq. 0.) then
 		  !call overlap(w90basis,nvec,rvec,ovp,kpt2(1),kpt2(2),kpt2(3),skp)
 		 
 		  call sandwich_average(w90basis,vbc1,sk,skp,vbc2,vc)
-		  call sandwich_average(w90basis,vbv1,sk,skp,vbv2,vv)
+		  call sandwich_average(w90basis,vbv2,sk,skp,vbv1,vv)
 
 		  matrizelbsekqtemp= vcoulk*vc*vv*sqrt(fermidisteh(ec1,ev1,temp)*fermidisteh(ec2,ev2,temp))
 
@@ -371,11 +386,11 @@ if (modq .eq. 0.) then
 	
 		 call vecconjg(vbc1,w90basis,vbc)
 
-		 call vecconjg(vbv1,w90basis,vbv)
+		 call vecconjg(vbv2,w90basis,vbv)
 
 		 call prodintsq(vbc,vbc2,w90basis,vc)
 
-		 call prodintsq(vbv,vbv2,w90basis,vv)
+		 call prodintsq(vbv,vbv1,w90basis,vv)
 
 
 		 matrizelbsekqtemp= vcoulk*vc*vv*sqrt(fermidisteh(ec1,ev1,temp)*fermidisteh(ec2,ev2,temp))
@@ -414,14 +429,14 @@ else
 
 		 call vecconjg(vbc1,w90basis,vbc)
 
-		 call vecconjg(vbv1,w90basis,vbv)
+		 call vecconjg(vbv2,w90basis,vbv)
 
 		 call vecconjg(vbv2,w90basis,vbvkp)
 
 
 		 call prodintsq(vbc,vbc2,w90basis,vc)
 
-		 call prodintsq(vbv,vbv2,w90basis,vv)
+		 call prodintsq(vbv,vbv1,w90basis,vv)
 
 
 		 call prodintsq(vbc,vbv1,w90basis,vcv)
@@ -450,7 +465,7 @@ else
 		  !call overlap(w90basis,nvec,rvec,ovp,kpt2(1)+q(2),kpt2(2)+q(3),kpt2(3)+q(4),skpq)
 		  
 		  call sandwich_average(w90basis,vbc1,skq,skpq,vbc2,vc)
-		  call sandwich_average(w90basis,vbv1,sk,skp,vbv2,vv)
+		  call sandwich_average(w90basis,vbv2,sk,skp,vbv1,vv)
 		  
 		  call sandwich_average(w90basis,vbc1,skq,sk,vbv1,vcv)
 		  call sandwich_average(w90basis,vbv2,skp,skpq,vbc2,vvc)
@@ -462,14 +477,14 @@ else
 
 		 call vecconjg(vbc1,w90basis,vbc)
 
-		 call vecconjg(vbv1,w90basis,vbv)
+		 call vecconjg(vbv2,w90basis,vbv)
 
 		 call vecconjg(vbv2,w90basis,vbvkp)
 
 
 		 call prodintsq(vbc,vbc2,w90basis,vc)
 
-		 call prodintsq(vbv,vbv2,w90basis,vv)
+		 call prodintsq(vbv,vbv1,w90basis,vv)
 
 
 		 call prodintsq(vbc,vbv1,w90basis,vcv)
@@ -497,6 +512,7 @@ end function matrizelbsekqtemp
 
 
 subroutine dielbseptemp(nthread,dimse,excitonvec,hopt1,hopt2,fdeh,activity)
+! <0|r|S> = sum_j conjg(A_j^S) <c|r|v>_j, consistent with the <v2|v1> kernel
 
 	use omp_lib
 	implicit none
@@ -533,8 +549,8 @@ subroutine dielbseptemp(nthread,dimse,excitonvec,hopt1,hopt2,fdeh,activity)
 		do j=1,dimse
 
 			
-			actaux=actaux+(excitonvec(j,i)*hopt1(j))
-			actaux2=actaux2+(excitonvec(j,i)*hopt2(j)*fdeh(j))
+			actaux=actaux+(conjg(excitonvec(j,i))*hopt1(j))
+			actaux2=actaux2+(conjg(excitonvec(j,i))*hopt2(j)*fdeh(j))
 			
 
 			

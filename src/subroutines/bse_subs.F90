@@ -2,7 +2,7 @@
 function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1,ev1,vbc1 &
 	         ,vbv1,kpt1,est2,ec2,ev2,vbc2,vbv2,kpt2,dft,nvec,rvec,sk,skp, &
 	         use_center_phase,center_phase1,center_phase2, &
-	         use_center_grad,w90dat) !funcao para calcular o elemento de matriz da matriz bse
+	         use_center_grad,w90dat,centers) !funcao para calcular o elemento de matriz da matriz bse
 
 	use bse_q_optics, only: rmn_data, rmn_bloch, center_phase_direct_vertices, center_phase_gradient_correction
 
@@ -51,6 +51,13 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 	real :: lc
 
 	complex :: vc,vv,delta_k
+	real,dimension(3,w90basis),intent(in) :: centers
+	integer :: nimg,img,m
+	real,dimension(3,27) :: gshift
+	real,dimension(3) :: kpt2i
+	complex,dimension(w90basis) :: phase2i
+	complex :: melem
+	real :: ang
 
 	complex :: a_od_p(3,w90basis,w90basis),a_od_m(3,w90basis,w90basis)
 	logical :: bloch_ok
@@ -66,76 +73,86 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 	real :: r0
 
 
+	! q = kpt1-kpt2 enters through V(q) and the Wannier-centre phases,
+	! neither periodic in q: use the shortest images q+G, averaged over the
+	! equally short ones on the zone boundary, so that the kernel keeps the
+	! lattice symmetry and does not depend on how the k-grid cell is chosen.
+	call bse_q_images(kpt1,kpt2,rlat,nimg,gshift)
+	matrizelbse=cmplx(0.0,0.0)
+	do img=1,nimg
+
+	kpt2i=kpt2+gshift(:,img)
+
 	select case (coultype)
 
 	case("V2DK")
 
-		vcoul1= v2dk(kpt1,kpt2,ediel,rlat,ngrid,lc,tolr)
+		vcoul1= v2dk(kpt1,kpt2i,ediel,rlat,ngrid,lc,tolr)
 
 	case("V3D")
 
-		vcoul1= vcoul(kpt1,kpt2,rlat,ngrid,tolr)
+		vcoul1= vcoul(kpt1,kpt2i,rlat,ngrid,tolr)
 
 	case("V3DL")
 
-		vcoul1= v3diel(kpt1,kpt2,ediel,rlat,ngrid,tolr)
+		vcoul1= v3diel(kpt1,kpt2i,ediel,rlat,ngrid,tolr)
 
 	case("V3DAVG")
 
-		vcoul1= v3davg(kpt1,kpt2,1.0,rlat,ngrid,tolr)
+		vcoul1= v3davg(kpt1,kpt2i,1.0,rlat,ngrid,tolr)
 
 	case("V3DLAVG")
 
-		vcoul1= v3davg(kpt1,kpt2,ediel(2),rlat,ngrid,tolr)
+		vcoul1= v3davg(kpt1,kpt2i,ediel(2),rlat,ngrid,tolr)
 		
 	case("V2D")
 
-		vcoul1= v2d(kpt1,kpt2,rlat,ngrid,tolr)
+		vcoul1= v2d(kpt1,kpt2i,rlat,ngrid,tolr)
 
 	case("V2DL")
 
-		vcoul1= v2diel(kpt1,kpt2,ediel,rlat,ngrid,tolr)		
+		vcoul1= v2diel(kpt1,kpt2i,ediel,rlat,ngrid,tolr)		
 
 	case("V2DT")
 
-		vcoul1= v2dt(kpt1,kpt2,ngrid,rlat,tolr)
+		vcoul1= v2dt(kpt1,kpt2i,ngrid,rlat,tolr)
 
 	case("V2DTAVG")
 
-		vcoul1= v2dtavg(kpt1,kpt2,ediel,ngrid,rlat,tolr)
+		vcoul1= v2dtavg(kpt1,kpt2i,ediel,ngrid,rlat,tolr)
 
 	case("V2DAVGTPV")
 
-		vcoul1= v2davgtpv(kpt1,kpt2,ediel,ngrid,rlat,tolr)
+		vcoul1= v2davgtpv(kpt1,kpt2i,ediel,ngrid,rlat,tolr)
 
 	case("V2DT2")
 
-		vcoul1= v2dt2(kpt1,kpt2,ngrid,rlat,lc,tolr)
+		vcoul1= v2dt2(kpt1,kpt2i,ngrid,rlat,lc,tolr)
 		
 	case("V2DOH")
 
-		vcoul1= v2dohono(kpt1,kpt2,ngrid,rlat,ediel,w,ez,tolr)
+		vcoul1= v2dohono(kpt1,kpt2i,ngrid,rlat,ediel,w,ez,tolr)
 		
 	case("V2DRK")
 
-		vcoul1= v2drk(kpt1,kpt2,ngrid,rlat,ediel,lc,ez,w,r0,tolr)
+		vcoul1= v2drk(kpt1,kpt2i,ngrid,rlat,ediel,lc,ez,w,r0,tolr)
 		
 	case("V1D")
 
-		vcoul1= v1d(kpt1,kpt2,ngrid,rlat,lc,tolr)
+		vcoul1= v1d(kpt1,kpt2i,ngrid,rlat,lc,tolr)
 
 	case("V1DL")
 
-		vcoul1= v1diel(kpt1,kpt2,ngrid,rlat,lc,ediel,tolr)		
+		vcoul1= v1diel(kpt1,kpt2i,ngrid,rlat,lc,ediel,tolr)		
 		
 	case("V1DT")
 	
-		vcoul1= v1dt(kpt1,kpt2,ngrid,rlat,tolr,lc)	
+		vcoul1= v1dt(kpt1,kpt2i,ngrid,rlat,tolr,lc)	
 				
 
 	case("V0DT")
 
-		vcoul1= v0dt(kpt1,kpt2,ngrid,rlat,tolr)
+		vcoul1= v0dt(kpt1,kpt2i,ngrid,rlat,tolr)
 
 	case default
 
@@ -151,7 +168,7 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 	if (est1(1) .eq. est2(1)) then
 
 
-		matrizelbse= (ec1-ev1) + vcoul1
+		melem= (ec1-ev1) + vcoul1
 
 
 	else
@@ -166,42 +183,47 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 		 !call overlap(w90basis,nvec,rvec,ovp,kpt2(1),kpt2(2),kpt2(3),skp)
 		 
 		 call sandwich_average(w90basis,vbc1,sk,skp,vbc2,vc)
-		 call sandwich_average(w90basis,vbv1,sk,skp,vbv2,vv)
+		 call sandwich_average(w90basis,vbv2,sk,skp,vbv1,vv)
 		 
-		 matrizelbse=  vcoul1*vc*vv		
+		 melem=  vcoul1*vc*vv		
 		
 		case default
 	
 		 if (use_center_phase) then
 
+			! the image kpt2+G carries the phases exp(i(kpt2+G).t_m)
+			do m=1,w90basis
+				ang=dot_product(gshift(:,img),centers(:,m))
+				phase2i(m)=center_phase2(m)*cmplx(cos(ang),sin(ang))
+			end do
 			call center_phase_direct_vertices(vbc1,vbc2,vbv1,vbv2, &
-				center_phase1,center_phase2,vc,vv)
+				center_phase1,phase2i,vc,vv)
 
 			if (use_center_grad) then
-				call rmn_bloch(w90dat,kpt1-kpt2,rlat,a_od_p,bloch_ok,bloch_msg)
-				call rmn_bloch(w90dat,kpt2-kpt1,rlat,a_od_m,bloch_ok,bloch_msg)
+				call rmn_bloch(w90dat,kpt1-kpt2i,rlat,a_od_p,bloch_ok,bloch_msg)
+				call rmn_bloch(w90dat,kpt2i-kpt1,rlat,a_od_m,bloch_ok,bloch_msg)
 				do idiag=1,w90basis
 					a_od_p(:,idiag,idiag)=cmplx(0.0,0.0)
 					a_od_m(:,idiag,idiag)=cmplx(0.0,0.0)
 				end do
 				call center_phase_gradient_correction(vbc1,vbc2,vbv1,vbv2, &
-					a_od_p,a_od_m,w90basis,kpt1-kpt2,vc,vv,delta_k)
-				matrizelbse=vcoul1*(vc*vv+delta_k)
+					a_od_p,a_od_m,w90basis,kpt1-kpt2i,vc,vv,delta_k)
+				melem=vcoul1*(vc*vv+delta_k)
 			else
-				matrizelbse=vcoul1*vc*vv
+				melem=vcoul1*vc*vv
 			end if
 
 		 else
 
 			call vecconjg(vbc1,w90basis,vbc)
 
-			call vecconjg(vbv1,w90basis,vbv)
+			call vecconjg(vbv2,w90basis,vbv)
 
 			call prodintsq(vbc,vbc2,w90basis,vc)
 
-			call prodintsq(vbv,vbv2,w90basis,vv)
+			call prodintsq(vbv,vbv1,w90basis,vv)
 
-			matrizelbse=vcoul1*vc*vv
+			melem=vcoul1*vc*vv
 
 		 end if
 	         
@@ -211,9 +233,12 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 
 
 	end if
-		
 
+	matrizelbse=matrizelbse+melem
 
+	end do
+
+	matrizelbse=matrizelbse/real(nimg)
 
 end function matrizelbse
 
@@ -221,6 +246,7 @@ end function matrizelbse
 
 
 subroutine opticalactivity(dimse,excitonvec,hopt,activity,description)
+! <0|r|S> = sum_j conjg(A_j^S) <c|r|v>_j, consistent with the <v2|v1> kernel
 
 	implicit none
 
@@ -243,7 +269,7 @@ subroutine opticalactivity(dimse,excitonvec,hopt,activity,description)
 		do j=1,dimse
 
 		
-		actaux=actaux+(excitonvec(j,i)*hopt(j))
+		actaux=actaux+(conjg(excitonvec(j,i))*hopt(j))
 
 		end do
 
@@ -325,6 +351,7 @@ end subroutine excitonil
 
 
 subroutine dielbse(dimse,excitonvec,hopt1,hopt2,activity)
+! <0|r|S> = sum_j conjg(A_j^S) <c|r|v>_j, consistent with the <v2|v1> kernel
 
 	implicit none
 
@@ -349,7 +376,7 @@ subroutine dielbse(dimse,excitonvec,hopt1,hopt2,activity)
 			do k=1,dimse
 
 
-		actaux=actaux+(excitonvec(j,i)*hopt1(j)*conjg(excitonvec(k,i))*conjg(hopt2(k)))
+		actaux=actaux+(conjg(excitonvec(j,i))*hopt1(j)*excitonvec(k,i)*conjg(hopt2(k)))
 
 		end do
 			end do
@@ -370,6 +397,7 @@ end subroutine dielbse
 
 
 subroutine dielbsep(nthread,dimse,excitonvec,hopt1,hopt2,activity)
+! <0|r|S> = sum_j conjg(A_j^S) <c|r|v>_j, consistent with the <v2|v1> kernel
 
 	use omp_lib
 	implicit none
@@ -407,8 +435,8 @@ subroutine dielbsep(nthread,dimse,excitonvec,hopt1,hopt2,activity)
 		do j=1,dimse
 
 			
-			actaux=actaux+(excitonvec(j,i)*hopt1(j))
-			actaux2=actaux2+(excitonvec(j,i)*hopt2(j))
+			actaux=actaux+(conjg(excitonvec(j,i))*hopt1(j))
+			actaux2=actaux2+(conjg(excitonvec(j,i))*hopt2(j))
 			
 
 			
@@ -432,6 +460,7 @@ end subroutine dielbsep
 
 
 subroutine dielbsev(nthread,dimse,excitonvec,hopt,activity)
+! <0|r|S> = sum_j conjg(A_j^S) <c|r|v>_j, consistent with the <v2|v1> kernel
 
 	use omp_lib
 	implicit none
@@ -461,7 +490,7 @@ subroutine dielbsev(nthread,dimse,excitonvec,hopt,activity)
 			
 
 
-		actaux=actaux+(excitonvec(j,i)*hopt(j))
+		actaux=actaux+(conjg(excitonvec(j,i))*hopt(j))
 	
 
 		end do
@@ -481,6 +510,7 @@ end subroutine dielbsev
 
 
 subroutine dielbsev_dist(dimse,excitonvec,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,hopt,activity,MPIError)
+! <0|r|S> = sum_j conjg(A_j^S) <c|r|v>_j, consistent with the <v2|v1> kernel
 
 #ifdef MPI
 	use mpi
@@ -505,7 +535,7 @@ subroutine dielbsev_dist(dimse,excitonvec,lld,locr,locc,mb,nb,myrow,mycol,nprow,
 		if (jg <= dimse) then
 			do li=1,locr
 				ig = indxl2g(li,mb,myrow,0,nprow)
-				if (ig <= dimse) amplitude(jg) = amplitude(jg) + excitonvec(li,lj)*hopt(ig)
+				if (ig <= dimse) amplitude(jg) = amplitude(jg) + conjg(excitonvec(li,lj))*hopt(ig)
 			end do
 		end if
 	end do
@@ -523,6 +553,7 @@ end subroutine dielbsev_dist
 
 
 subroutine dielbsep_dist(dimse,excitonvec,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,hopt1,hopt2,activity,MPIError)
+! <0|r|S> = sum_j conjg(A_j^S) <c|r|v>_j, consistent with the <v2|v1> kernel
 
 #ifdef MPI
 	use mpi
@@ -549,8 +580,8 @@ subroutine dielbsep_dist(dimse,excitonvec,lld,locr,locc,mb,nb,myrow,mycol,nprow,
 			do li=1,locr
 				ig = indxl2g(li,mb,myrow,0,nprow)
 				if (ig <= dimse) then
-					amplitude1(jg) = amplitude1(jg) + excitonvec(li,lj)*hopt1(ig)
-					amplitude2(jg) = amplitude2(jg) + excitonvec(li,lj)*hopt2(ig)
+					amplitude1(jg) = amplitude1(jg) + conjg(excitonvec(li,lj))*hopt1(ig)
+					amplitude2(jg) = amplitude2(jg) + conjg(excitonvec(li,lj))*hopt2(ig)
 				end if
 			end do
 		end if
@@ -845,3 +876,55 @@ end subroutine excwfi
 
 
 
+
+
+subroutine bse_q_images(kpt1,kpt2,rlat,nimg,shift)
+	! Periodic images of kpt2 closest to kpt1. A BSE kernel element
+	! depends on q = kpt1-kpt2 through V(q) (and the Wannier-centre phases),
+	! which is not periodic in q, so q must be the shortest vector of its
+	! class q+G (likewise the exciton momentum Q in the exchange term). On the zone boundary two or three images are equally short
+	! (K-type q on a hexagonal lattice, for instance): all are returned so
+	! the caller can average over them. shift(:,i) is the reciprocal lattice
+	! vector to add to kpt2; nimg is 1 away from the zone boundary.
+	implicit none
+	real,dimension(3),intent(in) :: kpt1,kpt2
+	real,dimension(3,3),intent(in) :: rlat
+	integer,intent(out) :: nimg
+	real,dimension(3,27),intent(out) :: shift
+	real,parameter :: pi=acos(-1.)
+	real,parameter :: tol=1.0e-4
+	real,dimension(3) :: blat1,blat2,blat3,q,g,qi
+	real,dimension(3,27) :: gall
+	real,dimension(27) :: qlen
+	integer,dimension(3) :: n0
+	integer :: i1,i2,i3,ic
+	real :: qmin
+
+	call recvec(rlat(1,:),rlat(2,:),rlat(3,:),blat1,blat2,blat3)
+	q=kpt1-kpt2
+	! crystal coordinates of q (a_i.b_j = 2 pi delta_ij), rounded
+	n0(1)=nint(dot_product(q,rlat(1,:))/(2.0*pi))
+	n0(2)=nint(dot_product(q,rlat(2,:))/(2.0*pi))
+	n0(3)=nint(dot_product(q,rlat(3,:))/(2.0*pi))
+	ic=0
+	do i1=-1,1
+		do i2=-1,1
+			do i3=-1,1
+				ic=ic+1
+				g=real(n0(1)+i1)*blat1+real(n0(2)+i2)*blat2+real(n0(3)+i3)*blat3
+				gall(:,ic)=g
+				qi=q-g
+				qlen(ic)=sqrt(dot_product(qi,qi))
+			end do
+		end do
+	end do
+	qmin=minval(qlen)
+	nimg=0
+	do ic=1,27
+		if (qlen(ic) .le. qmin*(1.0+tol)+1.0e-6) then
+			nimg=nimg+1
+			shift(:,nimg)=gall(:,ic)
+		end if
+	end do
+
+end subroutine bse_q_images
