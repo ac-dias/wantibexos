@@ -169,6 +169,39 @@ subroutine sandwich_average(w90basis,lvec,hma,hmb,rvec,res)
 
 end subroutine sandwich_average
 
+subroutine sandwich_phase(w90basis,lvec,hma,hmb,rvec,q,tau,res)
+
+	implicit none
+
+	integer :: w90basis,i,j
+	complex,dimension(w90basis) :: lvec,rvec
+	complex,dimension(w90basis,w90basis) :: hma,hmb
+	real,dimension(3) :: q
+	real,dimension(w90basis,3) :: tau
+	complex :: res,aux
+	complex,dimension(w90basis) :: ph
+
+	! sandwich_average in the atomic gauge, for the non-orthogonal DFT=S
+	! basis: with coefficients c^A_i(k) = c_i(k) exp(-i k.tau_i) and q the
+	! momentum transfer (k of lvec minus k of rvec),
+	!   res = (1/2) sum_ij conjg(lvec_i) [hma_ij exp(i q.tau_j)
+	!                                   + hmb_ij exp(i q.tau_i)] rvec_j,
+	! hma = S at the k of lvec, hmb = S at the k of rvec. tau = 0 gives
+	! sandwich_average.
+	do i=1,w90basis
+		ph(i) = exp(cmplx(0.0,dot_product(q,tau(i,:))))
+	end do
+	res = 0.0
+	do i=1,w90basis
+		aux = 0.0
+		do j=1,w90basis
+			aux = aux + 0.5*(hma(i,j)*ph(j)+hmb(i,j)*ph(i))*rvec(j)
+		end do
+		res = res + conjg(lvec(i))*aux
+	end do
+
+end subroutine sandwich_phase
+
 subroutine applyovp(w90basis,ovp,hm)
 
 	implicit none

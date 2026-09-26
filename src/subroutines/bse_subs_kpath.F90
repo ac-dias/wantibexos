@@ -62,6 +62,8 @@ function matrizelbsekq(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,est1
 	real :: v1d,v1diel
 
 	real :: r0
+	real,dimension(3) :: qimg
+	real,dimension(w90basis,3) :: tau
 
 	v0 = 0.0
 	ediel_bare = 1.0
@@ -198,15 +200,28 @@ function matrizelbsekq(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,est1
 		!call overlap(w90basis,nvec,rvec,ovp,kpt1(1)+q(2),kpt1(2)+q(3),kpt1(3)+q(4),skq)
 		!call overlap(w90basis,nvec,rvec,ovp,kpt2(1)+q(2),kpt2(2)+q(3),kpt2(3)+q(4),skpq)
 
+		! atomic gauge, as the centre-phase branch below: orbital centres
+		! from orbital_centres, each vertex averaged over the equally short
+		! images of its momentum transfer (q for the direct, Q for the
+		! exchange term); the hole vertex is <v k2|v k1>
+		call orbital_centres(w90basis,tau)
 		if (est1(1) .ne. est2(1)) then
-			call sandwich_average(w90basis,vbc1,skq,skpq,vbc2,vc)
-			call sandwich_average(w90basis,vbv2,sk,skp,vbv1,vv)
-			dirv=vc*vv
+			do img=1,nimg
+				qimg=kpt1-kpt2-gshift(:,img)
+				call sandwich_phase(w90basis,vbc1,skq,skpq,vbc2,qimg,tau,vc)
+				call sandwich_phase(w90basis,vbv1,sk,skp,vbv2,qimg,tau,vv)
+				dirv=dirv+vc*conjg(vv)
+			end do
+			dirv=dirv/real(nimg)
 		end if
 		if (modq .ne. 0.) then
-			call sandwich_average(w90basis,vbc1,skq,sk,vbv1,vcv)
-			call sandwich_average(w90basis,vbv2,skp,skpq,vbc2,vvc)
-			excv=vcv*vvc
+			do img=1,nimgq
+				qimg=q(2:4)-gshiftq(:,img)
+				call sandwich_phase(w90basis,vbc1,skq,sk,vbv1,qimg,tau,vcv)
+				call sandwich_phase(w90basis,vbv2,skp,skpq,vbc2,-qimg,tau,vvc)
+				excv=excv+vcv*vvc
+			end do
+			excv=excv/real(nimgq)
 		end if
 
 	case default

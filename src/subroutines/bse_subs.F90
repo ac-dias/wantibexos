@@ -1,29 +1,3 @@
-! orbital centres for the DFT=S direct-kernel vertices, read once from
-! basis_set-NP (utils/siesta2wtb.py, unpolarized) in the run directory
-module orbital_centres
-	implicit none
-	real,allocatable,dimension(:,:) :: tau
-	logical :: tau_ready = .false.
-contains
-	subroutine load_tau(n)
-		integer,intent(in) :: n
-		integer :: i,idx,erro
-		character(len=16) :: sp
-		real :: x,y,z
-		if (tau_ready) return
-		allocate(tau(n,3))
-		open(unit=977,file="basis_set-NP",status="old",iostat=erro)
-		if (erro/=0) stop "DFT=S BSE: basis_set-NP (orbital centres) not found"
-		read(977,*)
-		do i=1,n
-			read(977,*) idx,sp,x,y,z
-			tau(i,:) = (/x,y,z/)
-		end do
-		close(977)
-		tau_ready = .true.
-	end subroutine load_tau
-end module orbital_centres
-
 
 function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1,ev1,vbc1 &
 	         ,vbv1,kpt1,est2,ec2,ev2,vbc2,vbv2,kpt2,dft,nvec,rvec,sk,skp, &
@@ -32,7 +6,6 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 
 	use bse_q_optics, only: rmn_data, rmn_bloch, center_phase_direct_vertices, center_phase_gradient_correction
 
-	use orbital_centres, only: tau, tau_ready, load_tau
 	implicit none
 
 	character(len=10) :: coultype
@@ -41,6 +14,7 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 	integer,dimension(3) :: ngrid
 
 	integer :: w90basis,nvec
+	real,dimension(w90basis,3) :: tau
 	logical :: use_center_phase
 	real :: a,vcell1
 	real :: ez,w
@@ -209,15 +183,15 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 		 !call overlap(w90basis,nvec,rvec,ovp,kpt1(1),kpt1(2),kpt1(3),sk)
 		 !call overlap(w90basis,nvec,rvec,ovp,kpt2(1),kpt2(2),kpt2(3),skp)
 		 
-		 ! atomic gauge: orbital centres enter as exp(iq.tau), per image of q
-		 !$omp critical (tau_load)
-		 if (.not. tau_ready) call load_tau(w90basis)
-		 !$omp end critical (tau_load)
+		 ! atomic gauge: the orbital centres enter as exp(i q.tau), q the
+		 ! transfer of this image, as the Wannier centres do below; without
+		 ! them C3 is broken and the E' exciton doublet of h-BN splits
+		 call orbital_centres(w90basis,tau)
 		 call sandwich_phase(w90basis,vbc1,sk,skp,vbc2,kpt1-kpt2i,tau,vc)
+		 ! hole vertex <v k2|v k1> = conjg(<v k1|v k2>)
 		 call sandwich_phase(w90basis,vbv1,sk,skp,vbv2,kpt1-kpt2i,tau,vv)
-		 vv = conjg(vv)		! hole vertex <v k2|v k1>
 		 
-		 melem=  vcoul1*vc*vv		
+		 melem=  vcoul1*vc*conjg(vv)		
 		
 		case default
 	
@@ -962,26 +936,49 @@ subroutine bse_q_images(kpt1,kpt2,rlat,nimg,shift)
 end subroutine bse_q_images
 
 
-! sandwich_average in the atomic gauge (c^A_i(k) = c_i(k) exp(-ik.tau_i)):
-! (1/2) sum_ij c1_i^* [S_ij(k1) exp(iq.tau_j) + S_ij(k2) exp(iq.tau_i)] c2_j
-subroutine sandwich_phase(n,lvec,hma,hmb,rvec,q,tau,res)
+subroutine orbital_centres(w90basis,tau)
+
 	implicit none
-	integer :: n,i,j
-	complex,dimension(n) :: lvec,rvec
-	complex,dimension(n,n) :: hma,hmb
-	real,dimension(3) :: q
-	real,dimension(n,3) :: tau
-	complex :: res,aux
-	complex,dimension(n) :: ph
-	do i=1,n
-		ph(i) = exp(cmplx(0.0,dot_product(q,tau(i,:))))
-	end do
-	res = 0.0
-	do i=1,n
-		aux = 0.0
-		do j=1,n
-			aux = aux + 0.5*(hma(i,j)*ph(j)+hmb(i,j)*ph(i))*rvec(j)
+
+	integer,intent(in) :: w90basis
+	real,dimension(w90basis,3),intent(out) :: tau
+	real,allocatable,dimension(:,:),save :: centres
+	logical,save :: ready = .false.
+	character(len=13),dimension(4),parameter :: files = (/ 'basis_set-NP ', &
+		'basis_set-sp ','basis_set-nc ','basis_set-soc' /)
+	character(len=16) :: species
+	integer :: i,f,idx,erro
+	real :: x,y,z
+
+	! Orbital centres (Angstrom) of the DFT=S basis in tb-NP.dat order, for
+	! the atomic-gauge vertices of matrizelbse and matrizelbsekq. Read once,
+	! from the basis_set-* file utils/siesta2wtb.py writes with tb-*.dat,
+	! in the run directory. Without one they are zero: the old
+	! lattice-gauge vertices, with a warning.
+	!$omp critical (orbital_centres_load)
+	if (.not. ready) then
+		allocate(centres(w90basis,3))
+		centres = 0.0
+		do f=1,size(files)
+			open(unit=977,file=trim(files(f)),status='old',action='read',iostat=erro)
+			if (erro /= 0) cycle
+			read(977,*,iostat=erro)
+			do i=1,w90basis
+				if (erro == 0) read(977,*,iostat=erro) idx,species,x,y,z
+				if (erro == 0) centres(i,:) = (/x,y,z/)
+			end do
+			close(977)
+			if (erro == 0) then
+				write(*,'(2A)') ' DFT=S BSE: orbital centres from ',trim(files(f))
+				exit
+			end if
+			centres = 0.0
 		end do
-		res = res + conjg(lvec(i))*aux
-	end do
-end subroutine sandwich_phase
+		if (erro /= 0) write(*,'(A)') ' WARNING: DFT=S BSE without a basis_set-* file:'// &
+			' orbital centres set to zero, C3 symmetry is not preserved'
+		ready = .true.
+	end if
+	!$omp end critical (orbital_centres_load)
+	tau = centres
+
+end subroutine orbital_centres
