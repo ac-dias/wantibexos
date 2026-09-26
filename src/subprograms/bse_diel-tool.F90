@@ -222,14 +222,16 @@ subroutine bsedielraw(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebse0,
 		continue
 	end if					
 	
+	! optdiel returns 1+chi for xx, yy, zz (and sp, sm): the spin factor
+	! multiplies chi only, so Re eps -> 1 far from the transitions
 	do i=1,int(numbse)
 	
-		write(300,*) dielfxx(i,1),real(spinf*dielfxx(i,2)),real(spinf*dielfxx(i,3))
+		write(300,*) dielfxx(i,1),real(1.0+spinf*(dielfxx(i,2)-1.0)),real(spinf*dielfxx(i,3))
 		write(301,*) dielfxy(i,1),real(spinf*dielfxy(i,2)),real(spinf*dielfxy(i,3))
 		write(302,*) dielfxz(i,1),real(spinf*dielfxz(i,2)),real(spinf*dielfxz(i,3))
-		write(303,*) dielfyy(i,1),real(spinf*dielfyy(i,2)),real(spinf*dielfyy(i,3))
+		write(303,*) dielfyy(i,1),real(1.0+spinf*(dielfyy(i,2)-1.0)),real(spinf*dielfyy(i,3))
 		write(304,*) dielfyz(i,1),real(spinf*dielfyz(i,2)),real(spinf*dielfyz(i,3))
-		write(305,*) dielfzz(i,1),real(spinf*dielfzz(i,2)),real(spinf*dielfzz(i,3))
+		write(305,*) dielfzz(i,1),real(1.0+spinf*(dielfzz(i,2)-1.0)),real(spinf*dielfzz(i,3))
 														
 		!write(301,*) elux,real(spinf*rxy),real(spinf*ixy)
 		!write(302,*) elux,real(spinf*rxz),real(spinf*ixz)

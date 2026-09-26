@@ -212,14 +212,16 @@ subroutine bsedielrawpol(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebs
 		continue
 	end if		
 	
+	! optdiel returns 1+chi for xx, yy, zz (and sp, sm): the spin factor
+	! multiplies chi only, so Re eps -> 1 far from the transitions
 	do i=1,int(numbse)
 	
-		write(300,*) dielfxx(i,1),real(spinf*dielfxx(i,2)),real(spinf*dielfxx(i,3))
-		write(301,*) dielfyy(i,1),real(spinf*dielfyy(i,2)),real(spinf*dielfyy(i,3))
-		write(302,*) dielfzz(i,1),real(spinf*dielfzz(i,2)),real(spinf*dielfzz(i,3))
+		write(300,*) dielfxx(i,1),real(1.0+spinf*(dielfxx(i,2)-1.0)),real(spinf*dielfxx(i,3))
+		write(301,*) dielfyy(i,1),real(1.0+spinf*(dielfyy(i,2)-1.0)),real(spinf*dielfyy(i,3))
+		write(302,*) dielfzz(i,1),real(1.0+spinf*(dielfzz(i,2)-1.0)),real(spinf*dielfzz(i,3))
 		
-		write(303,*) dielfsp(i,1),real(spinf*dielfsp(i,2)),real(spinf*dielfsp(i,3))
-		write(304,*) dielfsm(i,1),real(spinf*dielfsm(i,2)),real(spinf*dielfsm(i,3))
+		write(303,*) dielfsp(i,1),real(1.0+spinf*(dielfsp(i,2)-1.0)),real(spinf*dielfsp(i,3))
+		write(304,*) dielfsm(i,1),real(1.0+spinf*(dielfsm(i,2)-1.0)),real(spinf*dielfsm(i,3))
 
 
 														
