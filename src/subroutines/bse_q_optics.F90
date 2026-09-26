@@ -14,6 +14,7 @@ module bse_q_optics
 	public :: rmn_destroy
 	public :: rmn_bloch
 	public :: rmn_centers
+	public :: rmn_center_setup
 	public :: rmn_r0_block
 	public :: center_phase_build
 	public :: center_phase_direct_vertices
@@ -211,6 +212,40 @@ subroutine rmn_centers(data,centers,ok,message)
 	ok=.true.
 
 end subroutine rmn_centers
+
+
+subroutine rmn_center_setup(filename,dft,w90basis,data,ok,message,centers)
+
+	! Read seedname_r.dat for a BSE solver, with the checks of bsesolver: the
+	! orthonormal Wannier representation (DFT=W) and the Hamiltonian's basis
+	! size. With centers present, also extract the Wannier centres.
+
+	character(len=*),intent(in) :: filename
+	character(len=1),intent(in) :: dft
+	integer,intent(in) :: w90basis
+	type(rmn_data),intent(inout) :: data
+	logical,intent(out) :: ok
+	character(len=*),intent(out) :: message
+	real,dimension(:,:),intent(out),optional :: centers
+
+	ok=.false.
+	message=''
+	if (present(centers)) centers=0.0
+	if (dft == 'S') then
+		message='Wannier position data currently require the orthonormal Wannier representation'
+		return
+	end if
+	call rmn_read(filename,data,ok,message)
+	if (.not. ok) return
+	if (data%num_wann /= w90basis) then
+		ok=.false.
+		write(message,'(A,I0,A,I0)') 'Incompatible Wannier position and Hamiltonian bases: ', &
+			data%num_wann,' and ',w90basis
+		return
+	end if
+	if (present(centers)) call rmn_centers(data,centers,ok,message)
+
+end subroutine rmn_center_setup
 
 
 subroutine center_phase_build(centers,kpoints,phases,ok,message)

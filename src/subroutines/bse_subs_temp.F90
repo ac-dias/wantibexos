@@ -1,6 +1,14 @@
 
 function matrizelbsetemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1,ev1,vbc1 &
-         ,vbv1,kpt1,est2,ec2,ev2,vbc2,vbv2,kpt2,temp,dft,nvec,rvec,sk,skp) !funcao para calcular o elemento de matriz da matriz bse
+         ,vbv1,kpt1,est2,ec2,ev2,vbc2,vbv2,kpt2,temp,dft,nvec,rvec,sk,skp, &
+         use_center_phase,center_phase1,center_phase2, &
+         use_center_grad,w90dat,centers) !funcao para calcular o elemento de matriz da matriz bse
+
+	! The zero-temperature kernel matrizelbse (Coulomb potentials, shortest
+	! image q, Wannier-centre phases), with the Coulomb term weighted by the
+	! occupation differences fv-fc of the two transitions.
+
+	use bse_q_optics, only: rmn_data
 
 	implicit none
 
@@ -10,183 +18,61 @@ function matrizelbsetemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1
 	integer,dimension(3) :: ngrid
 
 	integer :: w90basis,nvec
-	real :: a,vcell1
 	real :: ez,w
 
 	real,dimension(nvec,3) :: rvec
-	!real,dimension(nvec,w90basis,w90basis) :: ovp
 
 	complex,dimension(w90basis,w90basis) :: sk,skp
 
 	integer, dimension(4) :: est1,est2
 	real :: ec1,ec2,ev1,ev2
 	real,dimension(3) :: kpt1,kpt2
-	real,dimension(3) :: kpt2f
-	real,dimension(3,27) :: gshift
-	integer :: nimg
 	complex, dimension(w90basis) :: vbc1,vbc2,vbv1,vbv2
 
-	complex, dimension(w90basis) :: vbc,vbv
+	logical :: use_center_phase,use_center_grad
+	complex,dimension(w90basis) :: center_phase1,center_phase2
+	type(rmn_data),intent(in) :: w90dat
+	real,dimension(3,w90basis) :: centers
 
 	real,dimension(3,3) :: rlat
 
 	real :: tolr
-	integer :: ktol
-	
+
 	complex:: matrizelbsetemp
-
-	real,parameter:: pi=acos(-1.)
-
-	real :: auxi
-
-	real :: modk
+	complex:: matrizelbse,kernel
 
 	real,dimension(3) :: ediel
 
 	real :: lc
 
-	complex :: vc,vv
-
-	real :: vcoul1
-
-	real :: vcoul,v2dk,v3diel,v3davg,v2dt,v2dtavg,v0dt,v2dt2
-	real :: v2dohono,v2drk,v1dt,v2d,v2diel,v2davgtpv
-	real :: v1d,v1diel
-	
 	real :: r0
-	
+
 	real :: temp, fermidisteh
 
 
-	! Fold q = kpt1-kpt2 to its shortest image q+G: V(q) is not periodic
-	! in q. (Equally short boundary images give the same V here.)
-	call bse_q_images(kpt1,kpt2,rlat,nimg,gshift)
-	kpt2f=kpt2+gshift(:,1)
-
-	select case (coultype)
-
-	case("V2DK")
-
-		vcoul1= v2dk(kpt1,kpt2f,ediel,rlat,ngrid,lc,tolr)
-
-	case("V3D")
-
-		vcoul1= vcoul(kpt1,kpt2f,rlat,ngrid,tolr)
-
-	case("V3DL")
-
-		vcoul1= v3diel(kpt1,kpt2f,ediel,rlat,ngrid,tolr)
-
-	case("V3DAVG")
-
-		vcoul1= v3davg(kpt1,kpt2f,1.0,rlat,ngrid,tolr)
-
-	case("V3DLAVG")
-
-		vcoul1= v3davg(kpt1,kpt2f,ediel(2),rlat,ngrid,tolr)
-		
-	case("V2D")
-
-		vcoul1= v2d(kpt1,kpt2f,rlat,ngrid,tolr)
-
-	case("V2DL")
-
-		vcoul1= v2diel(kpt1,kpt2f,ediel,rlat,ngrid,tolr)		
-
-	case("V2DT")
-
-		vcoul1= v2dt(kpt1,kpt2f,ngrid,rlat,tolr)
-
-	case("V2DTAVG")
-
-		vcoul1= v2dtavg(kpt1,kpt2f,ediel,ngrid,rlat,tolr)
-
-	case("V2DAVGTPV")
-
-		vcoul1= v2davgtpv(kpt1,kpt2f,ediel,ngrid,rlat,tolr)
-
-	case("V2DT2")
-
-		vcoul1= v2dt2(kpt1,kpt2f,ngrid,rlat,lc,tolr)
-		
-	case("V2DOH")
-
-		vcoul1= v2dohono(kpt1,kpt2f,ngrid,rlat,ediel,w,ez,tolr)
-		
-	case("V2DRK")
-
-		vcoul1= v2drk(kpt1,kpt2f,ngrid,rlat,ediel,lc,ez,w,r0,tolr)
-		
-	case("V1D")
-
-		vcoul1= v1d(kpt1,kpt2f,ngrid,rlat,lc,tolr)
-
-	case("V1DL")
-
-		vcoul1= v1diel(kpt1,kpt2f,ngrid,rlat,lc,ediel,tolr)		
-		
-	case("V1DT")
-	
-		vcoul1= v1dt(kpt1,kpt2f,ngrid,rlat,tolr,lc)	
-		
-		
-	case("V0DT")
-
-		vcoul1= v0dt(kpt1,kpt2f,ngrid,rlat,tolr)
-
-	case default
-
-		write(*,*) "Wrong Coulomb Potential"
-		STOP
-
-	end select
-
-	
-
-
+	kernel= matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1,ev1,vbc1, &
+	         vbv1,kpt1,est2,ec2,ev2,vbc2,vbv2,kpt2,dft,nvec,rvec,sk,skp, &
+	         use_center_phase,center_phase1,center_phase2, &
+	         use_center_grad,w90dat,centers)
 
 	if (est1(1) .eq. est2(1)) then
 
-
-		matrizelbsetemp= (ec1-ev1) + vcoul1*fermidisteh(ec1,ev1,temp)
-
+		matrizelbsetemp= (ec1-ev1) + (kernel-(ec1-ev1))*fermidisteh(ec1,ev1,temp)
 
 	else
 
-	
-		if (dft .eq. "S") then
-
-		 !call overlap(w90basis,nvec,rvec,ovp,kpt1(1),kpt1(2),kpt1(3),sk)
-		 !call overlap(w90basis,nvec,rvec,ovp,kpt2(1),kpt2(2),kpt2(3),skp)
-		 
-		 call sandwich_average(w90basis,vbc1,sk,skp,vbc2,vc)
-		 call sandwich_average(w90basis,vbv2,sk,skp,vbv1,vv)
-		
-		else
-	
-		 call vecconjg(vbc1,w90basis,vbc)
-
-		 call vecconjg(vbv2,w90basis,vbv)
-
-		 call prodintsq(vbc,vbc2,w90basis,vc)
-
-		 call prodintsq(vbv,vbv1,w90basis,vv)
-	
-	
-		end if
-	
-		matrizelbsetemp=  vcoul1*vc*vv*sqrt(fermidisteh(ec1,ev1,temp)*fermidisteh(ec2,ev2,temp))
-
+		matrizelbsetemp= kernel*sqrt(fermidisteh(ec1,ev1,temp)*fermidisteh(ec2,ev2,temp))
 
 	end if
-		
-
-
 
 end function matrizelbsetemp
 
 function matrizelbsekqtemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,est1,ec1,ev1,vbc1 &
-                       ,vbv1,kpt1,est2,ec2,ev2,vbc2,vbv2,kpt2,temp,dft,nvec,rvec,sk,skp,skq,skpq) !funcao para calcular o elemento de matriz da matriz bse
+                       ,vbv1,kpt1,est2,ec2,ev2,vbc2,vbv2,kpt2,temp,dft,nvec,rvec,sk,skp,skq,skpq, &
+                       use_center_phase,centers) !funcao para calcular o elemento de matriz da matriz bse
+
+	! The zero-temperature kernel matrizelbsekq, with the Coulomb terms
+	! weighted by the occupation differences fv-fc of the two transitions.
 
 	implicit none
 
@@ -199,314 +85,47 @@ function matrizelbsekqtemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,
 	real :: ez,w
 
 	integer :: w90basis,nvec
-	real :: a,vcell1
-	
+
 	real,dimension(nvec,3) :: rvec
-	!real,dimension(nvec,w90basis,w90basis) :: ovp
-	
-	complex,dimension(w90basis,w90basis) :: sk,skq,skp,skpq	
+
+	complex,dimension(w90basis,w90basis) :: sk,skq,skp,skpq
 
 	integer, dimension(4) :: est1,est2
 	real :: ec1,ec2,ev1,ev2
 	real,dimension(3) :: kpt1,kpt2
-	real,dimension(3) :: kpt2f
-	real,dimension(3,27) :: gshift
-	integer :: nimg
 	real,dimension(4) :: q
-	real,dimension(3) :: vq,v0
 	complex, dimension(w90basis) :: vbc1,vbc2,vbv1,vbv2
 
-	complex, dimension(w90basis) :: vbc,vbv,vbvkp
+	logical :: use_center_phase
+	real,dimension(3,w90basis) :: centers
 
 	real :: tolr
-	integer :: ktol
-	
+
 	complex:: matrizelbsekqtemp
+	complex:: matrizelbsekq,kernel
 
-	real :: modk,modq
-
-	real,dimension(3) :: ediel,ediel_bare
+	real,dimension(3) :: ediel
 
 	real :: lc
 
-	complex :: vc,vv
-	complex :: vcv,vvc
-
-	real :: vcoulk,vcoulq
-
-	real :: v2dk,vcoul,v3diel,v3davg,v2dt,v2dtavg,v0dt,v2dt2
-	real :: v2dohono,v2drk,v1dt,v2d,v2diel,v2davgtpv
-	real :: v1d,v1diel
-
 	real :: r0
-	
+
 	real :: temp, fermidisteh
 
-	v0 = 0.0
-	ediel_bare = 1.0
 
-	vq = q(2:4)
-
-
-	! Fold q = kpt1-kpt2 to its shortest image q+G: V(q) is not periodic
-	! in q. (Equally short boundary images give the same V here.)
-	call bse_q_images(kpt1,kpt2,rlat,nimg,gshift)
-	kpt2f=kpt2+gshift(:,1)
-	! the exchange term needs Q itself as its shortest image too
-	call bse_q_images(vq,v0,rlat,nimg,gshift)
-	vq=vq-gshift(:,1)
-	modq=sqrt(dot_product(vq,vq))
-	call modvec(kpt1,kpt2f,modk)
-
-	select case (coultype)
-
-	case("V2DK")
-
-		vcoulk= v2dk(kpt1,kpt2f,ediel,rlat,ngrid,lc,tolr)
-		vcoulq= v2dk(vq,v0,ediel,rlat,ngrid,lc,tolr)
-
-	case("V3D")
-
-		vcoulk= vcoul(kpt1,kpt2f,rlat,ngrid,tolr)
-		vcoulq= vcoul(vq,v0,rlat,ngrid,tolr)
-
-	case("V3DL")
-
-		vcoulk= v3diel(kpt1,kpt2f,ediel,rlat,ngrid,tolr)
-		vcoulq= v3diel(vq,v0,ediel,rlat,ngrid,tolr)
-
-	case("V3DAVG")
-
-		vcoulk= v3davg(kpt1,kpt2f,1.0,rlat,ngrid,tolr)
-		vcoulq= v3davg(vq,v0,1.0,rlat,ngrid,tolr)
-
-	case("V3DLAVG")
-
-		vcoulk= v3davg(kpt1,kpt2f,ediel(2),rlat,ngrid,tolr)
-		vcoulq= v3davg(vq,v0,ediel(2),rlat,ngrid,tolr)
-		
-	case("V2D")
-
-		vcoulk= v2d(kpt1,kpt2f,rlat,ngrid,tolr)
-		vcoulq= v2d(vq,v0,rlat,ngrid,tolr)		
-
-	case("V2DL")
-
-		vcoulk= v2diel(kpt1,kpt2f,ediel,rlat,ngrid,tolr)
-		vcoulq= v2diel(vq,v0,ediel,rlat,ngrid,tolr)			
-
-	case("V2DT")
-
-		vcoulk= v2dt(kpt1,kpt2f,ngrid,rlat,tolr)
-		vcoulq= v2dt(vq,v0,ngrid,rlat,tolr)
-
-	case("V2DTAVG")
-
-		vcoulk= v2dtavg(kpt1,kpt2f,ediel,ngrid,rlat,tolr)
-		vcoulq= v2dtavg(vq,v0,ediel_bare,ngrid,rlat,tolr)
-
-	case("V2DAVGTPV")
-
-		vcoulk= v2davgtpv(kpt1,kpt2f,ediel,ngrid,rlat,tolr)
-		vcoulq= v2davgtpv(vq,v0,ediel_bare,ngrid,rlat,tolr)
-
-	case("V2DT2")
-
-		vcoulk= v2dt2(kpt1,kpt2f,ngrid,rlat,lc,tolr)
-		vcoulq= v2dt2(vq,v0,ngrid,rlat,lc,tolr)
-		
-	case("V2DOH")
-
-		vcoulk= v2dohono(kpt1,kpt2f,ngrid,rlat,ediel,w,ez,tolr)
-		vcoulq= v2dohono(vq,v0,ngrid,rlat,ediel,w,ez,tolr)
-		
-	case("V2DRK")
-
-		vcoulk= v2drk(kpt1,kpt2f,ngrid,rlat,ediel,lc,ez,w,r0,tolr)
-		vcoulq= v2drk(vq,v0,ngrid,rlat,ediel,lc,ez,w,r0,tolr)
-		
-	case("V1D")
-
-		vcoulk= v1d(kpt1,kpt2f,ngrid,rlat,lc,tolr)
-		vcoulq= v1d(vq,v0,ngrid,rlat,lc,tolr)
-
-	case("V1DL")
-
-		vcoulk= v1diel(kpt1,kpt2f,ngrid,rlat,lc,ediel,tolr)
-		vcoulq= v1diel(vq,v0,ngrid,rlat,lc,ediel,tolr)		
-		
-	case("V1DT")
-	
-		vcoulk= v1dt(kpt1,kpt2f,ngrid,rlat,tolr,lc)	
-		vcoulq= v1dt(vq,v0,ngrid,rlat,tolr,lc)
-		
-	case("V0DT")
-
-		vcoulk= v0dt(kpt1,kpt2f,ngrid,rlat,tolr)
-		vcoulq= v0dt(vq,v0,ngrid,rlat,tolr)
-
-	case default
-
-		write(*,*) "Wrong Coulomb Potential"
-		STOP
-
-	end select
-
-	
-
-
-
-
-if (modq .eq. 0.) then
-
+	kernel= matrizelbsekq(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,est1,ec1,ev1,vbc1, &
+	         vbv1,kpt1,est2,ec2,ev2,vbc2,vbv2,kpt2,dft,nvec,rvec,sk,skp,skq,skpq, &
+	         use_center_phase,centers)
 
 	if (est1(1) .eq. est2(1)) then
 
-		matrizelbsekqtemp= (ec1-ev1) + vcoulk*fermidisteh(ec1,ev1,temp)
-
-
+		matrizelbsekqtemp= (ec1-ev1) + (kernel-(ec1-ev1))*fermidisteh(ec1,ev1,temp)
 
 	else
 
-		select case (dft)
-
-		case ("S")
-		
-
-		  !call overlap(w90basis,nvec,rvec,ovp,kpt1(1),kpt1(2),kpt1(3),sk)
-		  !call overlap(w90basis,nvec,rvec,ovp,kpt2(1),kpt2(2),kpt2(3),skp)
-		 
-		  call sandwich_average(w90basis,vbc1,sk,skp,vbc2,vc)
-		  call sandwich_average(w90basis,vbv2,sk,skp,vbv1,vv)
-
-		  matrizelbsekqtemp= vcoulk*vc*vv*sqrt(fermidisteh(ec1,ev1,temp)*fermidisteh(ec2,ev2,temp))
-
-		case default
-
-	
-		 call vecconjg(vbc1,w90basis,vbc)
-
-		 call vecconjg(vbv2,w90basis,vbv)
-
-		 call prodintsq(vbc,vbc2,w90basis,vc)
-
-		 call prodintsq(vbv,vbv1,w90basis,vv)
-
-
-		 matrizelbsekqtemp= vcoulk*vc*vv*sqrt(fermidisteh(ec1,ev1,temp)*fermidisteh(ec2,ev2,temp))
-
-		 end select
-
-
+		matrizelbsekqtemp= kernel*sqrt(fermidisteh(ec1,ev1,temp)*fermidisteh(ec2,ev2,temp))
 
 	end if
-		
-
-
-else 
-
-
-	if (est1(1) .eq. est2(1)) then
-
-
-		select case (dft)
-		
-		case ("S")
-
-
-		  !call overlap(w90basis,nvec,rvec,ovp,kpt1(1),kpt1(2),kpt1(3),sk)
-		  !call overlap(w90basis,nvec,rvec,ovp,kpt2(1),kpt2(2),kpt2(3),skp)
-		  
-		  !call overlap(w90basis,nvec,rvec,ovp,kpt1(1)+q(2),kpt1(2)+q(3),kpt1(3)+q(4),skq)
-		  !call overlap(w90basis,nvec,rvec,ovp,kpt2(1)+q(2),kpt2(2)+q(3),kpt2(3)+q(4),skpq)
-		  
-		  call sandwich_average(w90basis,vbc1,skq,sk,vbv1,vcv)
-		  call sandwich_average(w90basis,vbv2,skp,skpq,vbc2,vvc)
-		  
-		  matrizelbsekqtemp= (ec1-ev1) + (vcoulk - vcoulq*vcv*vvc)*fermidisteh(ec1,ev1,temp)
-		  
-		case default  		  
-
-		 call vecconjg(vbc1,w90basis,vbc)
-
-		 call vecconjg(vbv2,w90basis,vbv)
-
-		 call vecconjg(vbv2,w90basis,vbvkp)
-
-
-		 call prodintsq(vbc,vbc2,w90basis,vc)
-
-		 call prodintsq(vbv,vbv1,w90basis,vv)
-
-
-		 call prodintsq(vbc,vbv1,w90basis,vcv)
-
-		 call prodintsq(vbvkp,vbc2,w90basis,vvc)
-
-
-		 matrizelbsekqtemp= (ec1-ev1) + (vcoulk - vcoulq*vcv*vvc)*fermidisteh(ec1,ev1,temp)
-		
-		end select 
-			     
-
-	
-
-
-	else
-
-		select case (dft)
-		
-		case ("S")
-		
-		  !call overlap(w90basis,nvec,rvec,ovp,kpt1(1),kpt1(2),kpt1(3),sk)
-		  !call overlap(w90basis,nvec,rvec,ovp,kpt2(1),kpt2(2),kpt2(3),skp)
-		  
-		  !call overlap(w90basis,nvec,rvec,ovp,kpt1(1)+q(2),kpt1(2)+q(3),kpt1(3)+q(4),skq)
-		  !call overlap(w90basis,nvec,rvec,ovp,kpt2(1)+q(2),kpt2(2)+q(3),kpt2(3)+q(4),skpq)
-		  
-		  call sandwich_average(w90basis,vbc1,skq,skpq,vbc2,vc)
-		  call sandwich_average(w90basis,vbv2,sk,skp,vbv1,vv)
-		  
-		  call sandwich_average(w90basis,vbc1,skq,sk,vbv1,vcv)
-		  call sandwich_average(w90basis,vbv2,skp,skpq,vbc2,vvc)
-	
-
-		   matrizelbsekqtemp= (vcoulk*vc*vv- vcoulq*vcv*vvc)*sqrt(fermidisteh(ec1,ev1,temp)*fermidisteh(ec2,ev2,temp))
-
-		case default
-
-		 call vecconjg(vbc1,w90basis,vbc)
-
-		 call vecconjg(vbv2,w90basis,vbv)
-
-		 call vecconjg(vbv2,w90basis,vbvkp)
-
-
-		 call prodintsq(vbc,vbc2,w90basis,vc)
-
-		 call prodintsq(vbv,vbv1,w90basis,vv)
-
-
-		 call prodintsq(vbc,vbv1,w90basis,vcv)
-
-		 call prodintsq(vbvkp,vbc2,w90basis,vvc)
-
-		 matrizelbsekqtemp= (vcoulk*vc*vv- vcoulq*vcv*vvc)*sqrt(fermidisteh(ec1,ev1,temp)*fermidisteh(ec2,ev2,temp))
-
-		end select		
-
-
-	end if
-
-
-
-
-
-end if
-
-
-
-
 
 end function matrizelbsekqtemp
 

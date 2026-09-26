@@ -10,6 +10,8 @@ subroutine bsebndstemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 #endif
 	use omp_lib
 	use hamiltonian_input_variables
+	use input_variables, only: bsecenterfile, bsecenterkernel, bsecentgrad
+	use bse_q_optics, only: rmn_data, rmn_destroy, rmn_center_setup
 
 	implicit none
 
@@ -25,6 +27,11 @@ subroutine bsebndstemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	real,allocatable,dimension(:,:) :: kpt_bse
 
 	real,dimension(4) :: q
+
+	type(rmn_data) :: rmn
+	logical :: use_center_phase,rmn_ok
+	character(len=256) :: rmn_message
+	real,allocatable,dimension(:,:) :: wannier_centers
 
 	real,allocatable,dimension(:) :: eaux !variavel auxiliar para energia
 	complex,allocatable,dimension(:,:) :: vaux !variavel auxiliar para os autovetores
@@ -186,6 +193,27 @@ subroutine bsebndstemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	
 
 	end select
+
+	! BSE_CENTER_FILE: Wannier-centre phases in the direct and exchange
+	! kernels, as in the Q=0 solver (its optical vertex and BSE_CENTER_GRAD
+	! correction are Q=0 only).
+	use_center_phase=bsecenterkernel
+	allocate(wannier_centers(3,w90basis))
+	wannier_centers=0.0
+	if (use_center_phase) then
+		call rmn_center_setup(trim(bsecenterfile),dft,w90basis,rmn,rmn_ok,rmn_message,wannier_centers)
+		if (.not. rmn_ok) then
+			write(*,*) trim(rmn_message)
+			stop 'Unable to initialize the Wannier centres'
+		end if
+		call rmn_destroy(rmn)
+		if (Node .eq. 0) then
+			write(300,*) 'Wannier centres:',trim(bsecenterfile)
+			write(300,*) 'G=0 direct and exchange Coulomb embedding: Wannier-centre phases enabled'
+			if (bsecentgrad) write(300,*) 'BSE_CENTER_GRAD is not applied on the q path (Q=0 BSE only)'
+			call flush(300)
+		end if
+	end if
 	!ediel(2) = edielh
 
 	! KPATH_BSE accepts its original path format, or the explicit GRID format:
@@ -580,7 +608,8 @@ hbse(i2,j)= matrizelbsekqtemp(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,q,r
           ,energy(stt_bse(4,i2),stt_bse(2,i2)),vectorq(:,stt_bse(3,i2),stt_bse(4,i2)),vector(:,stt_bse(2,i2),stt_bse(4,i2)),&
           kpt_bse(:,stt_bse(4,i2)),stt_bse(:,j),energyq(stt_bse(4,j),stt_bse(3,j)),energy(stt_bse(4,j),stt_bse(2,j))&
           ,vectorq(:,stt_bse(3,j),stt_bse(4,j)),vector(:,stt_bse(2,j),stt_bse(4,j)),kpt_bse(:,stt_bse(4,j)),temp,dft,nvec,rvec,&
-          sk(:,:,stt_bse(4,i2)),sk(:,:,stt_bse(4,j)),skq(:,:,stt_bse(4,i2)),skq(:,:,stt_bse(4,j)))
+          sk(:,:,stt_bse(4,i2)),sk(:,:,stt_bse(4,j)),skq(:,:,stt_bse(4,i2)),skq(:,:,stt_bse(4,j)),&
+          use_center_phase,wannier_centers)
 
 			end do
 
@@ -953,7 +982,7 @@ hbse(i2,j)= matrizelbsekqtemp(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,q,r
 580 continue
 
 	deallocate(energy,vector)
-	deallocate(kpt,kpt_bse)
+	deallocate(kpt,kpt_bse,wannier_centers)
 	deallocate(qpt)
 	deallocate(exk)
 	deallocate(nocpq,nocpk)

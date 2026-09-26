@@ -1,5 +1,6 @@
 function matrizelbsekq(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,est1,ec1,ev1,vbc1 &
-                       ,vbv1,kpt1,est2,ec2,ev2,vbc2,vbv2,kpt2,dft,nvec,rvec,sk,skp,skq,skpq) !funcao para calcular o elemento de matriz da matriz bse
+                       ,vbv1,kpt1,est2,ec2,ev2,vbc2,vbv2,kpt2,dft,nvec,rvec,sk,skp,skq,skpq, &
+                       use_center_phase,centers) !funcao para calcular o elemento de matriz da matriz bse
 
 	implicit none
 
@@ -31,7 +32,7 @@ function matrizelbsekq(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,est1
 	real,dimension(3) :: vq,v0
 	complex, dimension(w90basis) :: vbc1,vbc2,vbv1,vbv2
 
-	complex, dimension(w90basis) :: vbc,vbv,vbvkp
+	complex, dimension(w90basis) :: vbc,vbv
 
 	real :: tolr
 	integer :: ktol
@@ -46,6 +47,13 @@ function matrizelbsekq(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,est1
 
 	complex :: vc,vv
 	complex :: vcv,vvc
+	complex :: dirv,excv
+	logical :: use_center_phase
+	real,dimension(3,w90basis) :: centers
+	real,dimension(3,27) :: gshiftq
+	integer :: nimgq,img,m
+	complex,dimension(w90basis) :: rphase
+	real :: ang
 
 	real :: vcoulk,vcoulq
 
@@ -62,12 +70,13 @@ function matrizelbsekq(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,est1
 
 
 	! Fold q = kpt1-kpt2 to its shortest image q+G: V(q) is not periodic
-	! in q. (Equally short boundary images give the same V here.)
+	! in q. Equally short boundary images give the same V; the centre-phase
+	! vertices below are averaged over them.
 	call bse_q_images(kpt1,kpt2,rlat,nimg,gshift)
 	kpt2f=kpt2+gshift(:,1)
 	! the exchange term needs Q itself as its shortest image too
-	call bse_q_images(vq,v0,rlat,nimg,gshift)
-	vq=vq-gshift(:,1)
+	call bse_q_images(vq,v0,rlat,nimgq,gshiftq)
+	vq=vq-gshiftq(:,1)
 	modq=sqrt(dot_product(vq,vq))
 	call modvec(kpt1,kpt2f,modk)
 
@@ -170,153 +179,98 @@ function matrizelbsekq(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,q,rlat,est1
 
 
 
-if (modq .eq. 0.) then
+	! Direct vertices <c1|c2><v2|v1> (q = kpt1-kpt2) and exchange vertices
+	! <c1|v1><v2|c2> (exciton momentum Q, none at Q=0). With the Wannier-centre
+	! phases exp(+i q.t_m) and exp(+i Q.t_m) of <c1|c2> and <c1|v1> they
+	! depend on the image q+G (Q+G), so, as in matrizelbse, they are averaged
+	! over the equally short images.
+
+	dirv=cmplx(0.0,0.0)
+	excv=cmplx(0.0,0.0)
+
+	select case (dft)
+
+	case ("S")
+
+		!call overlap(w90basis,nvec,rvec,ovp,kpt1(1),kpt1(2),kpt1(3),sk)
+		!call overlap(w90basis,nvec,rvec,ovp,kpt2(1),kpt2(2),kpt2(3),skp)
+
+		!call overlap(w90basis,nvec,rvec,ovp,kpt1(1)+q(2),kpt1(2)+q(3),kpt1(3)+q(4),skq)
+		!call overlap(w90basis,nvec,rvec,ovp,kpt2(1)+q(2),kpt2(2)+q(3),kpt2(3)+q(4),skpq)
+
+		if (est1(1) .ne. est2(1)) then
+			call sandwich_average(w90basis,vbc1,skq,skpq,vbc2,vc)
+			call sandwich_average(w90basis,vbv2,sk,skp,vbv1,vv)
+			dirv=vc*vv
+		end if
+		if (modq .ne. 0.) then
+			call sandwich_average(w90basis,vbc1,skq,sk,vbv1,vcv)
+			call sandwich_average(w90basis,vbv2,skp,skpq,vbc2,vvc)
+			excv=vcv*vvc
+		end if
+
+	case default
+
+		if (use_center_phase) then
+
+			if (est1(1) .ne. est2(1)) then
+				do img=1,nimg
+					do m=1,w90basis
+						ang=dot_product(kpt1-kpt2-gshift(:,img),centers(:,m))
+						rphase(m)=cmplx(cos(ang),sin(ang))
+					end do
+					vc=sum(conjg(vbc1)*vbc2*rphase)
+					vv=sum(conjg(vbv2)*vbv1*conjg(rphase))
+					dirv=dirv+vc*vv
+				end do
+				dirv=dirv/real(nimg)
+			end if
+			if (modq .ne. 0.) then
+				do img=1,nimgq
+					do m=1,w90basis
+						ang=dot_product(q(2:4)-gshiftq(:,img),centers(:,m))
+						rphase(m)=cmplx(cos(ang),sin(ang))
+					end do
+					vcv=sum(conjg(vbc1)*vbv1*rphase)
+					vvc=sum(conjg(vbv2)*vbc2*conjg(rphase))
+					excv=excv+vcv*vvc
+				end do
+				excv=excv/real(nimgq)
+			end if
+
+		else
+
+			call vecconjg(vbc1,w90basis,vbc)
+
+			call vecconjg(vbv2,w90basis,vbv)
+
+			if (est1(1) .ne. est2(1)) then
+				call prodintsq(vbc,vbc2,w90basis,vc)
+				call prodintsq(vbv,vbv1,w90basis,vv)
+				dirv=vc*vv
+			end if
+			if (modq .ne. 0.) then
+				call prodintsq(vbc,vbv1,w90basis,vcv)
+				call prodintsq(vbv,vbc2,w90basis,vvc)
+				excv=vcv*vvc
+			end if
+
+		end if
+
+	end select
 
 
 	if (est1(1) .eq. est2(1)) then
 
 		matrizelbsekq= (ec1-ev1) + vcoulk
 
-
-
-	else
-	
-		select case (dft)
-		
-		case ("S")
-		
-
-		  !call overlap(w90basis,nvec,rvec,ovp,kpt1(1),kpt1(2),kpt1(3),sk)
-		  !call overlap(w90basis,nvec,rvec,ovp,kpt2(1),kpt2(2),kpt2(3),skp)
-		 
-		  call sandwich_average(w90basis,vbc1,sk,skp,vbc2,vc)
-		  call sandwich_average(w90basis,vbv2,sk,skp,vbv1,vv)
-		 
-		  matrizelbsekq=  vcoulk*vc*vv		
-		
-		case default	
-
-	
-		 call vecconjg(vbc1,w90basis,vbc)
-
-		 call vecconjg(vbv2,w90basis,vbv)
-
-		 call prodintsq(vbc,vbc2,w90basis,vc)
-
-		 call prodintsq(vbv,vbv1,w90basis,vv)
-
-
-		 matrizelbsekq= vcoulk*vc*vv
-
-		end select
-
-	end if
-		
-
-
-else 
-
-
-	if (est1(1) .eq. est2(1)) then
-	
-		
-		select case (dft)
-		
-		case ("S")
-
-
-		  !call overlap(w90basis,nvec,rvec,ovp,kpt1(1),kpt1(2),kpt1(3),sk)
-		  !call overlap(w90basis,nvec,rvec,ovp,kpt2(1),kpt2(2),kpt2(3),skp)
-		  
-		  !call overlap(w90basis,nvec,rvec,ovp,kpt1(1)+q(2),kpt1(2)+q(3),kpt1(3)+q(4),skq)
-		  !call overlap(w90basis,nvec,rvec,ovp,kpt2(1)+q(2),kpt2(2)+q(3),kpt2(3)+q(4),skpq)
-		  
-		  call sandwich_average(w90basis,vbc1,skq,sk,vbv1,vcv)
-		  call sandwich_average(w90basis,vbv2,skp,skpq,vbc2,vvc)
-
-		 matrizelbsekq= (ec1-ev1) + vcoulk &
-			     - vcoulq*vcv*vvc
-		
-		case default
-
-
-		 call vecconjg(vbc1,w90basis,vbc)
-
-		 call vecconjg(vbv2,w90basis,vbv)
-
-		 call vecconjg(vbv2,w90basis,vbvkp)
-
-
-		 call prodintsq(vbc,vbc2,w90basis,vc)
-
-		 call prodintsq(vbv,vbv1,w90basis,vv)
-
-
-		 call prodintsq(vbc,vbv1,w90basis,vcv)
-
-		 call prodintsq(vbvkp,vbc2,w90basis,vvc)
-
-
-		 matrizelbsekq= (ec1-ev1) + vcoulk &
-			     - vcoulq*vcv*vvc
-
-	
-		end select
-
-
 	else
 
-		select case (dft)
-		
-		case ("S")
-		
-		  !call overlap(w90basis,nvec,rvec,ovp,kpt1(1),kpt1(2),kpt1(3),sk)
-		  !call overlap(w90basis,nvec,rvec,ovp,kpt2(1),kpt2(2),kpt2(3),skp)
-		  
-		  !call overlap(w90basis,nvec,rvec,ovp,kpt1(1)+q(2),kpt1(2)+q(3),kpt1(3)+q(4),skq)
-		  !call overlap(w90basis,nvec,rvec,ovp,kpt2(1)+q(2),kpt2(2)+q(3),kpt2(3)+q(4),skpq)
-		  
-		  call sandwich_average(w90basis,vbc1,skq,skpq,vbc2,vc)
-		  call sandwich_average(w90basis,vbv2,sk,skp,vbv1,vv)
-		  
-		  call sandwich_average(w90basis,vbc1,skq,sk,vbv1,vcv)
-		  call sandwich_average(w90basis,vbv2,skp,skpq,vbc2,vvc)
-
-		 matrizelbsekq= vcoulk*vc*vv&
-				- vcoulq*vcv*vvc		
-		
-		case default
-
-		 call vecconjg(vbc1,w90basis,vbc)
-
-		 call vecconjg(vbv2,w90basis,vbv)
-
-		 call vecconjg(vbv2,w90basis,vbvkp)
-
-
-		 call prodintsq(vbc,vbc2,w90basis,vc)
-
-		 call prodintsq(vbv,vbv1,w90basis,vv)
-
-
-		 call prodintsq(vbc,vbv1,w90basis,vcv)
-
-		 call prodintsq(vbvkp,vbc2,w90basis,vvc)
-
-		 matrizelbsekq= vcoulk*vc*vv&
-				- vcoulq*vcv*vvc
-
-		end select
+		matrizelbsekq= vcoulk*dirv
 
 	end if
 
-
-
-
-
-end if
-
-
+	if (modq .ne. 0.) matrizelbsekq= matrizelbsekq - vcoulq*excv
 
 
 

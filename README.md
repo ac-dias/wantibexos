@@ -73,11 +73,18 @@ This is the centre-resolved G=0 approximation
 `V_mn(q)=V(q) exp[i q.(t_m-t_n)]`, with q the shortest image of k1-k2 (see
 BSE kernel conventions below). It changes the BSE Hamiltonian, exciton
 energies, and oscillator strengths. The screened scalar Coulomb potential and
-its q=0 averaging are otherwise unchanged. The finite-Q direct and exchange
-kernels are not modified.
+its q=0 averaging are otherwise unchanged.
 
-This is currently the zero-temperature `BSE= T` path only; finite-Q and
-finite-temperature optical vertices remain unchanged. It requires the
+The finite-temperature optical BSE (`TEMP` > 0) uses the same vertex and
+kernel. The q-path BSE (`BSE_BND= T`, at zero and finite temperature) uses the
+centre phases in its direct kernel and in the exchange vertices
+
+```
+sum_m C_m^*(k+Q) V_m(k) exp[+i Q.t_m],
+```
+
+with Q the shortest image of the exciton momentum; `BSE_CENTER_GRAD` applies
+to the Q=0 kernels only. The centre phases require the
 orthonormal Wannier representation (`DFT=W`), not the nonorthogonal `DFT=S`
 path. The path is also intentionally rejected when the companion
 `seedname_wsvec.dat` is present: Wannier90 `use_ws_distance` requires its
@@ -105,16 +112,18 @@ with the hole overlap `<v2|v1>` (earlier versions used its complex conjugate
 `<v1|v2>`), and with q the shortest image of the grid difference k1-k2: the
 screened potential and the Wannier-centre phases are not periodic in q, and
 the raw difference made the kernel depend on how the k-grid cell is chosen.
-Where several images are equally short (the zone boundary), the Q=0 kernel
-averages over them; the finite-Q exchange term takes the shortest image of Q
+Where several images are equally short (the zone boundary), the kernels
+average over them; the finite-Q exchange term takes the shortest images of Q
 in the same way. Exciton oscillator strengths are contracted as
 `|sum_j A_j^* <c|r|v>_j|^2`, consistent with these overlaps (earlier versions
 used `A_j`).
 
 Together with the Wannier-centre phases of `BSE_CENTER_FILE`, this keeps the
 lattice symmetry of the kernel: in monolayer h-BN the lowest bright exciton is
-the degenerate, in-plane isotropic E' doublet, independent of the k-grid cell,
-where the earlier kernel split it by 145 meV (36x36 grid). BSE Hamiltonians
+the degenerate E' doublet, independent of the k-grid cell,
+where the earlier kernel split it by 145 meV (36x36 grid), and the q-path
+energies at the three M points agree to 0.5 meV (16 meV apart without the
+centre phases). BSE Hamiltonians
 (`BSE_HAM_SAVE`) and q-path checkpoints written by earlier builds hold the
 earlier kernel and must be regenerated.
 

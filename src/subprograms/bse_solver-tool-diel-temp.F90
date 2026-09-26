@@ -17,6 +17,9 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 #endif
 	use omp_lib
 	use hamiltonian_input_variables
+	use input_variables, only: bsecenterfile, bsecenterkernel, bsecentgrad
+	use bse_q_optics, only: rmn_data, rmn_destroy, rmn_center_setup, &
+		center_phase_build, rmn_apply_q0_optical_correction
 
 	implicit none
 
@@ -145,6 +148,12 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	real :: fermidisteh,tcor
 	real,allocatable,dimension(:) :: fdeh
 
+	complex,allocatable,dimension(:,:) :: center_phase
+	type(rmn_data) :: rmn
+	logical :: use_rmn,use_center_phase,use_center_grad,rmn_ok
+	character(len=256) :: rmn_message
+	real,allocatable,dimension(:,:) :: wannier_centers
+
 	integer :: MPIError, Node, Nodes
 	integer :: blacs_ctxt, nprow, npcol, myrow, mycol
 	integer :: mb, nb, locr, locc, lld, ig, jg, li, lj
@@ -226,6 +235,39 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	
 
 	end select
+
+	! Wannier position data, as in bsesolver: BSE_CENTER_FILE (or the
+	! optical-only BSE_RMAT_FILE) gives the dH/dk - i[A,H] optical vertex,
+	! and BSE_CENTER_FILE the Wannier-centre phases of the direct kernel.
+	use_rmn=len_trim(bsecenterfile) > 0
+	use_center_phase=bsecenterkernel
+	use_center_grad=bsecentgrad .and. use_center_phase
+	if (use_center_phase .and. .not. use_rmn) stop 'BSE_CENTER_FILE requires a Wannier90 r-matrix filename'
+	if (bsecentgrad .and. .not. use_center_phase) stop 'BSE_CENTER_GRAD requires BSE_CENTER_FILE and BSE_CENTER_KERNEL'
+	allocate(wannier_centers(3,w90basis))
+	wannier_centers=0.0
+	if (use_rmn) then
+		if (use_center_phase) then
+			call rmn_center_setup(trim(bsecenterfile),dft,w90basis,rmn,rmn_ok,rmn_message,wannier_centers)
+		else
+			call rmn_center_setup(trim(bsecenterfile),dft,w90basis,rmn,rmn_ok,rmn_message)
+		end if
+		if (.not. rmn_ok) then
+			write(*,*) trim(rmn_message)
+			stop 'Unable to initialize the Wannier position data'
+		end if
+		if (Node == 0) then
+			write(300,*) 'Wannier position data:',trim(bsecenterfile)
+			write(300,*) 'Q=0 position-matrix treatment: dH/dk - i[A,H]'
+			if (use_center_grad) then
+				write(300,*) 'G=0 direct Coulomb embedding: Wannier-centre phases + off-diagonal dipole (full FT)'
+			else if (use_center_phase) then
+				write(300,*) 'G=0 direct Coulomb embedding: Wannier-centre phases enabled'
+			else
+				write(300,*) 'G=0 direct Coulomb embedding: legacy scalar kernel'
+			end if
+		end if
+	end if
 
 	!ediel(2) = edielh
 
@@ -313,6 +355,15 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 	!shift = 0.0
 	call monhkhorst_pack(ngrid(1),ngrid(2),ngrid(3),mshift,rlat(1,:),rlat(2,:),rlat(3,:),kpt)
+	allocate(center_phase(w90basis,ngkpt))
+	center_phase=cmplx(1.0,0.0)
+	if (use_center_phase) then
+		call center_phase_build(wannier_centers,kpt,center_phase,rmn_ok,rmn_message)
+		if (.not. rmn_ok) then
+			write(*,*) trim(rmn_message)
+			stop 'Unable to build Wannier-centre phase table'
+		end if
+	end if
 
 
 	! Keep the orbital index first so BSE eigenvector arguments are contiguous.
@@ -618,7 +669,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	call cpu_time(task_start)
 #endif
 
-	 !$omp parallel do default(shared) private(i,ec,ev)
+	 !$omp parallel do default(shared) private(i,ec,ev,rmn_ok,rmn_message)
 
 	do i=1,dimbse
 
@@ -631,6 +682,13 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		     kpt(stt(i,4),1),kpt(stt(i,4),2),kpt(stt(i,4),3),ffactor,sme,&
 		     w90basis,nvec,rlat,rvec,hopmatrices,&
 		     ihopmatrices,hrx(i),hry(i),hrz(i))
+		if (use_rmn) then
+			call rmn_apply_q0_optical_correction(rmn,kpt(stt(i,4),:),rlat,&
+				eigv(stt(i,4),stt(i,2)),vector(:,stt(i,2),stt(i,4)),&
+				eigv(stt(i,4),stt(i,3)),vector(:,stt(i,3),stt(i,4)),sme,&
+				hrx(i),hry(i),hrz(i),rmn_ok,rmn_message)
+			if (.not. rmn_ok) stop 'Unable to evaluate the Q=0 Wannier position matrix'
+		end if
 		     
 		     hrsp(i) = (hrx(i)+cmplx(0.,1.)*hry(i))*(1.0/sqrt(2.))
 		     hrsm(i) = (hrx(i)-cmplx(0.,1.)*hry(i))*(1.0/sqrt(2.))
@@ -736,6 +794,8 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	if (Nodes == 1) then
 		! The second field identifies the temperature-dependent BSE Hamiltonian.
 		bseham_metadata = (/ dimbse,2,1 /)
+		if (use_center_phase) bseham_metadata(3) = 3
+		if (use_center_grad) bseham_metadata(3) = 5
 		bseham_path = trim(outputfolder)//trim(bsehamfile)
 		allocate(hbse(dimbse,dimbse))
 		if (bsehamread) then
@@ -755,7 +815,9 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 					    kpt_bse(:,stt_bse(4,i)),stt_bse(:,j),eigv(stt_bse(4,j),stt_bse(3,j)),&
 					    eigv(stt_bse(4,j),stt_bse(2,j)),vector(:,stt_bse(3,j),stt_bse(4,j)),&
 					    vector(:,stt_bse(2,j),stt_bse(4,j)),kpt_bse(:,stt_bse(4,j)),temp,dft,nvec,rvec,&
-					    sk(:,:,stt_bse(4,i)),sk(:,:,stt_bse(4,j)))
+					    sk(:,:,stt_bse(4,i)),sk(:,:,stt_bse(4,j)),use_center_phase, &
+					    center_phase(:,stt_bse(4,i)),center_phase(:,stt_bse(4,j)), &
+					    use_center_grad,rmn,wannier_centers)
 				end do
 			end do
 			!$omp end parallel do
@@ -792,6 +854,8 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		call DESCINIT(descz, dimbse, dimbse, mb, nb, 0, 0, blacs_ctxt, lld, INFO)
 		bseham_metadata = (/ dimbse,2,1 /)
 		if (trim(bsealgo) == 'elpa') bseham_metadata(3) = 2
+		if (use_center_phase) bseham_metadata(3) = bseham_metadata(3)+2
+		if (use_center_grad) bseham_metadata(3) = bseham_metadata(3)+2
 		bseham_path = trim(outputfolder)//trim(bsehamfile)
 
 		if (bsehamread) then
@@ -820,7 +884,9 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 						    kpt_bse(:,stt_bse(4,ig)),stt_bse(:,jg),eigv(stt_bse(4,jg),stt_bse(3,jg)),&
 						    eigv(stt_bse(4,jg),stt_bse(2,jg)),vector(:,stt_bse(3,jg),stt_bse(4,jg)),&
 						    vector(:,stt_bse(2,jg),stt_bse(4,jg)),kpt_bse(:,stt_bse(4,jg)),temp,dft,nvec,rvec,&
-						    sk(:,:,stt_bse(4,ig)),sk(:,:,stt_bse(4,jg)))
+						    sk(:,:,stt_bse(4,ig)),sk(:,:,stt_bse(4,jg)),use_center_phase, &
+						    center_phase(:,stt_bse(4,ig)),center_phase(:,stt_bse(4,jg)), &
+						    use_center_grad,rmn,wannier_centers)
 					end if
 				end do
 			end do
@@ -1250,8 +1316,9 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	deallocate(fdeh)
 	deallocate(ovp)	
 
-	deallocate(kpt,kpt_bse)
+	deallocate(kpt,kpt_bse,center_phase,wannier_centers)
 	deallocate(sk)
+	if (use_rmn) call rmn_destroy(rmn)
 
 789     continue
 
