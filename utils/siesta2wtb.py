@@ -27,10 +27,145 @@ def ncases(var):
     return "%8f"%var
 
 ###############################################################################
+# --rmatrix: position matrix of the SIESTA basis
+#
+# X_ij(R) = <phi_i,0| r |phi_j,R> (Angstrom, absolute coordinates, the frame
+# of basis_set-*), with phi_i,0 orbital i of the home cell and phi_j,R
+# orbital j of the cell R, written as tb-*_r.dat in the layout of Wannier90's
+# seedname_r.dat (which WanTiBEXOS' rmn_read parses). It is the matrix of
+# the non-orthogonal SIESTA basis, not of orthonormal Wannier functions, so
+# it is not a BSE_CENTER_FILE: WanTiBEXOS reads it as BSE_RMAT_FILE (DFT=S),
+# for the part of the optical dipole that H(R), S(R) and the orbital centres
+# miss, the dipoles <phi_i|r - (r_i + r_j)/2|phi_j> between basis orbitals.
+# It needs the basis functions, here the ones sisl reads from the
+# *.ion.nc/*.ion.xml files next to the fdf.
+#
+# Each atom pair is integrated over the region where both of its orbitals
+# can be non-zero: two centres A, B in bipolar coordinates (r_a, r_b, phi)
+# about the A-B axis, volume element r_a r_b/d dr_a dr_b dphi; one centre in
+# spherical coordinates. The phi (and theta) integrands are trigonometric
+# polynomials of low degree, integrated exactly by the uniform (Gauss) rules;
+# r_a and r_b use Gauss-Legendre on pieces split at every orbital cutoff (and
+# wherever the r_b range crosses one), so each piece is smooth. The same
+# quadrature gives the overlap, which is checked against SIESTA's S.
+
+def _gauss_pieces(lo, hi, cuts, n):
+    """Gauss-Legendre nodes and weights on [lo, hi], split at the cuts inside"""
+    edges = np.unique([lo, hi] + [c for c in cuts if lo < c < hi])
+    x, w = np.polynomial.legendre.leggauss(n)
+    xs, ws = [], []
+    for a, b in zip(edges[:-1], edges[1:]):
+        if b - a > 1e-10:
+            xs.append(0.5*(b-a)*x + 0.5*(b+a))
+            ws.append(0.5*(b-a)*w)
+    if not xs:
+        return np.empty(0), np.empty(0)
+    return np.concatenate(xs), np.concatenate(ws)
+
+
+def _pair_quadrature(A, B, cut_a, cut_b, n=24, nphi=12):
+    """Points and weights for integrals over the region where an orbital
+    on A (cutoff radii cut_a) and one on B (cut_b) are both non-zero;
+    None when they do not overlap. One centre: 2n radial nodes per piece
+    (cheap, and the slowest to converge)."""
+    Ra, Rb = max(cut_a), max(cut_b)
+    phi = 2*np.pi*np.arange(nphi)/nphi
+    d = np.linalg.norm(B - A)
+    if d < 1e-8:
+        r, wr = _gauss_pieces(0.0, min(Ra, Rb), list(cut_a) + list(cut_b), 2*n)
+        ct, wt = np.polynomial.legendre.leggauss(8)
+        st = np.sqrt(1.0 - ct**2)
+        pts = A + r[:, None, None, None]*np.stack(np.broadcast_arrays(
+            st[:, None]*np.cos(phi), st[:, None]*np.sin(phi),
+            ct[:, None]*np.ones(nphi)), -1)[None]
+        w = (wr*r*r)[:, None, None]*wt[None, :, None]*(2*np.pi/nphi)
+        w = np.broadcast_to(w, pts.shape[:3])
+        return pts.reshape(-1, 3), w.reshape(-1)
+    if d >= Ra + Rb:
+        return None
+    ez = (B - A)/d
+    t = np.array([1.0, 0.0, 0.0]) if abs(ez[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
+    ex = t - ez*(t @ ez)
+    ex /= np.linalg.norm(ex)
+    ey = np.cross(ez, ex)
+    circle = np.cos(phi)[:, None]*ex + np.sin(phi)[:, None]*ey
+    cuts = list(cut_a) + [d] + [c + d for c in cut_b] + [c - d for c in cut_b] \
+        + [d - c for c in cut_b]
+    ra, wa = _gauss_pieces(0.0, Ra, cuts, n)
+    P, W = [], []
+    for x, wx in zip(ra, wa):
+        lo, hi = abs(x - d), min(x + d, Rb)
+        if hi - lo < 1e-10:
+            continue
+        rb, wb = _gauss_pieces(lo, hi, cut_b, n)
+        z = (x*x - rb*rb + d*d)/(2*d)
+        rho = np.sqrt(np.clip(x*x - z*z, 0.0, None))
+        P.append((A + z[:, None, None]*ez + rho[:, None, None]*circle).reshape(-1, 3))
+        W.append(np.repeat(wx*x*rb*wb/d*(2*np.pi/nphi), nphi))
+    return np.concatenate(P), np.concatenate(W)
+
+
+def position_matrix(geom, n=24):
+    """X[isc, i, j, :] = <phi_i,0| r |phi_j,R_isc> and the overlap Sq from
+    the same quadrature, for every supercell isc of geom (sisl order)."""
+    no, ncell = geom.no, geom.n_s
+    X = np.zeros((ncell, no, no, 3))
+    Sq = np.zeros((ncell, no, no))
+    try:
+        for atom in geom.atoms.atom:
+            for o in atom.orbitals:
+                o.psi(np.zeros((1, 3)))
+    except Exception:
+        sys.exit('--rmatrix needs the basis functions: run with the '
+                 '*.ion.nc or *.ion.xml files SIESTA wrote next to the fdf')
+    for isc in range(ncell):
+        R = geom.lattice.sc_off[isc] @ geom.cell
+        for a, atoma in enumerate(geom.atoms):
+            A = geom.xyz[a]
+            oa = geom.a2o(a, all=True)
+            for b, atomb in enumerate(geom.atoms):
+                B = geom.xyz[b] + R
+                q = _pair_quadrature(A, B, [o.R for o in atoma.orbitals],
+                                     [o.R for o in atomb.orbitals], n)
+                if q is None:
+                    continue
+                pts, w = q
+                fa = np.array([o.psi(pts - A) for o in atoma.orbitals])*w
+                fb = np.array([o.psi(pts - B) for o in atomb.orbitals])
+                ob = geom.a2o(b, all=True)
+                Sq[isc, oa[:, None], ob] = fa @ fb.T
+                for c in range(3):
+                    X[isc, oa[:, None], ob, c] = (fa*pts[:, c]) @ fb.T
+    return X, Sq
+
+
+def write_rmatrix(fname, geom, X, nspin, source):
+    """tb-*_r.dat in the Wannier90 seedname_r.dat layout: integer R, then
+    m n Re(x) Im(x) Re(y) Im(y) Re(z) Im(z) with m (the home-cell orbital)
+    running fastest; nspin = 2 repeats X in both spin blocks (r is
+    spin-diagonal), in the orbital order of tb-*.dat."""
+    no, ncell = geom.no, geom.n_s
+    with open(fname, 'w') as f:
+        print(f'siesta2wtb.py: <m,0|r|n,R> (Angstrom) of the SIESTA basis of {source}', file=f)
+        print(nspin*no, file=f)
+        print(ncell, file=f)
+        for isc in range(ncell):
+            r1, r2, r3 = geom.lattice.sc_off[isc]
+            for s in range(nspin):
+                for n_ in range(no):
+                    for s2 in range(nspin):
+                        for m in range(no):
+                            x = X[isc, m, n_] if s2 == s else np.zeros(3)
+                            print('%5d%5d%5d%5d%5d' % (r1, r2, r3, s2*no+m+1, s*no+n_+1)
+                                  + ''.join('%16.10f%16.10f' % (v, 0.0) for v in x), file=f)
+
+###############################################################################
 
 #inputfdf=  './teste-honpas/mos2.fdf'
 
 inputfdf=  sys.argv[1]  
+# siesta2wtb.py file.fdf --rmatrix: also write tb-*_r.dat (see position_matrix)
+rmatrix = '--rmatrix' in sys.argv[2:]
 #fermi= sys.argv[2]
 fermi= 0.00
 
@@ -464,3 +599,13 @@ if sptype2 == 'spin-orbit' :
 #os.system("rm run.out")	
 ####################################################################	
 
+if rmatrix:
+
+ suffix, nspin = {'unpolarized': ('NP', 1), 'polarized': ('sp', 2),
+                  'non-colinear': ('nc', 2), 'spin-orbit': ('soc', 2)}[sptype2]
+ X, Sq = position_matrix(tshs.geometry)
+ # the quadrature's overlap against SIESTA's, over the whole supercell
+ Ssiesta = tshs.tocsr(tshs.S_idx).toarray().reshape(nbasis, -1, nbasis).transpose(1, 0, 2)
+ dS = np.abs(Ssiesta - Sq).max()
+ write_rmatrix("tb-%s_r.dat" % suffix, tshs.geometry, X, nspin, inputfdf)
+ print("tb-%s_r.dat written; max |S(quadrature) - S(SIESTA)| = %.1e" % (suffix, dS))
