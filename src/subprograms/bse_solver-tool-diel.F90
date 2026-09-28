@@ -21,7 +21,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	use hamiltonian_input_variables
 	use input_variables, only: bsecenterfile, bsecenterkernel, bsecentgrad
 	use bse_q_optics, only: rmn_data, rmn_read, rmn_destroy, rmn_centers, &
-		center_phase_build, rmn_apply_q0_optical_correction
+		center_phase_build, rmn_apply_q0_optical_correction, rmn_dfts_dipoles
 
 	implicit none
 
@@ -85,7 +85,8 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	
 	complex,allocatable,dimension(:,:,:) :: sk
 	type(rmn_data) :: rmn
-	logical :: use_rmn,use_center_phase,use_center_grad,rmn_ok
+	logical :: use_rmn,use_center_phase,use_center_grad,rmn_ok,use_dmat
+	real,allocatable,dimension(:,:,:,:) :: dmat !DFT=S orbital dipoles (BSE_RMAT_FILE)
 	character(len=256) :: rmn_message
 	real,allocatable,dimension(:,:) :: wannier_centers
 
@@ -258,6 +259,9 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 #endif
 
 	use_rmn=len_trim(bsecenterfile) > 0
+	! DFT=S: the file is the position matrix of the SIESTA basis (optical
+	! vertex only), not Wannier position data
+	use_dmat=use_rmn .and. dft == 'S'
 	use_center_phase=bsecenterkernel
 	use_center_grad=bsecentgrad .and. use_center_phase
 	if (use_center_phase .and. .not. use_rmn) stop 'BSE_CENTER_FILE requires a Wannier90 r-matrix filename'
@@ -265,7 +269,8 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	allocate(wannier_centers(3,w90basis))
 	wannier_centers=0.0
 	if (use_rmn) then
-		if (dft == 'S') stop 'Wannier position data currently require the orthonormal Wannier representation'
+		if (use_dmat .and. use_center_phase) stop 'BSE_CENTER_FILE needs DFT=W: for DFT=S give '// &
+			'siesta2wtb.py --rmatrix output as BSE_RMAT_FILE'
 		call rmn_read(trim(bsecenterfile),rmn,rmn_ok,rmn_message)
 		if (.not. rmn_ok) then
 			write(*,*) trim(rmn_message)
@@ -282,7 +287,10 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 				stop 'Unable to initialize the Wannier centres'
 			end if
 		end if
-		if (Node == 0) then
+		if (Node == 0 .and. use_dmat) then
+			write(300,*) 'DFT=S position matrix:',trim(bsecenterfile)
+			write(300,*) 'Q=0 optical vertex: orbital dipoles <c|D|v> added'
+		else if (Node == 0) then
 			write(300,*) 'Wannier position data:',trim(bsecenterfile)
 			write(300,*) 'Q=0 position-matrix treatment: dH/dk - i[A,H]'
 			if (use_center_phase) then
@@ -644,6 +652,16 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	allocate(tau(w90basis,3))
 	tau = 0.0
 	if (dft .eq. "S") call orbital_centres(w90basis,tau)
+	! DFT=S with BSE_RMAT_FILE: the dipoles between basis orbitals, from
+	! the position matrix of siesta2wtb.py --rmatrix, for optdip_s
+	if (use_dmat) then
+		allocate(dmat(nvec,w90basis,w90basis,3))
+		call rmn_dfts_dipoles(rmn,w90basis,nvec,rvec,rlat,ovp,tau,dmat,rmn_ok,rmn_message)
+		if (.not. rmn_ok) then
+			write(*,*) trim(rmn_message)
+			stop 'Unable to build the DFT=S orbital dipoles'
+		end if
+	end if
 
 		if (Node == 0) then
 			write(300,*) 'IPA transitions: begin'
@@ -670,6 +688,9 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		     kpt(stt(i,4),1),kpt(stt(i,4),2),kpt(stt(i,4),3),sme,&
 		     w90basis,nvec,rvec,hopmatrices,ihopmatrices,ovp,tau,&
 		     hrx(i),hry(i),hrz(i))
+		if (use_dmat) call optdip_s(vector(:,stt(i,2),stt(i,4)),vector(:,stt(i,3),stt(i,4)),&
+		     kpt(stt(i,4),1),kpt(stt(i,4),2),kpt(stt(i,4),3),w90basis,nvec,rvec,dmat,&
+		     hrx(i),hry(i),hrz(i))
 		else
 		call optsp(eigv(stt(i,4),stt(i,2)),vector(:,stt(i,2),stt(i,4)),&
 		     eigv(stt(i,4),stt(i,3)),vector(:,stt(i,3),stt(i,4)),&
@@ -677,7 +698,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		     w90basis,nvec,rlat,rvec,hopmatrices,&
 		     ihopmatrices,hrx(i),hry(i),hrz(i))
 		end if
-		if (use_rmn) then
+		if (use_rmn .and. .not. use_dmat) then
 			call rmn_apply_q0_optical_correction(rmn,kpt(stt(i,4),:),rlat,&
 				eigv(stt(i,4),stt(i,2)),vector(:,stt(i,2),stt(i,4)),&
 				eigv(stt(i,4),stt(i,3)),vector(:,stt(i,3),stt(i,4)),sme,&
@@ -1291,6 +1312,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		end if
 		deallocate(W,stt,stt_bse,nocpk)
 	deallocate(tau)
+	if (use_dmat) deallocate(dmat)
 	deallocate(ovp)
 
 	deallocate(kpt,kpt_bse,center_phase,wannier_centers)

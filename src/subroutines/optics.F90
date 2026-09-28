@@ -220,7 +220,8 @@ subroutine optsp_s(ev,vv,ec,vc,kx,ky,kz,sme,w90basis,nvec,rvec,&
 	! S-orthonormal eigenvectors of CHEGV, i<c|dH - (ec+ev)/2 dS|v> =
 	! (ev-ec) A_cv, A_cv = i<c|S dv> + (i/2)<c|dS|v> the (Hermitian)
 	! interband connection, up to the dipoles <a|r-(r_a+r_b)/2|b> between
-	! basis orbitals, which are neglected. optsp's lattice-gauge dH/dk alone
+	! basis orbitals, which optdip_s adds when BSE_RMAT_FILE gives the
+	! position matrix of the basis. optsp's lattice-gauge dH/dk alone
 	! breaks C3 (eps_xx /= eps_yy and eps_xy /= 0 for h-BN) and lacks dS/dk.
 	call optspbz_s(ev,vv,ec,vc,kx,ky,kz,w90basis,nvec,rvec,hopmatrices,&
 		       ihopmatrices,ovp,tau,hrx,hry,hrz)
@@ -229,6 +230,44 @@ subroutine optsp_s(ev,vv,ec,vc,kx,ky,kz,sme,w90basis,nvec,rvec,&
 	hrz = hrz/cmplx(ec-ev,sme)
 
 end subroutine optsp_s
+
+
+subroutine optdip_s(vv,vc,kx,ky,kz,w90basis,nvec,rvec,dmat,hrx,hry,hrz)
+
+	implicit none
+
+	integer :: i
+	integer :: w90basis,nvec
+	real :: kx,ky,kz
+	real,dimension(nvec,3) :: rvec
+	real,dimension(nvec,w90basis,w90basis,3) :: dmat
+	complex,dimension(w90basis) :: vc,vv
+	complex :: hrx,hry,hrz
+	complex :: ph,drx,dry,drz
+	complex,dimension(w90basis,w90basis) :: dx,dy,dz
+
+	! Adds to the DFT=S optical vertex hr of optsp_s the dipoles between basis
+	! orbitals, i<c|D(k)|v>, D(k) = sum_R exp(ik.R) D(R) with D(R) from
+	! rmn_dfts_dipoles (between the lattice-gauge eigenvectors the orbital-
+	! centre phases of the atomic gauge cancel). hr is then i r_cv, r_cv the
+	! interband dipole of the basis without approximation.
+	dx = 0.0
+	dy = 0.0
+	dz = 0.0
+	do i=1,nvec
+		ph = exp(cmplx(0.0,kx*rvec(i,1)+ky*rvec(i,2)+kz*rvec(i,3)))
+		dx = dx+ph*dmat(i,:,:,1)
+		dy = dy+ph*dmat(i,:,:,2)
+		dz = dz+ph*dmat(i,:,:,3)
+	end do
+	call sandwich(w90basis,vc,dx,vv,drx)
+	call sandwich(w90basis,vc,dy,vv,dry)
+	call sandwich(w90basis,vc,dz,vv,drz)
+	hrx = hrx+cmplx(0.0,1.0)*drx
+	hry = hry+cmplx(0.0,1.0)*dry
+	hrz = hrz+cmplx(0.0,1.0)*drz
+
+end subroutine optdip_s
 
 
 

@@ -20,6 +20,7 @@ module bse_q_optics
 	public :: center_phase_direct_vertices
 	public :: center_phase_gradient_correction
 	public :: rmn_apply_q0_optical_correction
+	public :: rmn_dfts_dipoles
 
 contains
 
@@ -217,8 +218,10 @@ end subroutine rmn_centers
 subroutine rmn_center_setup(filename,dft,w90basis,data,ok,message,centers)
 
 	! Read seedname_r.dat for a BSE solver, with the checks of bsesolver: the
-	! orthonormal Wannier representation (DFT=W) and the Hamiltonian's basis
-	! size. With centers present, also extract the Wannier centres.
+	! Hamiltonian's basis size, and with centers present (the Wannier-centre
+	! phases of BSE_CENTER_FILE) the orthonormal Wannier representation
+	! (DFT=W), whose centres are extracted. For DFT=S (no centers) the file is
+	! the position matrix of the basis, siesta2wtb.py --rmatrix (BSE_RMAT_FILE).
 
 	character(len=*),intent(in) :: filename
 	character(len=1),intent(in) :: dft
@@ -231,8 +234,9 @@ subroutine rmn_center_setup(filename,dft,w90basis,data,ok,message,centers)
 	ok=.false.
 	message=''
 	if (present(centers)) centers=0.0
-	if (dft == 'S') then
-		message='Wannier position data currently require the orthonormal Wannier representation'
+	if (dft == 'S' .and. present(centers)) then
+		message='BSE_CENTER_FILE needs the orthonormal Wannier representation (DFT=W); DFT=S '// &
+			'takes its orbital centres from basis_set-*, and siesta2wtb.py --rmatrix output as BSE_RMAT_FILE'
 		return
 	end if
 	call rmn_read(filename,data,ok,message)
@@ -412,6 +416,60 @@ subroutine rmn_apply_q0_optical_correction(data,kpoint,rlat,ev,vv,ec,vc,sme,hrx,
 	ok=.true.
 
 end subroutine rmn_apply_q0_optical_correction
+
+subroutine rmn_dfts_dipoles(data,w90basis,nvec,rvec,rlat,ovp,tau,dmat,ok,message)
+	! Dipoles between the orbitals of the non-orthogonal DFT=S basis,
+	!
+	!   D_ab(R) = <a,0| r - (t_a+t_b+R)/2 |b,R> = r_ab(R) - (t_a+t_b+R)/2 S_ab(R),
+	!
+	! on the lattice vectors rvec of tb-*.dat, from the position matrix
+	! r_ab(R) = <a,0|r|b,R> of the basis (siesta2wtb.py --rmatrix, read by
+	! rmn_read), with the overlap ovp and the orbital centres t (tau) of
+	! orbital_centres. optdip_s adds them to the optical vertex of optsp_s. A
+	! lattice vector absent from the file must carry no overlap.
+	type(rmn_data),intent(in) :: data
+	integer,intent(in) :: w90basis,nvec
+	real,dimension(nvec,3),intent(in) :: rvec
+	real,dimension(3,3),intent(in) :: rlat
+	real,dimension(nvec,w90basis,w90basis),intent(in) :: ovp
+	real,dimension(w90basis,3),intent(in) :: tau
+	real,dimension(nvec,w90basis,w90basis,3),intent(out) :: dmat
+	logical,intent(out) :: ok
+	character(len=*),intent(out) :: message
+	integer :: ir,jr,found,a,b
+	real :: rcart(3)
+	ok=.false.
+	message=''
+	dmat=0.0
+	if (data%num_wann /= w90basis) then
+		write(message,'(A,I0,A,I0)') 'Incompatible DFT=S position matrix and Hamiltonian bases: ', &
+			data%num_wann,' and ',w90basis
+		return
+	end if
+	do ir=1,nvec
+		found=0
+		do jr=1,data%nrpts
+			rcart=matmul(real(data%rvec(:,jr)),rlat)
+			if (all(abs(rcart-rvec(ir,:)) < 1.0e-4)) then
+				found=jr
+				exit
+			end if
+		end do
+		if (found == 0) then
+			if (any(ovp(ir,:,:) /= 0.0)) then
+				write(message,'(A,3F10.5)') 'The DFT=S position matrix lacks the lattice vector',rvec(ir,:)
+				return
+			end if
+			cycle
+		end if
+		do b=1,w90basis
+			do a=1,w90basis
+				dmat(ir,a,b,:)=real(data%rmn(:,a,b,found))-0.5*(tau(a,:)+tau(b,:)+rvec(ir,:))*ovp(ir,a,b)
+			end do
+		end do
+	end do
+	ok=.true.
+end subroutine rmn_dfts_dipoles
 
 
 subroutine rmn_r0_block(data,r0,ok,message)

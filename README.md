@@ -98,6 +98,25 @@ legacy scalar BSE kernel, so existing inputs do not silently acquire different
 exciton energies. New calculations using the centre-resolved direct kernel
 should use `BSE_CENTER_FILE`.
 
+For `DFT=S` (SIESTA/Honpas files from `utils/siesta2wtb.py`) the orbital
+centres come from the `basis_set-*` file written next to `tb-*.dat`, and
+`BSE_CENTER_FILE` is rejected. The optical vertex is
+`<c| dH/dk - (Ec+Ev)/2 dS/dk |v>/(Ec-Ev)` in the atomic gauge, which treats
+each orbital as if its charge sat on its centre. `BSE_RMAT_FILE= tb-NP_r.dat`,
+the position matrix `<a,0|r|b,R>` of the basis written by
+`siesta2wtb.py file.fdf --rmatrix`, adds what the orbital shapes give, the
+dipoles between basis orbitals
+
+```
+<c|D|v>,    D_ab(R) = <a,0| r - (t_a+t_b+R)/2 |b,R>,
+```
+
+which makes the vertex the full interband dipole of the basis. For monolayer
+h-BN they lower the strength of the gap transition at K by 11% and bring the
+momentum matrix elements to within 1.5% of plane-wave (Quantum ESPRESSO)
+values with the same pseudopotentials, from 8-21% too large. The kernel does
+not change, and neither do exciton energies.
+
 BSE kernel conventions
 ----------------------
 

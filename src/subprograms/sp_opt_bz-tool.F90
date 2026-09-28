@@ -8,6 +8,8 @@ subroutine spoptpolbz(nthreads,dft,outputfolder,ngrid,nc,nv, &
 
 	use omp_lib
 	use hamiltonian_input_variables
+	use input_variables, only: bsecenterfile, bsecenterkernel
+	use bse_q_optics, only: rmn_data, rmn_center_setup, rmn_destroy, rmn_dfts_dipoles
 
 	implicit none
 
@@ -18,6 +20,10 @@ subroutine spoptpolbz(nthreads,dft,outputfolder,ngrid,nc,nv, &
 
 	real,allocatable,dimension(:,:) :: eigv
 	real,allocatable,dimension(:,:) :: tau !DFT=S orbital centres
+	real,allocatable,dimension(:,:,:,:) :: dmat !DFT=S orbital dipoles (BSE_RMAT_FILE)
+	type(rmn_data) :: rmn
+	logical :: use_dmat,rmn_ok
+	character(len=256) :: rmn_message
 	complex,allocatable,dimension(:,:,:) :: vector
 
 	real,allocatable,dimension(:,:) :: kpt !pontos k do grid
@@ -289,6 +295,23 @@ end do
 	allocate(tau(w90basis,3))
 	tau = 0.0
 	if (dft .eq. "S") call orbital_centres(w90basis,tau)
+	! DFT=S with BSE_RMAT_FILE: the dipoles between basis orbitals, from
+	! the position matrix of siesta2wtb.py --rmatrix, for optdip_s
+	use_dmat = dft .eq. "S" .and. len_trim(bsecenterfile) > 0
+	if (use_dmat .and. bsecenterkernel) stop 'BSE_CENTER_FILE needs DFT=W: for DFT=S give '// &
+		'siesta2wtb.py --rmatrix output as BSE_RMAT_FILE'
+	if (use_dmat) then
+		call rmn_center_setup(trim(bsecenterfile),dft,w90basis,rmn,rmn_ok,rmn_message)
+		if (rmn_ok) then
+			allocate(dmat(nvec,w90basis,w90basis,3))
+			call rmn_dfts_dipoles(rmn,w90basis,nvec,rvec,rlat,ovp,tau,dmat,rmn_ok,rmn_message)
+			call rmn_destroy(rmn)
+		end if
+		if (.not. rmn_ok) then
+			write(*,*) trim(rmn_message)
+			stop 'Unable to build the DFT=S orbital dipoles'
+		end if
+	end if
 
 	!$omp parallel do default(shared) private(j,hxsp,hysp,hzsp)
 	do j=1,ngkpt
@@ -320,6 +343,8 @@ end do
 		hxsp= hxsp/(cmplx(eigv(j,stto(j,i,3))-eigv(j,stto(j,i,2)),sme))
 		hysp= hysp/(cmplx(eigv(j,stto(j,i,3))-eigv(j,stto(j,i,2)),sme))
 		hzsp= hzsp/(cmplx(eigv(j,stto(j,i,3))-eigv(j,stto(j,i,2)),sme))
+		if (use_dmat) call optdip_s(vector(j,stto(j,i,2),:),vector(j,stto(j,i,3),:),&
+		     kpt(j,1),kpt(j,2),kpt(j,3),w90basis,nvec,rvec,dmat,hxsp,hysp,hzsp)
 		
 		output(j,1) = output(j,1)+real(hxsp*conjg(hxsp))	
 		output(j,2) = output(j,2)+real(hysp*conjg(hysp))
@@ -387,6 +412,7 @@ end do
 	deallocate(eigv,vector)
 	deallocate(rvec,hopmatrices,ihopmatrices,ffactor)
 	deallocate(tau)
+	if (use_dmat) deallocate(dmat)
 	deallocate(ovp)
 	!deallocate(hoptxf,hoptyf,hoptspf,hoptsmf)
 	deallocate(stto)
