@@ -24,7 +24,9 @@ def calctype(data):
 
 
 def ncases(var):
-    return "%8f"%var
+    # 13 significant digits: S(k) of an LCAO basis is close to singular, and
+    # rounding H and S to 6 decimals grows with energy in the eigenvalues
+    return "%.12e"%var
 
 ###############################################################################
 # --rmatrix: position matrix of the SIESTA basis
