@@ -268,7 +268,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 			write(300,*) 'Wannier position data:',trim(bsecenterfile)
 			write(300,*) 'Q=0 position-matrix treatment: dH/dk - i[A,H]'
 			if (use_center_grad) then
-				write(300,*) 'G=0 direct Coulomb embedding: Wannier-centre phases + off-diagonal dipole (full FT)'
+				write(300,*) 'G=0 direct Coulomb embedding: Wannier-centre phases + pair-midpoint dipoles'
 			else if (use_center_phase) then
 				write(300,*) 'G=0 direct Coulomb embedding: Wannier-centre phases enabled'
 			else
@@ -829,7 +829,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		! The second field identifies the temperature-dependent BSE Hamiltonian.
 		bseham_metadata = (/ dimbse,2,1 /)
 		if (use_center_phase) bseham_metadata(3) = 3
-		if (use_center_grad) bseham_metadata(3) = 5
+		if (use_center_grad) bseham_metadata(3) = 7   ! 5: the kernel before the pair-midpoint term
 		bseham_path = trim(outputfolder)//trim(bsehamfile)
 		allocate(hbse(dimbse,dimbse))
 		if (bsehamread) then
@@ -889,7 +889,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		bseham_metadata = (/ dimbse,2,1 /)
 		if (trim(bsealgo) == 'elpa') bseham_metadata(3) = 2
 		if (use_center_phase) bseham_metadata(3) = bseham_metadata(3)+2
-		if (use_center_grad) bseham_metadata(3) = bseham_metadata(3)+2
+		if (use_center_grad) bseham_metadata(3) = bseham_metadata(3)+4   ! +2: before the pair-midpoint term
 		bseham_path = trim(outputfolder)//trim(bsehamfile)
 
 		if (bsehamread) then

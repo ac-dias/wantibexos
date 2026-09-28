@@ -529,13 +529,21 @@ subroutine center_phase_gradient_correction(c1,c2,v1,v2, &
 	! Returns delta_k such that the corrected kernel element is V(q)*(vc0*vv0 + delta_k).
 	!
 	!   delta_k = iq.(A_c*vv0 - vc0*A_v)
-	!   (A_c)_a = sum_{m/=m'} c1_m* c2_m' A_od_p(a,m,m')   [full FT at +q]
-	!   (A_v)_a = sum_{n/=n'} v2_n* v1_n' A_od_m(a,n,n')   [full FT at -q]
+	!   (A_c)_a = sum_{m,m'} c1_m* c2_m' A_od_p(a,m,m')
+	!   (A_v)_a = sum_{n,n'} v2_n* v1_n' A_od_m(a,n,n')
 	!   (the hole overlap is <v2|v1>, as in center_phase_direct_vertices)
 	!
-	! A_od_p = sum_R exp(+iq.R) r^od(R) and A_od_m = sum_R exp(-iq.R) r^od(R)
-	! are the off-diagonal Fourier-transformed position matrices (diagonal zeroed).
-	! Using the full FT instead of the R=0 approximation makes the BSE kernel Hermitian.
+	! It is the first order in q of <m,0|exp(iq.r)|n,R>, expanded about the
+	! pair midpoint (t_m+t_n+R)/2, as matrizelbse builds the two matrices:
+	!
+	!   A_od_p(:,m,n) = exp(+iq.(t_m+t_n)/2) [A(kb) - diag(t)]_mn
+	!   A_od_m(:,m,n) = exp(-iq.(t_m+t_n)/2) [A(kb) - diag(t)]_mn
+	!
+	! with A(kb) = sum_R exp(i kb.R) r(R) at the mean kb = (k1+k2)/2 of the two
+	! states and t the centres of the zeroth-order phases. The midpoint phase is
+	! what keeps the term independent of the coordinate origin (and C3 intact);
+	! the diagonal keeps sum_{R/=0} exp(i kb.R) r_mm(R). For a Hermitian r(R) the
+	! corrected kernel stays Hermitian.
 
     integer,intent(in) :: w90basis
 
@@ -554,7 +562,6 @@ subroutine center_phase_gradient_correction(c1,c2,v1,v2, &
 
 	do m=1,w90basis
 		do mp=1,w90basis
-			if (m == mp) cycle
 			do alpha=1,3
 				ac(alpha)=ac(alpha)+conjg(c1(m))*c2(mp)*a_od_p(alpha,m,mp)
 				av(alpha)=av(alpha)+conjg(v2(m))*v1(mp)*a_od_m(alpha,m,mp)

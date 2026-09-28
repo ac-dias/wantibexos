@@ -75,6 +75,19 @@ BSE kernel conventions below). It changes the BSE Hamiltonian, exciton
 energies, and oscillator strengths. The screened scalar Coulomb potential and
 its q=0 averaging are otherwise unchanged.
 
+`BSE_CENTER_GRAD= T` adds the next order in q of the vertices: the first-order
+term of <m,0|exp(iq.r)|n,R> expanded about the pair midpoint (t_m+t_n+R)/2,
+
+```
+i q.sum_mn C1_m^* C2_n exp[+i q.(t_m+t_n)/2] [A(kb) - diag(t)]_mn
+```
+
+added to the electron vertex, and the same with V2^*, V1, -q and
+exp[-i q.(t_m+t_n)/2] to the hole vertex, with A at the mean kb = (k1+k2)/2 of
+the two states. Without the midpoint phase the term would depend on the
+coordinate origin and break the lattice symmetry. It uses the whole position
+matrix and costs one Fourier sum of r(R) per matrix element.
+
 The finite-temperature optical BSE (`TEMP` > 0) uses the same vertex and
 kernel. The q-path BSE (`BSE_BND= T`, at zero and finite temperature) uses the
 centre phases in its direct kernel and in the exchange vertices

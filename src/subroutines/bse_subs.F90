@@ -53,7 +53,7 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 
 	complex :: vc,vv,delta_k
 	real,dimension(3,w90basis),intent(in) :: centers
-	integer :: nimg,img,m
+	integer :: nimg,img,m,n
 	real,dimension(3,27) :: gshift
 	real,dimension(3) :: kpt2i
 	complex,dimension(w90basis) :: phase2i
@@ -206,11 +206,21 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 				center_phase1,phase2i,vc,vv)
 
 			if (use_center_grad) then
-				call rmn_bloch(w90dat,kpt1-kpt2i,rlat,a_od_p,bloch_ok,bloch_msg)
-				call rmn_bloch(w90dat,kpt2i-kpt1,rlat,a_od_m,bloch_ok,bloch_msg)
+				! first order of <m,0|exp(iq.r)|n,R> about the pair midpoint
+				! (t_m+t_n+R)/2: exp(iq.(t_m+t_n)/2) iq.[A(kb)-diag(t)]_mn, with
+				! A(k) = sum_R exp(ik.R) r(R) at the states' mean kb = (kpt1+kpt2i)/2
+				! (the Bloch phases of R, not q), the diagonal less the centres, and
+				! the phase conjugated for the hole vertex
+				call rmn_bloch(w90dat,0.5*(kpt1+kpt2i),rlat,a_od_p,bloch_ok,bloch_msg)
 				do idiag=1,w90basis
-					a_od_p(:,idiag,idiag)=cmplx(0.0,0.0)
-					a_od_m(:,idiag,idiag)=cmplx(0.0,0.0)
+					a_od_p(:,idiag,idiag)=a_od_p(:,idiag,idiag)-centers(:,idiag)
+				end do
+				do n=1,w90basis
+					do m=1,w90basis
+						ang=0.5*dot_product(kpt1-kpt2i,centers(:,m)+centers(:,n))
+						a_od_m(:,m,n)=a_od_p(:,m,n)*cmplx(cos(ang),-sin(ang))
+						a_od_p(:,m,n)=a_od_p(:,m,n)*cmplx(cos(ang),sin(ang))
+					end do
 				end do
 				call center_phase_gradient_correction(vbc1,vbc2,vbv1,vbv2, &
 					a_od_p,a_od_m,w90basis,kpt1-kpt2i,vc,vv,delta_k)
