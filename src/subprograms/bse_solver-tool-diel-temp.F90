@@ -674,7 +674,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	call MPI_BARRIER(MPI_COMM_WORLD,MPIError)
 	task_start = MPI_WTIME()
 #else
-	call cpu_time(task_start)
+	task_start = omp_get_wtime()
 #endif
 
 	! DFT=S: orbital centres for the atomic-gauge optical vertex
@@ -766,7 +766,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	task_elapsed = MPI_WTIME() - task_start
 	call MPI_REDUCE(task_elapsed,task_elapsed_max,1,MPI_DOUBLE_PRECISION,MPI_MAX,0,MPI_COMM_WORLD,MPIError)
 #else
-	call cpu_time(task_elapsed)
+	task_elapsed = omp_get_wtime()
 	task_elapsed_max = task_elapsed - task_start
 #endif
 	
@@ -824,7 +824,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	call MPI_BARRIER(MPI_COMM_WORLD,MPIError)
 	task_start = MPI_WTIME()
 #else
-	call cpu_time(task_start)
+	task_start = omp_get_wtime()
 #endif
 
 	if (Node == 0) then
@@ -949,7 +949,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	task_elapsed = MPI_WTIME() - task_start
 	call MPI_REDUCE(task_elapsed,task_elapsed_max,1,MPI_DOUBLE_PRECISION,MPI_MAX,0,MPI_COMM_WORLD,MPIError)
 #else
-	call cpu_time(task_elapsed)
+	task_elapsed = omp_get_wtime()
 	task_elapsed_max = task_elapsed - task_start
 #endif
 
@@ -972,7 +972,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	call MPI_BARRIER(MPI_COMM_WORLD,MPIError)
 	task_start = MPI_WTIME()
 #else
-	call cpu_time(task_start)
+	task_start = omp_get_wtime()
 #endif
 
 	if (Nodes == 1) then
@@ -1153,7 +1153,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	task_elapsed = MPI_WTIME() - task_start
 	call MPI_REDUCE(task_elapsed,task_elapsed_max,1,MPI_DOUBLE_PRECISION,MPI_MAX,0,MPI_COMM_WORLD,MPIError)
 #else
-	call cpu_time(task_elapsed)
+	task_elapsed = omp_get_wtime()
 	task_elapsed_max = task_elapsed - task_start
 #endif
 	if (Node == 0) then
