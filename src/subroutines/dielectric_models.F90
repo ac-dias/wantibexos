@@ -8,6 +8,7 @@ module dielectric_models
 	public :: trolle_pedersen_veniard_dielectric
 	public :: tpv_bulk_dielectric
 	public :: tpv_effective_2d_dielectric
+	public :: tpv_slab_coulomb_factor
 
 contains
 
@@ -118,6 +119,36 @@ pure real function tpv_effective_2d_dielectric(q,thickness,epsilon_layer_q, &
 	end if
 
 end function tpv_effective_2d_dielectric
+
+
+! Thickness factor of the bare interaction in Eq. (10) of the reference above.
+! Two charges spread uniformly across the slab, |z|,|z'| < d/2, interact
+! through d**-2 times the double integral of exp(-q|z-z'|)/(2 eps0 q), which is
+! 1/(2 eps0 q) times 2 (beta-1+exp(-beta))/beta**2, beta = q d.  The effective
+! screening of Eq. (12) is defined with respect to this interaction, so the
+! screened one is this factor over (2 eps0 q eps_2D).  It is 1 at d = 0 and
+! falls off as 2/beta at large beta.
+pure real function tpv_slab_coulomb_factor(q,thickness) result(factor)
+
+	implicit none
+
+	real,intent(in) :: q,thickness
+
+	real(kind=8) :: beta
+
+	if (thickness .lt. 0.0) then
+		factor=ieee_value(1.0,ieee_quiet_nan)
+		return
+	end if
+
+	beta=abs(dble(q))*dble(thickness)
+	if (beta .lt. 1.0d-3) then
+		factor=real(1.0d0-beta/3.0d0+beta**2/12.0d0-beta**3/60.0d0)
+	else
+		factor=real(2.0d0*(beta-1.0d0+exp(-beta))/(beta*beta))
+	end if
+
+end function tpv_slab_coulomb_factor
 
 
 ! Complete Trolle-Pedersen-Veniard model: Eq. (1) supplies the slab response

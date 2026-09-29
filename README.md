@@ -136,6 +136,38 @@ IPA spectra). The optical vertex takes the unshifted energies: the scissor
 leaves the eigenvectors, and so the interband dipoles and the oscillator
 strengths, as they are.
 
+Two-dimensional Coulomb interactions
+------------------------------------
+
+`COULOMB_POT= V2DTPV` is the two-dimensional interaction of Trolle, Pedersen
+and Veniard, Sci. Rep. 7, 39844 (2017), Eq. (10), per unit area like `V2D`,
+`V2DK` and `V2DRK`: the Coulomb interaction of two charges spread uniformly
+across a slab of thickness d, screened by the finite-thickness model dielectric
+function of their Eqs. (1) and (12),
+
+```
+W(q) = e^2 F(|q| d) / (2 eps0 A |q| eps_TPV(|q|))
+F(b) = 2 (b - 1 + exp(-b)) / b^2
+```
+
+with `TPV_KAPPA`, `TPV_QTF` (1/Angstrom), `TPV_HWP` (eV), `TPV_THICKNESS` = d
+(Angstrom), `TPV_ALPHA` and the half-spaces `EDIEL_T`, `EDIEL_B`; `EDIEL` other
+than 1 switches the screening on (`EDIEL= 1` is the bare slab interaction
+F/(2 eps0 A |q|)). eps_TPV is defined as the ratio of the bare to the screened
+interaction, both averaged across the slab, so F is part of W: eps_TPV goes
+back to 1 at large |q|, and without F the interaction would return to the
+point-charge Coulomb there. F = 1 for d = 0. The q = 0 term is W averaged over
+the k-grid cell around q = 0.
+
+`V2DTAVG` and `V2DAVGTPV` instead use the cell-averaged truncated Coulomb
+`4 pi e^2 (1 - exp(-|q| L/2)) / (V q^2)`, divided by `EDIEL` or by eps_TPV(q):
+the point-charge 2D Coulomb times `2 (1 - exp(-|q| L/2)) / (|q| L)`, as if the
+charges were spread over the whole cell height L instead of d. Their excitons
+therefore depend on the vacuum: for monolayer h-BN (`V2DTAVG`, `EDIEL= 1.7`)
+the binding energy of the lowest exciton drops from 1.38 to 0.86 eV when the
+cell height grows from 12.5 to 25 Angstrom, while with `V2DTPV` it does not
+change.
+
 BSE kernel conventions
 ----------------------
 

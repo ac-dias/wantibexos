@@ -68,7 +68,7 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 	real :: vcoul1
 
 	real :: vcoul,v2dk,v3diel,v3davg,v2dt,v2dtavg,v0dt,v2dt2
-	real :: v2dohono,v2drk,v1dt,v2d,v2diel,v2davgtpv
+	real :: v2dohono,v2drk,v1dt,v2d,v2diel,v2davgtpv,v2dtpv
 	real :: v1d,v1diel
 
 	real :: r0
@@ -125,6 +125,10 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 	case("V2DAVGTPV")
 
 		vcoul1= v2davgtpv(kpt1,kpt2i,ediel,ngrid,rlat,tolr)
+
+	case("V2DTPV")
+
+		vcoul1= v2dtpv(kpt1,kpt2i,ediel,ngrid,rlat,tolr)
 
 	case("V2DT2")
 

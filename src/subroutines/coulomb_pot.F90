@@ -689,6 +689,181 @@ function v2davgtpv(kpt1,kpt2,ediel,ngrid,rlat,tolr)
 end function v2davgtpv
 
 
+function v2dtpv(kpt1,kpt2,ediel,ngrid,rlat,tolr)
+
+	! Two-dimensional interaction of Trolle, Pedersen and Veniard, Sci. Rep. 7,
+	! 39844 (2017), Eq. (10): the Coulomb interaction of two charges spread
+	! uniformly across a slab of thickness d, screened by the finite-thickness
+	! model dielectric function of their Eqs. (1) and (12),
+	!
+	!   W(q) = -e^2/(2 eps0) F(|q| d) / (A Nk |q| eps_TPV(|q|)),
+	!   F(beta) = 2 (beta - 1 + exp(-beta))/beta^2,
+	!
+	! per unit area A like V2D, V2DK and V2DRK, with eps_TPV from
+	! dielectric_models (TPV_KAPPA, TPV_QTF, TPV_HWP, TPV_THICKNESS = d,
+	! TPV_ALPHA; EDIEL_T and EDIEL_B the half-spaces). eps_TPV is the ratio of
+	! the bare to the screened slab interaction, both averaged across the slab
+	! (F/(2 eps0 |q|) is the bare one), so F belongs to W: without it W would
+	! return to the point-charge Coulomb at large |q|, where eps_TPV goes back
+	! to 1. F = 1 for d = 0. EDIEL = 1 gives the bare slab interaction (the
+	! exchange term of the finite-Q kernel), as in V2DAVGTPV.
+	! V2DAVGTPV divides the cell-averaged truncated Coulomb of V2DTAVG,
+	! 4 pi e^2 (1-exp(-|q| L/2))/(V q^2), by eps_TPV: the point-charge 2D
+	! Coulomb times 2 (1-exp(-|q| L/2))/(|q| L), the charges spread over the
+	! cell height L instead of d, so its excitons depend on the vacuum. Here
+	! they do not. The q = 0 term is W averaged over the k-grid cell around
+	! q = 0 (v2dtpv_cell).
+
+	use dielectric_models, only: trolle_pedersen_veniard_dielectric,tpv_slab_coulomb_factor
+	use input_variables, only: tpv_kappa,tpv_qtf,tpv_hwp,tpv_thickness,tpv_alpha
+
+	implicit none
+
+	real,parameter :: cic=-(0.0904756)*10**3
+	real,dimension(3) :: kpt1,kpt2
+	real,dimension(3,3) :: rlat
+	integer,dimension(3) :: ngrid
+	real,dimension(3) :: ediel
+	real :: tolr,modk,vc,vbz,ed
+	real :: v2dtpv
+	real(kind=8) :: v2dtpv_cell
+	logical :: bare
+	logical,save :: cache_valid=.false.
+	integer,dimension(3),save :: cached_ngrid=(/0,0,0/)
+	real,dimension(3,3),save :: cached_rlat=0.0
+	real,dimension(8),save :: cached_par=0.0
+	real,save :: cached_value=0.0
+	real,dimension(8) :: par
+
+	call modvec(kpt1,kpt2,modk)
+	call vcell2D(rlat,vc)
+	vbz=1.0/((ngrid(1)*ngrid(2)*ngrid(3))*vc)
+	bare=abs(ediel(2)-1.0) .lt. 0.001
+	if (modk .lt. tolr) then
+		par=(/tpv_kappa,tpv_qtf,tpv_hwp,tpv_thickness,tpv_alpha,ediel(1),ediel(3), &
+		      merge(1.0,0.0,bare)/)
+		!$omp critical (v2dtpv_cache)
+		if ((.not. cache_valid) .or. any(cached_ngrid .ne. ngrid) .or. &
+		    any(cached_rlat .ne. rlat) .or. any(cached_par .ne. par)) then
+			cached_value=real(v2dtpv_cell(ngrid,rlat,ediel,bare))
+			cached_ngrid=ngrid
+			cached_rlat=rlat
+			cached_par=par
+			cache_valid=.true.
+		end if
+		v2dtpv=vbz*cic*cached_value
+		!$omp end critical (v2dtpv_cache)
+	else
+		if (bare) then
+			ed=1.0
+		else
+			ed=trolle_pedersen_veniard_dielectric(modk,tpv_thickness,tpv_kappa, &
+			                                      tpv_qtf,tpv_hwp,ediel(1),ediel(3),tpv_alpha)
+		end if
+		v2dtpv=vbz*cic*tpv_slab_coulomb_factor(modk,tpv_thickness)/(modk*ed)
+	end if
+
+end function v2dtpv
+
+
+real(kind=8) function v2dtpv_cell(ngrid,rlat,ediel,bare)
+
+	! Average of F(|q| d)/(|q| eps_TPV(|q|)) (eps = 1 if bare; F of v2dtpv)
+	! over the k-grid cell around q = 0, the parallelogram spanned by b1/N1
+	! and b2/N2, as v2dtavg_cell: four triangles from the origin,
+	! Gauss-Legendre in the radial fraction s and along the edge t; the
+	! Jacobian s cancels the 1/|q| of the integrand.
+
+	use dielectric_models, only: trolle_pedersen_veniard_dielectric,tpv_slab_coulomb_factor
+	use input_variables, only: tpv_kappa,tpv_qtf,tpv_hwp,tpv_thickness,tpv_alpha
+
+	implicit none
+
+	integer,dimension(3) :: ngrid
+	real,dimension(3,3) :: rlat
+	real,dimension(3) :: ediel
+	logical :: bare
+	integer,parameter :: nq=16
+	real(kind=8),parameter,dimension(nq) :: xg=(/ &
+		-0.989400934991650d0,-0.944575023073233d0,-0.865631202387832d0, &
+		-0.755404408355003d0,-0.617876244402644d0,-0.458016777657227d0, &
+		-0.281603550779259d0,-0.095012509837637d0, 0.095012509837637d0, &
+		 0.281603550779259d0, 0.458016777657227d0, 0.617876244402644d0, &
+		 0.755404408355003d0, 0.865631202387832d0, 0.944575023073233d0, &
+		 0.989400934991650d0 /)
+	real(kind=8),parameter,dimension(nq) :: wg=(/ &
+		0.027152459411754d0,0.062253523938648d0,0.095158511682493d0, &
+		0.124628971255534d0,0.149595988816577d0,0.169156519395003d0, &
+		0.182603415044924d0,0.189450610455069d0,0.189450610455069d0, &
+		0.182603415044924d0,0.169156519395003d0,0.149595988816577d0, &
+		0.124628971255534d0,0.095158511682493d0,0.062253523938648d0, &
+		0.027152459411754d0 /)
+	real(kind=8),parameter :: pi=acos(-1.0d0)
+	real(kind=8),dimension(3) :: a1,a2,a3,cross23,cross31
+	real(kind=8),dimension(3) :: b1,b2,dq1,dq2
+	real(kind=8),dimension(3,4) :: vertex
+	real(kind=8),dimension(3) :: va,vb,crossab,direction,qvec
+	real(kind=8) :: volume,cell_area,integral,jacobian,s,t,ws,wt,qnorm,ed
+	integer :: itri,inext,i,j
+
+	a1=dble(rlat(1,:))
+	a2=dble(rlat(2,:))
+	a3=dble(rlat(3,:))
+	cross23(1)=a2(2)*a3(3)-a2(3)*a3(2)
+	cross23(2)=a2(3)*a3(1)-a2(1)*a3(3)
+	cross23(3)=a2(1)*a3(2)-a2(2)*a3(1)
+	volume=a1(1)*cross23(1)+a1(2)*cross23(2)+a1(3)*cross23(3)
+	cross31(1)=a3(2)*a1(3)-a3(3)*a1(2)
+	cross31(2)=a3(3)*a1(1)-a3(1)*a1(3)
+	cross31(3)=a3(1)*a1(2)-a3(2)*a1(1)
+	b1=(2.0d0*pi/volume)*cross23
+	b2=(2.0d0*pi/volume)*cross31
+	dq1=b1/dble(ngrid(1))
+	dq2=b2/dble(ngrid(2))
+	vertex(:,1)= 0.5d0*(dq1+dq2)
+	vertex(:,2)= 0.5d0*(-dq1+dq2)
+	vertex(:,3)=-0.5d0*(dq1+dq2)
+	vertex(:,4)= 0.5d0*(dq1-dq2)
+	crossab(1)=dq1(2)*dq2(3)-dq1(3)*dq2(2)
+	crossab(2)=dq1(3)*dq2(1)-dq1(1)*dq2(3)
+	crossab(3)=dq1(1)*dq2(2)-dq1(2)*dq2(1)
+	cell_area=sqrt(sum(crossab*crossab))
+	integral=0.0d0
+	do itri=1,4
+		inext=mod(itri,4)+1
+		va=vertex(:,itri)
+		vb=vertex(:,inext)
+		crossab(1)=va(2)*vb(3)-va(3)*vb(2)
+		crossab(2)=va(3)*vb(1)-va(1)*vb(3)
+		crossab(3)=va(1)*vb(2)-va(2)*vb(1)
+		jacobian=sqrt(sum(crossab*crossab))
+		do i=1,nq
+			s=0.5d0*(xg(i)+1.0d0)
+			ws=0.5d0*wg(i)
+			do j=1,nq
+				t=0.5d0*(xg(j)+1.0d0)
+				wt=0.5d0*wg(j)
+				direction=(1.0d0-t)*va+t*vb
+				qvec=s*direction
+				qnorm=sqrt(sum(qvec*qvec))
+				if (bare) then
+					ed=1.0d0
+				else
+					ed=dble(trolle_pedersen_veniard_dielectric(real(qnorm),tpv_thickness, &
+					        tpv_kappa,tpv_qtf,tpv_hwp,ediel(1),ediel(3),tpv_alpha))
+				end if
+				! s F/(|q| eps) = F/(|direction| eps): finite at the origin
+				integral=integral+ws*wt*jacobian &
+				         *dble(tpv_slab_coulomb_factor(real(qnorm),tpv_thickness)) &
+				         /(sqrt(sum(direction*direction))*ed)
+			end do
+		end do
+	end do
+	v2dtpv_cell=integral/cell_area
+
+end function v2dtpv_cell
+
+
 !potencial 0D truncado (DOI: 10.1103/PhysRevB.73.205119)
 
 function v0dt(kpt1,kpt2,ngrid,rlat,tolr)
