@@ -27,6 +27,7 @@ subroutine berrycurv(nthreads,dft,outputfolder,params,kpaths,sme,nocpf,fermishif
 
 	complex :: bxy,bxz,byz
 	real,parameter :: gammas= 1.0E-37
+	real :: noscs
 
 	integer,allocatable,dimension(:) :: nocpk 
 
@@ -120,6 +121,14 @@ subroutine berrycurv(nthreads,dft,outputfolder,params,kpaths,sme,nocpf,fermishif
 	!allocate(kpts(nkpts*(nks-1),4))
 	!allocate(nocpk(nkpts*(nks-1)))
 	
+	! The Berry curvature is a property of the eigenvectors: berryct2 divides the
+	! velocity matrix elements <n|dH/dk|i> of the tight-binding Hamiltonian by the
+	! squared energy differences, and a scissor (scs, line 2 of the tight-binding
+	! file) shifts the conduction bands but not the eigenvectors. With the shifted
+	! energies each term of the sum would shrink by ((Ei-En)/(Ei-En+scs))**2, so
+	! the bands are computed here without it.
+	noscs = 0.0
+
 	allocate(kpts((nks/2)*nkpts,4))
 	allocate(nocpk((nks/2)*nkpts))
 
@@ -148,7 +157,7 @@ subroutine berrycurv(nthreads,dft,outputfolder,params,kpaths,sme,nocpf,fermishif
 		
 #endif
 	
-		call eigsys(nthreads,dft,systype,scs,exc,nocpk(i),ffactor,kpts(i,2),kpts(i,3),kpts(i,4),w90basis,nvec,&
+		call eigsys(nthreads,dft,systype,noscs,exc,nocpk(i),ffactor,kpts(i,2),kpts(i,3),kpts(i,4),w90basis,nvec,&
 		           rlat,rvec,hopmatrices,ihopmatrices,ovp,efermi,eigv,autovetores,nocpf,fermishift,mag)
 #ifdef MKL
 		call MKL_SET_NUM_THREADS(nthreads)

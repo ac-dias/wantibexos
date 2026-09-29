@@ -135,6 +135,8 @@ conduction bands, and so every transition energy (the BSE diagonal and the
 IPA spectra). The optical vertex takes the unshifted energies: the scissor
 leaves the eigenvectors, and so the interband dipoles and the oscillator
 strengths, as they are.
+The Berry curvature (`BERRY`, `BERRY_BZ`) is a property of the eigenvectors and
+does not use the scissor either.
 
 Two-dimensional Coulomb interactions
 ------------------------------------
