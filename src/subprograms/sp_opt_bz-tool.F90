@@ -313,6 +313,12 @@ end do
 		end if
 	end if
 
+	! The optical vertex takes the DFT energies: the scissor scs, which eigsys
+	! adds to the conduction bands, shifts the transition energies (BSE
+	! diagonal, IPA spectra) but not the eigenvectors, so it must not change
+	! r_cv. With the shifted energies <c|dH/dk|v>/(Ec-Ev) would shrink by
+	! (Ec-Ev)/(Ec-Ev+scs), and for DFT=S the -(Ec+Ev)/2 dS/dk term would change.
+
 	!$omp parallel do default(shared) private(j,hxsp,hysp,hzsp)
 	do j=1,ngkpt
 
@@ -327,7 +333,7 @@ end do
 
 		if (dft .eq. "S") then
 		call optspbz_s(eigv(j,stto(j,i,2)),vector(j,stto(j,i,2),:),&
-		     eigv(j,stto(j,i,3)),vector(j,stto(j,i,3),:),&
+		     eigv(j,stto(j,i,3))-scs,vector(j,stto(j,i,3),:),&
 		     kpt(j,1),kpt(j,2),kpt(j,3),&
 		     w90basis,nvec,rvec,hopmatrices,ihopmatrices,ovp,tau,&
 		     hxsp,hysp,hzsp)
@@ -340,9 +346,9 @@ end do
 		     
 		    
 
-		hxsp= hxsp/(cmplx(eigv(j,stto(j,i,3))-eigv(j,stto(j,i,2)),sme))
-		hysp= hysp/(cmplx(eigv(j,stto(j,i,3))-eigv(j,stto(j,i,2)),sme))
-		hzsp= hzsp/(cmplx(eigv(j,stto(j,i,3))-eigv(j,stto(j,i,2)),sme))
+		hxsp= hxsp/(cmplx(eigv(j,stto(j,i,3))-scs-eigv(j,stto(j,i,2)),sme))
+		hysp= hysp/(cmplx(eigv(j,stto(j,i,3))-scs-eigv(j,stto(j,i,2)),sme))
+		hzsp= hzsp/(cmplx(eigv(j,stto(j,i,3))-scs-eigv(j,stto(j,i,2)),sme))
 		if (use_dmat) call optdip_s(vector(j,stto(j,i,2),:),vector(j,stto(j,i,3),:),&
 		     kpt(j,1),kpt(j,2),kpt(j,3),w90basis,nvec,rvec,dmat,hxsp,hysp,hzsp)
 		

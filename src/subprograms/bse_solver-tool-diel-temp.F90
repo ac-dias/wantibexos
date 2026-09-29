@@ -692,6 +692,12 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		end if
 	end if
 
+	! The optical vertex takes the DFT energies: the scissor (scs+tcor), which eigsys
+	! adds to the conduction bands, shifts the transition energies (BSE
+	! diagonal, IPA spectra) but not the eigenvectors, so it must not change
+	! r_cv. With the shifted energies <c|dH/dk|v>/(Ec-Ev) would shrink by
+	! (Ec-Ev)/(Ec-Ev+(scs+tcor)), and for DFT=S the -(Ec+Ev)/2 dS/dk term would change.
+
 	 !$omp parallel do default(shared) private(i,ec,ev,rmn_ok,rmn_message)
 
 	do i=1,dimbse
@@ -702,7 +708,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 		if (dft .eq. "S") then
 		call optsp_s(eigv(stt(i,4),stt(i,2)),vector(:,stt(i,2),stt(i,4)),&
-		     eigv(stt(i,4),stt(i,3)),vector(:,stt(i,3),stt(i,4)),&
+		     eigv(stt(i,4),stt(i,3))-(scs+tcor),vector(:,stt(i,3),stt(i,4)),&
 		     kpt(stt(i,4),1),kpt(stt(i,4),2),kpt(stt(i,4),3),sme,&
 		     w90basis,nvec,rvec,hopmatrices,ihopmatrices,ovp,tau,&
 		     hrx(i),hry(i),hrz(i))
@@ -711,7 +717,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		     hrx(i),hry(i),hrz(i))
 		else
 		call optsp(eigv(stt(i,4),stt(i,2)),vector(:,stt(i,2),stt(i,4)),&
-		     eigv(stt(i,4),stt(i,3)),vector(:,stt(i,3),stt(i,4)),&
+		     eigv(stt(i,4),stt(i,3))-(scs+tcor),vector(:,stt(i,3),stt(i,4)),&
 		     kpt(stt(i,4),1),kpt(stt(i,4),2),kpt(stt(i,4),3),ffactor,sme,&
 		     w90basis,nvec,rlat,rvec,hopmatrices,&
 		     ihopmatrices,hrx(i),hry(i),hrz(i))
@@ -719,7 +725,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		if (use_rmn .and. .not. use_dmat) then
 			call rmn_apply_q0_optical_correction(rmn,kpt(stt(i,4),:),rlat,&
 				eigv(stt(i,4),stt(i,2)),vector(:,stt(i,2),stt(i,4)),&
-				eigv(stt(i,4),stt(i,3)),vector(:,stt(i,3),stt(i,4)),sme,&
+				eigv(stt(i,4),stt(i,3))-(scs+tcor),vector(:,stt(i,3),stt(i,4)),sme,&
 				hrx(i),hry(i),hrz(i),rmn_ok,rmn_message)
 			if (.not. rmn_ok) stop 'Unable to evaluate the Q=0 Wannier position matrix'
 		end if

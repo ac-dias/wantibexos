@@ -130,6 +130,12 @@ momentum matrix elements to within 1.5% of plane-wave (Quantum ESPRESSO)
 values with the same pseudopotentials, from 8-21% too large. The kernel does
 not change, and neither do exciton energies.
 
+The scissor on the second line of the tight-binding file shifts the
+conduction bands, and so every transition energy (the BSE diagonal and the
+IPA spectra). The optical vertex takes the unshifted energies: the scissor
+leaves the eigenvectors, and so the interband dipoles and the oscillator
+strengths, as they are.
+
 BSE kernel conventions
 ----------------------
 

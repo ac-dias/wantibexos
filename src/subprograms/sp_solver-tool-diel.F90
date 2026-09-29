@@ -300,6 +300,12 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 		end if
 	end if
 
+	! The optical vertex takes the DFT energies: the scissor scs, which eigsys
+	! adds to the conduction bands, shifts the transition energies (BSE
+	! diagonal, IPA spectra) but not the eigenvectors, so it must not change
+	! r_cv. With the shifted energies <c|dH/dk|v>/(Ec-Ev) would shrink by
+	! (Ec-Ev)/(Ec-Ev+scs), and for DFT=S the -(Ec+Ev)/2 dS/dk term would change.
+
 	!$omp parallel do default(shared) private(i,ec,ev,hrsp,hrsm,hxsp,hysp,hzsp)
 
 	do i=1,dimsp
@@ -309,7 +315,7 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 		     
 		if (dft .eq. "S") then
 		call optsp_s(eigv(stt(i,4),stt(i,2)),vector(stt(i,4),stt(i,2),:),&
-		     eigv(stt(i,4),stt(i,3)),vector(stt(i,4),stt(i,3),:),&
+		     eigv(stt(i,4),stt(i,3))-scs,vector(stt(i,4),stt(i,3),:),&
 		     kpt(stt(i,4),1),kpt(stt(i,4),2),kpt(stt(i,4),3),sme,&
 		     w90basis,nvec,rvec,hopmatrices,ihopmatrices,ovp,tau,&
 		     hxsp,hysp,hzsp)
@@ -318,7 +324,7 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 		     hxsp,hysp,hzsp)
 		else
 	       call optsp(eigv(stt(i,4),stt(i,2)),vector(stt(i,4),stt(i,2),:),&
-		     eigv(stt(i,4),stt(i,3)),vector(stt(i,4),stt(i,3),:),&
+		     eigv(stt(i,4),stt(i,3))-scs,vector(stt(i,4),stt(i,3),:),&
 		     kpt(stt(i,4),1),kpt(stt(i,4),2),kpt(stt(i,4),3),ffactor,sme,&
 		     w90basis,nvec,rlat,rvec,hopmatrices,&
 		     ihopmatrices,hxsp,hysp,hzsp)  
