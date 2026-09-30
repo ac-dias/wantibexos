@@ -1025,9 +1025,9 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		
 		CALL CHEEVD( 'Vectors', 'U', dimbse, hbse, dimbse, W, WORK, LWORK,& 	      
 		              RWORK, LRWORK, IWORK, LIWORK, INFO )
-      		LWORK = MIN( 2*dimbse + dimbse**2, INT( WORK( 1 ) ) )
-      		LRWORK = MIN( 1 + 5*dimbse + 2*dimbse**2, INT( RWORK( 1 ) ) )
-      		LIWORK = MIN( 3 + 5*dimbse, IWORK( 1 ) )
+		LWORK = 2*dimbse + dimbse**2
+		LRWORK = 1 + 5*dimbse + 2*dimbse**2
+		LIWORK = 3 + 5*dimbse
       		!LWORK = MIN( LWMAX, INT( WORK( 1 ) ) )
       		!LRWORK = MIN( LWMAX, INT( RWORK( 1 ) ) )
       		!LIWORK = MIN( LWMAX, IWORK( 1 ) )
