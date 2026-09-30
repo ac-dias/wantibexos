@@ -301,6 +301,7 @@ model; add a per-thread reserve with `--external-thread-mib` when appropriate.
 
 The Siesta/Honpas Hamiltonian extract script (siesta2wtb.py) was tested in SISL version 0.16.2, could not be work in other versions.
 `siesta2wtb.py file.fdf --rmatrix` also writes `tb-*_r.dat`, the position matrix `<a,0|r|b,R>` of the basis (see `BSE_RMAT_FILE` above); it needs the `*.ion.nc` or `*.ion.xml` files SIESTA writes next to the fdf.
+The PAOFLOW script, `paoflow2wtb.py prefix.save [--configuration minimal|standard|extended] [--basispath DIR] [--pthr 0.95] [--shift auto]`, builds the PAOFLOW tight-binding Hamiltonian of a Quantum ESPRESSO run (projections, projectability, pao_hamiltonian; the save directory of a pw.x run on a Monkhorst-Pack grid) and writes it for both readers: `paoflow-NP.dat` with `paoflow_r.dat` (the orbital centres, for `BSE_CENTER_FILE`) for `DFT=W`, `tb-NP.dat` with `basis_set-NP` for `DFT=S`. H(R) is placed at the minimal images of each orbital pair, as Wannier90's `use_ws_distance`. It was tested with PAOFLOW 3.0.0, unpolarized runs only; run it with `mpirun` to use PAOFLOW's MPI parallelism.
 
 Citing
    ------
