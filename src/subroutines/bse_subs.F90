@@ -823,7 +823,7 @@ subroutine excwfi(outputfolder,ngkpt,kpt,qpt,nc,nv,nocp,stt,excenergy,excnum,qpt
 	Format = "(I,3F15.4,2I,2E15.4)"
 	
 	WRITE (file2,"(a8,I0,a1,I0,a4)") 'exc_den_',excnum,"_",qptnum,'.dat'
-	Format = "(3F15.4,1E15.4)"	
+	Format2 = "(3F15.4,1E15.4)"
 	
 	OPEN(UNIT=700+excnum*qptnum, FILE=trim(outputfolder)//trim(file1),STATUS='unknown', IOSTAT=erro)
     	if (erro/=0) stop "Error opening wf BSE output file"
