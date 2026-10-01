@@ -101,6 +101,16 @@ program main
     call bcast_input_read
 #endif
 
+! BSE_RMAT_FILE is now BSE_CENTER_FILE, for DFT=S and DFT=W: every rank stops
+    if (bsermatkey) then
+	if (Node == 0) write(*,*) 'BSE_RMAT_FILE is now BSE_CENTER_FILE: the same file (siesta2wtb.py', &
+		' --rmatrix, Wannier90 seedname_r.dat), which for DFT=W now also gives the kernel its Wannier centres'
+#ifdef MPI
+	call MPI_Finalize(MPIError)
+#endif
+	stop 'Rename BSE_RMAT_FILE to BSE_CENTER_FILE in the input'
+    end if
+
     if (Node == 0 ) then
 	OPEN(UNIT=2055, FILE= params,STATUS='unknown', IOSTAT=erro)
     	if (erro/=0) stop "Error opening hamiltonian input file (main)"	

@@ -278,8 +278,8 @@ module input_variables
 	character(len=70) :: bsehamfile
 	character(len=70) :: bsekpathcheckpointfile
 	character(len=70) :: bsecenterfile
-	logical :: bsecenterkernel
 	logical :: bsecentgrad
+	logical :: bsermatkey
 		
 
 	logical :: bandscalc,doscalc
@@ -451,8 +451,8 @@ subroutine input_read
 	bsehamread = .false.
 	bsehamfile = "bse_hamiltonian.bin"
 	bsecenterfile = ""
-	bsecenterkernel = .false.
 	bsecentgrad = .false.
+	bsermatkey = .false.
 	bsekpathcheckpoint = .false.
 	bsekpathcheckpointfile = "bse_kpath_checkpoint"
 	
@@ -638,13 +638,13 @@ subroutine input_read
 	case ("BSE_CENTER_FILE=")
 
 		bsecenterfile = b
-		bsecenterkernel = .true.
 
 	case ("BSE_RMAT_FILE=")
 
-		! Backward-compatible optical-only alias.  Existing inputs using the
-		! old name must not silently acquire a different BSE Hamiltonian.
-		bsecenterfile = b
+		! the former name of BSE_CENTER_FILE: wtb_main stops and asks for
+		! BSE_CENTER_FILE, which for DFT=W also puts the Wannier centres in
+		! the kernel (BSE_RMAT_FILE did not)
+		bsermatkey = .true.
 
 	case ("BSE_CENTER_GRAD=")
 

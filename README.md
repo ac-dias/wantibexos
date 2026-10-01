@@ -45,21 +45,21 @@ For distributed MPI BSE runs, the checkpoint is a single global matrix written
 with MPI-IO.  It can be restarted with a different MPI rank count or
 process-grid layout; each rank reads its own block-cyclic part of the matrix.
 
-Q=0 Wannier position data
---------------------------
+Q=0 position matrix and orbital centres
+---------------------------------------
 
-The zero-temperature optical BSE solver can use the Wannier90 position matrix
-<0m|r|Rn> both in its vertical optical vertex and in the G=0 direct Coulomb
-kernel. Enable the Wannier90 `write_rmn` output and pass its `seedname_r.dat`
-file explicitly:
+The optical BSE solvers can use the position matrix <0m|r|Rn> of the
+tight-binding basis, for `DFT=W` (Wannier90's `write_rmn` output,
+`seedname_r.dat`) and for `DFT=S` (`siesta2wtb.py file.fdf --rmatrix`,
+`tb-NP_r.dat`), with the same keyword:
 
 ```
 BSE_CENTER_FILE= seedname_r.dat
 ```
 
 When this setting is absent, the legacy derivative-only optical matrix element
-and scalar Coulomb kernel are retained unchanged. When it is present, the code
-reconstructs
+and, for `DFT=W`, the scalar Coulomb kernel are retained unchanged. For `DFT=W`
+the code reconstructs
 `A(k) = sum_R exp(i k.R) <0|r|R>` exactly at each BSE k point and uses
 `dH/dk - i[A,H]` for Q=0 transitions. It also extracts the Wannier centres
 `t_m=<0m|r|0m>` from the R=0 diagonal and replaces the direct-kernel vertices by
@@ -75,7 +75,7 @@ BSE kernel conventions below). It changes the BSE Hamiltonian, exciton
 energies, and oscillator strengths. The screened scalar Coulomb potential and
 its q=0 averaging are otherwise unchanged.
 
-`BSE_CENTER_GRAD= T` adds the next order in q of the vertices: the first-order
+`BSE_CENTER_GRAD= T` (`DFT=W`) adds the next order in q of the vertices: the first-order
 term of <m,0|exp(iq.r)|n,R> expanded about the pair midpoint (t_m+t_n+R)/2,
 
 ```
@@ -86,36 +86,37 @@ added to the electron vertex, and the same with V2^*, V1, -q and
 exp[-i q.(t_m+t_n)/2] to the hole vertex, with A at the mean kb = (k1+k2)/2 of
 the two states. Without the midpoint phase the term would depend on the
 coordinate origin and break the lattice symmetry. It uses the whole position
-matrix and costs one Fourier sum of r(R) per matrix element.
+matrix and costs one Fourier sum of r(R) per matrix element. It is not
+implemented for `DFT=S`.
 
 The finite-temperature optical BSE (`TEMP` > 0) uses the same vertex and
-kernel. The q-path BSE (`BSE_BND= T`, at zero and finite temperature) uses the
-centre phases in its direct kernel and in the exchange vertices
+kernel, and the single-particle tools (`IPA= T`, `OPT_BZ= T`) the same optical
+vertex, for `DFT=W` as for `DFT=S`. The q-path BSE (`BSE_BND= T`, at zero and
+finite temperature) uses the centre phases in its direct kernel and in the
+exchange vertices
 
 ```
 sum_m C_m^*(k+Q) V_m(k) exp[+i Q.t_m],
 ```
 
 with Q the shortest image of the exciton momentum; `BSE_CENTER_GRAD` applies
-to the Q=0 kernels only. The centre phases require the
-orthonormal Wannier representation (`DFT=W`), not the nonorthogonal `DFT=S`
-path. The path is also intentionally rejected when the companion
+to the Q=0 kernels only. For `DFT=W` the path is intentionally rejected when the companion
 `seedname_wsvec.dat` is present: Wannier90 `use_ws_distance` requires its
 additional Wigner-Seitz correction, which has not yet been implemented.
 `BSE_CENTER_FILE` is resolved from the run directory, and all MPI ranks must be
 able to read it.
 
-The former `BSE_RMAT_FILE` input name remains available as an optical-only
-compatibility alias. It applies `dH/dk - i[A,H]` but deliberately retains the
-legacy scalar BSE kernel, so existing inputs do not silently acquire different
-exciton energies. New calculations using the centre-resolved direct kernel
-should use `BSE_CENTER_FILE`.
+`BSE_RMAT_FILE`, the former name of this keyword (the optical vertex only,
+without the Wannier centres in the `DFT=W` kernel), is no longer read: an input
+that has it stops with a message to rename it `BSE_CENTER_FILE`. For `DFT=S`
+the results with the new name are the same; for `DFT=W` the kernel then has
+its centre phases.
 
 For `DFT=S` (SIESTA/Honpas files from `utils/siesta2wtb.py`) the orbital
-centres come from the `basis_set-*` file written next to `tb-*.dat`, and
-`BSE_CENTER_FILE` is rejected. The optical vertex is
+centres come from the `basis_set-*` file written next to `tb-*.dat`, and the
+kernel uses them with or without `BSE_CENTER_FILE`. The optical vertex is
 `<c| dH/dk - (Ec+Ev)/2 dS/dk |v>/(Ec-Ev)` in the atomic gauge, which treats
-each orbital as if its charge sat on its centre. `BSE_RMAT_FILE= tb-NP_r.dat`,
+each orbital as if its charge sat on its centre. `BSE_CENTER_FILE= tb-NP_r.dat`,
 the position matrix `<a,0|r|b,R>` of the basis written by
 `siesta2wtb.py file.fdf --rmatrix`, adds what the orbital shapes give, the
 dipoles between basis orbitals
@@ -300,7 +301,7 @@ BLAS, ELPA, allocator, and operating-system overhead are outside the source
 model; add a per-thread reserve with `--external-thread-mib` when appropriate.
 
 The Siesta/Honpas Hamiltonian extract script (siesta2wtb.py) was tested in SISL version 0.16.2, could not be work in other versions.
-`siesta2wtb.py file.fdf --rmatrix` also writes `tb-*_r.dat`, the position matrix `<a,0|r|b,R>` of the basis (see `BSE_RMAT_FILE` above); it needs the `*.ion.nc` or `*.ion.xml` files SIESTA writes next to the fdf.
+`siesta2wtb.py file.fdf --rmatrix` also writes `tb-*_r.dat`, the position matrix `<a,0|r|b,R>` of the basis (its `BSE_CENTER_FILE`, see above); it needs the `*.ion.nc` or `*.ion.xml` files SIESTA writes next to the fdf.
 The PAOFLOW script, `paoflow2wtb.py prefix.save [--configuration minimal|standard|extended] [--basispath DIR] [--pthr 0.95] [--shift auto]`, builds the PAOFLOW tight-binding Hamiltonian of a Quantum ESPRESSO run (projections, projectability, pao_hamiltonian; the save directory of a pw.x run on a Monkhorst-Pack grid) and writes it for both readers: `paoflow-NP.dat` with `paoflow_r.dat` (the orbital centres, for `BSE_CENTER_FILE`) for `DFT=W`, `tb-NP.dat` with `basis_set-NP` for `DFT=S`. H(R) is placed at the minimal images of each orbital pair, as Wannier90's `use_ws_distance`. It was tested with PAOFLOW 3.0.0, unpolarized runs only; run it with `mpirun` to use PAOFLOW's MPI parallelism.
 `wannier2wtb.py seedname [--efermi E]` writes `seedname-NP.dat`, the `DFT=W` tight-binding file (the WanTiBEXOS header followed by `seedname_hr.dat`), from a Wannier90 run (`seedname.wout`, `seedname_hr.dat`); `seedname_r.dat` is its `BSE_CENTER_FILE`.
 

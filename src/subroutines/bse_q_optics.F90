@@ -217,11 +217,12 @@ end subroutine rmn_centers
 
 subroutine rmn_center_setup(filename,dft,w90basis,data,ok,message,centers)
 
-	! Read seedname_r.dat for a BSE solver, with the checks of bsesolver: the
-	! Hamiltonian's basis size, and with centers present (the Wannier-centre
-	! phases of BSE_CENTER_FILE) the orthonormal Wannier representation
-	! (DFT=W), whose centres are extracted. For DFT=S (no centers) the file is
-	! the position matrix of the basis, siesta2wtb.py --rmatrix (BSE_RMAT_FILE).
+	! Read the position matrix of BSE_CENTER_FILE (the seedname_r.dat layout)
+	! for a BSE solver, with the checks of bsesolver: the Hamiltonian's basis
+	! size, and with centers present (the Wannier-centre phases of the kernel)
+	! the orthonormal Wannier representation (DFT=W), whose centres are
+	! extracted. For DFT=S (no centers) the file is the position matrix of the
+	! basis, siesta2wtb.py --rmatrix, and the centres are those of basis_set-*.
 
 	character(len=*),intent(in) :: filename
 	character(len=1),intent(in) :: dft
@@ -235,8 +236,8 @@ subroutine rmn_center_setup(filename,dft,w90basis,data,ok,message,centers)
 	message=''
 	if (present(centers)) centers=0.0
 	if (dft == 'S' .and. present(centers)) then
-		message='BSE_CENTER_FILE needs the orthonormal Wannier representation (DFT=W); DFT=S '// &
-			'takes its orbital centres from basis_set-*, and siesta2wtb.py --rmatrix output as BSE_RMAT_FILE'
+		message='The Wannier centres of BSE_CENTER_FILE need the orthonormal Wannier '// &
+			'representation (DFT=W); DFT=S takes its orbital centres from basis_set-*'
 		return
 	end if
 	call rmn_read(filename,data,ok,message)

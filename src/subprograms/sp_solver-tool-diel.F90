@@ -5,8 +5,9 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 
 	use omp_lib
 	use hamiltonian_input_variables
-	use input_variables, only: bsecenterfile, bsecenterkernel
-	use bse_q_optics, only: rmn_data, rmn_center_setup, rmn_destroy, rmn_dfts_dipoles
+	use input_variables, only: bsecenterfile
+	use bse_q_optics, only: rmn_data, rmn_center_setup, rmn_destroy, rmn_dfts_dipoles, &
+		rmn_apply_q0_optical_correction
 
 	implicit none
 
@@ -17,9 +18,9 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 
 	real,allocatable,dimension(:,:) :: eigv
 	real,allocatable,dimension(:,:) :: tau !DFT=S orbital centres
-	real,allocatable,dimension(:,:,:,:) :: dmat !DFT=S orbital dipoles (BSE_RMAT_FILE)
+	real,allocatable,dimension(:,:,:,:) :: dmat !DFT=S orbital dipoles (BSE_CENTER_FILE)
 	type(rmn_data) :: rmn
-	logical :: use_dmat,rmn_ok
+	logical :: use_dmat,use_rmn,rmn_ok
 	character(len=256) :: rmn_message
 	complex,allocatable,dimension(:,:,:) :: vector
 
@@ -282,21 +283,22 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 	allocate(tau(w90basis,3))
 	tau = 0.0
 	if (dft .eq. "S") call orbital_centres(w90basis,tau)
-	! DFT=S with BSE_RMAT_FILE: the dipoles between basis orbitals, from
-	! the position matrix of siesta2wtb.py --rmatrix, for optdip_s
-	use_dmat = dft .eq. "S" .and. len_trim(bsecenterfile) > 0
-	if (use_dmat .and. bsecenterkernel) stop 'BSE_CENTER_FILE needs DFT=W: for DFT=S give '// &
-		'siesta2wtb.py --rmatrix output as BSE_RMAT_FILE'
-	if (use_dmat) then
+	! BSE_CENTER_FILE, the position matrix of the basis, as in bsesolver:
+	! DFT=S: the dipoles between basis orbitals (siesta2wtb.py --rmatrix), for
+	! optdip_s; DFT=W: the -i[A,H] term of the Wannier position matrix
+	use_rmn = len_trim(bsecenterfile) > 0
+	use_dmat = dft .eq. "S" .and. use_rmn
+	if (use_rmn) then
 		call rmn_center_setup(trim(bsecenterfile),dft,w90basis,rmn,rmn_ok,rmn_message)
-		if (rmn_ok) then
+		if (rmn_ok .and. use_dmat) then
 			allocate(dmat(nvec,w90basis,w90basis,3))
 			call rmn_dfts_dipoles(rmn,w90basis,nvec,rvec,rlat,ovp,tau,dmat,rmn_ok,rmn_message)
 			call rmn_destroy(rmn)
 		end if
 		if (.not. rmn_ok) then
 			write(*,*) trim(rmn_message)
-			stop 'Unable to build the DFT=S orbital dipoles'
+			if (use_dmat) stop 'Unable to build the DFT=S orbital dipoles'
+			stop 'Unable to initialize the Wannier position data'
 		end if
 	end if
 
@@ -306,7 +308,7 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 	! r_cv. With the shifted energies <c|dH/dk|v>/(Ec-Ev) would shrink by
 	! (Ec-Ev)/(Ec-Ev+scs), and for DFT=S the -(Ec+Ev)/2 dS/dk term would change.
 
-	!$omp parallel do default(shared) private(i,ec,ev,hrsp,hrsm,hxsp,hysp,hzsp)
+	!$omp parallel do default(shared) private(i,ec,ev,hrsp,hrsm,hxsp,hysp,hzsp,rmn_ok,rmn_message)
 
 	do i=1,dimsp
 
@@ -328,6 +330,13 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 		     kpt(stt(i,4),1),kpt(stt(i,4),2),kpt(stt(i,4),3),ffactor,sme,&
 		     w90basis,nvec,rlat,rvec,hopmatrices,&
 		     ihopmatrices,hxsp,hysp,hzsp)  
+		end if
+		if (use_rmn .and. .not. use_dmat) then
+			call rmn_apply_q0_optical_correction(rmn,kpt(stt(i,4),:),rlat,&
+				eigv(stt(i,4),stt(i,2)),vector(stt(i,4),stt(i,2),:),&
+				eigv(stt(i,4),stt(i,3))-scs,vector(stt(i,4),stt(i,3),:),sme,&
+				hxsp,hysp,hzsp,rmn_ok,rmn_message)
+			if (.not. rmn_ok) stop 'Unable to evaluate the Q=0 Wannier position matrix'
 		end if
 		
 		hrsp = (hxsp+cmplx(0.,1.)*hysp)*(1.0/sqrt(2.))
@@ -385,6 +394,7 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 	deallocate(rvec,hopmatrices,ihopmatrices,ffactor)
 	deallocate(tau)
 	if (use_dmat) deallocate(dmat)
+	if (use_rmn .and. .not. use_dmat) call rmn_destroy(rmn)
 	deallocate(ovp)
 
 	!deallocate(auxx,auxy,auxz,auyy,auyz,auzz)

@@ -10,7 +10,7 @@ subroutine bsebnds(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 #endif
 	use omp_lib
 	use hamiltonian_input_variables
-	use input_variables, only: bsecenterfile, bsecenterkernel, bsecentgrad
+	use input_variables, only: bsecenterfile, bsecentgrad
 	use bse_q_optics, only: rmn_data, rmn_destroy, rmn_center_setup
 
 	implicit none
@@ -189,10 +189,10 @@ subroutine bsebnds(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 	end select
 
-	! BSE_CENTER_FILE: Wannier-centre phases in the direct and exchange
-	! kernels, as in the Q=0 solver (its optical vertex and BSE_CENTER_GRAD
-	! correction are Q=0 only).
-	use_center_phase=bsecenterkernel
+	! BSE_CENTER_FILE: for DFT=W the Wannier-centre phases in the direct and
+	! exchange kernels, as in the Q=0 solver (its optical vertex and BSE_CENTER_GRAD
+	! are Q=0 only); DFT=S takes the orbital centres of basis_set-*.
+	use_center_phase=len_trim(bsecenterfile) > 0 .and. dft /= 'S'
 	allocate(wannier_centers(3,w90basis))
 	wannier_centers=0.0
 	if (use_center_phase) then

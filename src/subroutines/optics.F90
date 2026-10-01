@@ -220,7 +220,7 @@ subroutine optsp_s(ev,vv,ec,vc,kx,ky,kz,sme,w90basis,nvec,rvec,&
 	! S-orthonormal eigenvectors of CHEGV, i<c|dH - (ec+ev)/2 dS|v> =
 	! (ev-ec) A_cv, A_cv = i<c|S dv> + (i/2)<c|dS|v> the (Hermitian)
 	! interband connection, up to the dipoles <a|r-(r_a+r_b)/2|b> between
-	! basis orbitals, which optdip_s adds when BSE_RMAT_FILE gives the
+	! basis orbitals, which optdip_s adds when BSE_CENTER_FILE gives the
 	! position matrix of the basis. optsp's lattice-gauge dH/dk alone
 	! breaks C3 (eps_xx /= eps_yy and eps_xy /= 0 for h-BN) and lacks dS/dk.
 	call optspbz_s(ev,vv,ec,vc,kx,ky,kz,w90basis,nvec,rvec,hopmatrices,&

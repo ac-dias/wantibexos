@@ -17,7 +17,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 #endif
 	use omp_lib
 	use hamiltonian_input_variables
-	use input_variables, only: bsecenterfile, bsecenterkernel, bsecentgrad
+	use input_variables, only: bsecenterfile, bsecentgrad
 	use bse_q_optics, only: rmn_data, rmn_destroy, rmn_center_setup, &
 		center_phase_build, rmn_apply_q0_optical_correction, rmn_dfts_dipoles
 
@@ -152,7 +152,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	complex,allocatable,dimension(:,:) :: center_phase
 	type(rmn_data) :: rmn
 	logical :: use_rmn,use_center_phase,use_center_grad,rmn_ok,use_dmat
-	real,allocatable,dimension(:,:,:,:) :: dmat !DFT=S orbital dipoles (BSE_RMAT_FILE)
+	real,allocatable,dimension(:,:,:,:) :: dmat !DFT=S orbital dipoles (BSE_CENTER_FILE)
 	character(len=256) :: rmn_message
 	real,allocatable,dimension(:,:) :: wannier_centers
 
@@ -238,17 +238,16 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 	end select
 
-	! Wannier position data, as in bsesolver: BSE_CENTER_FILE (or the
-	! optical-only BSE_RMAT_FILE) gives the dH/dk - i[A,H] optical vertex,
-	! and BSE_CENTER_FILE the Wannier-centre phases of the direct kernel.
+	! As in bsesolver: BSE_CENTER_FILE, the position matrix <m,0|r|n,R> of the
+	! basis (DFT=W: Wannier90's seedname_r.dat; DFT=S: siesta2wtb.py
+	! --rmatrix), gives the optical vertex, and for DFT=W the Wannier centres
+	! of the kernel (DFT=S takes the orbital centres of basis_set-*).
 	use_rmn=len_trim(bsecenterfile) > 0
-	! DFT=S: the file is the position matrix of the SIESTA basis (optical
-	! vertex only), not Wannier position data
 	use_dmat=use_rmn .and. dft == 'S'
-	use_center_phase=bsecenterkernel
+	use_center_phase=use_rmn .and. dft /= 'S'
 	use_center_grad=bsecentgrad .and. use_center_phase
-	if (use_center_phase .and. .not. use_rmn) stop 'BSE_CENTER_FILE requires a Wannier90 r-matrix filename'
-	if (bsecentgrad .and. .not. use_center_phase) stop 'BSE_CENTER_GRAD requires BSE_CENTER_FILE and BSE_CENTER_KERNEL'
+	if (bsecentgrad .and. .not. use_rmn) stop 'BSE_CENTER_GRAD requires BSE_CENTER_FILE'
+	if (bsecentgrad .and. dft == 'S') stop 'BSE_CENTER_GRAD is implemented for DFT=W only'
 	allocate(wannier_centers(3,w90basis))
 	wannier_centers=0.0
 	if (use_rmn) then
@@ -271,8 +270,6 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 				write(300,*) 'G=0 direct Coulomb embedding: Wannier-centre phases + pair-midpoint dipoles'
 			else if (use_center_phase) then
 				write(300,*) 'G=0 direct Coulomb embedding: Wannier-centre phases enabled'
-			else
-				write(300,*) 'G=0 direct Coulomb embedding: legacy scalar kernel'
 			end if
 		end if
 	end if
@@ -681,7 +678,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	allocate(tau(w90basis,3))
 	tau = 0.0
 	if (dft .eq. "S") call orbital_centres(w90basis,tau)
-	! DFT=S with BSE_RMAT_FILE: the dipoles between basis orbitals, from
+	! DFT=S with BSE_CENTER_FILE: the dipoles between basis orbitals, from
 	! the position matrix of siesta2wtb.py --rmatrix, for optdip_s
 	if (use_dmat) then
 		allocate(dmat(nvec,w90basis,w90basis,3))

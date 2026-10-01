@@ -36,9 +36,10 @@ def ncases(var):
 # orbital j of the cell R, written as tb-*_r.dat in the layout of Wannier90's
 # seedname_r.dat (which WanTiBEXOS' rmn_read parses). It is the matrix of
 # the non-orthogonal SIESTA basis, not of orthonormal Wannier functions, so
-# it is not a BSE_CENTER_FILE: WanTiBEXOS reads it as BSE_RMAT_FILE (DFT=S),
-# for the part of the optical dipole that H(R), S(R) and the orbital centres
-# miss, the dipoles <phi_i|r - (r_i + r_j)/2|phi_j> between basis orbitals.
+# WanTiBEXOS reads it as BSE_CENTER_FILE with DFT=S for the part of the
+# optical dipole that H(R), S(R) and the orbital centres miss, the dipoles
+# <phi_i|r - (r_i + r_j)/2|phi_j> between basis orbitals (the kernel takes
+# the orbital centres of basis_set-*).
 # It needs the basis functions, here the ones sisl reads from the
 # *.ion.nc/*.ion.xml files next to the fdf.
 #
@@ -689,4 +690,4 @@ if rmatrix:
  Ssiesta = tshs.tocsr(tshs.S_idx).toarray().reshape(nbasis, -1, nbasis).transpose(1, 0, 2)
  dS = np.abs(Ssiesta - Sq).max()
  write_rmatrix("tb-%s_r.dat" % suffix, tshs.geometry, X, nspin, inputfdf)
- print("tb-%s_r.dat written; max |S(quadrature) - S(SIESTA)| = %.1e" % (suffix, dS))
+ print("tb-%s_r.dat written (BSE_CENTER_FILE); max |S(quadrature) - S(SIESTA)| = %.1e" % (suffix, dS))
