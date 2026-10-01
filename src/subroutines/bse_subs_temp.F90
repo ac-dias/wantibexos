@@ -2,13 +2,14 @@
 function matrizelbsetemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1,ev1,vbc1 &
          ,vbv1,kpt1,est2,ec2,ev2,vbc2,vbv2,kpt2,temp,dft,nvec,rvec,sk,skp, &
          use_center_phase,center_phase1,center_phase2, &
-         use_center_grad,w90dat,centers) !funcao para calcular o elemento de matriz da matriz bse
+         use_center_grad,w90dat,centers,ffdat) !funcao para calcular o elemento de matriz da matriz bse
 
 	! The zero-temperature kernel matrizelbse (Coulomb potentials, shortest
-	! image q, Wannier-centre phases), with the Coulomb term weighted by the
-	! occupation differences fv-fc of the two transitions.
+	! image q, Wannier-centre phases, form factors), with the Coulomb term
+	! weighted by the occupation differences fv-fc of the two transitions.
 
 	use bse_q_optics, only: rmn_data
+	use bse_formfactor, only: ff_data
 
 	implicit none
 
@@ -33,6 +34,7 @@ function matrizelbsetemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1
 	complex,dimension(w90basis) :: center_phase1,center_phase2
 	type(rmn_data),intent(in) :: w90dat
 	real,dimension(3,w90basis) :: centers
+	type(ff_data),intent(in) :: ffdat
 
 	real,dimension(3,3) :: rlat
 
@@ -53,7 +55,7 @@ function matrizelbsetemp(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1
 	kernel= matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1,ev1,vbc1, &
 	         vbv1,kpt1,est2,ec2,ev2,vbc2,vbv2,kpt2,dft,nvec,rvec,sk,skp, &
 	         use_center_phase,center_phase1,center_phase2, &
-	         use_center_grad,w90dat,centers)
+	         use_center_grad,w90dat,centers,ffdat)
 
 	if (est1(1) .eq. est2(1)) then
 

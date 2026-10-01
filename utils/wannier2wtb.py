@@ -236,7 +236,7 @@ def main():
     rdat = read_rdat(seed + "_r.dat")
     dr = max(float(np.abs(pair_dipole(wff, grid, groups[k[3] - 1], groups[k[4] - 1], np.array(k[:3]))
                           - rdat[k]).max()) for k, _ in checks)
-    print("form factors: {} written (grid {}x{}x{} per cell); plots normalised by {:.4g}-{:.4g}; "
+    print("form factors: {} written (BSE_FF_FILE; grid {}x{}x{} per cell); plots normalised by {:.4g}-{:.4g}; "
           "norm within the radii {:.5f}-{:.5f}".format(ffname, *grid.M, 1 / np.sqrt(norms.max()),
                                                         1 / np.sqrt(norms.min()), min(kept), max(kept)))
     print("  phases of the plots: {}; max |r_mn(R) - Wannier90's| on the {} pairs that fixed them: {:.1e} A".format(

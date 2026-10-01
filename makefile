@@ -21,6 +21,7 @@ SUBROUTINE_NAMES := \
     berry_curvature_subs \
     boltzmann_subs \
     bse_hamiltonian_io \
+    bse_formfactor \
     bse_subs \
     bse_subs_kpath \
     bse_q_optics \
@@ -77,6 +78,9 @@ $(filter-out $(INPUT_MODULE_OBJ),$(MODULE_OBJECTS)): $(INPUT_MODULE_OBJ)
 
 $(BUILD_DIR)/subprograms/bse_solver-tool-diel.o: $(BUILD_DIR)/subroutines/bse_q_optics.o
 $(BUILD_DIR)/subroutines/bse_subs.o: $(BUILD_DIR)/subroutines/bse_q_optics.o
+$(BUILD_DIR)/subroutines/bse_subs.o $(BUILD_DIR)/subroutines/bse_subs_temp.o \
+    $(BUILD_DIR)/subprograms/bse_solver-tool-diel.o $(BUILD_DIR)/subprograms/bse_solver-tool-diel-temp.o: \
+    $(BUILD_DIR)/subroutines/bse_formfactor.o
 $(BUILD_DIR)/subroutines/coulomb_pot.o: $(BUILD_DIR)/subroutines/dielectric_models.o
 
 MAIN_SRC  := $(SRC_DIR)/wtb_main.F90

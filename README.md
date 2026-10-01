@@ -87,7 +87,8 @@ exp[-i q.(t_m+t_n)/2] to the hole vertex, with A at the mean kb = (k1+k2)/2 of
 the two states. Without the midpoint phase the term would depend on the
 coordinate origin and break the lattice symmetry. It uses the whole position
 matrix and costs one Fourier sum of r(R) per matrix element. It is not
-implemented for `DFT=S`.
+implemented for `DFT=S`, where the form factors (`BSE_FF`, below) give the
+vertices exactly, and it cannot be combined with `BSE_FF`.
 
 The finite-temperature optical BSE (`TEMP` > 0) uses the same vertex and
 kernel, and the single-particle tools (`IPA= T`, `OPT_BZ= T`) the same optical
@@ -293,7 +294,9 @@ python3 utils/bse_memory_estimate.py input.dat --nodes 4 --threads 8
 ```
 
 The script reads `NGX`, `NGY`, `NGZ`, `NBANDSC`, `NBANDSV`, `BSE_ALGO`,
-`PARAMS_FILE`, and (for `BSE_BND`) `KPATH_BSE`. `--nodes` means MPI ranks, not
+`PARAMS_FILE`, (for `BSE_FF`) `BSE_FF_FILE` and `BSE_FF_EXCHANGE`, which every
+rank holds while it builds its part of the Hamiltonian, and (for `BSE_BND`)
+`KPATH_BSE`. `--nodes` means MPI ranks, not
 physical compute nodes. It reports the Hamiltonian, explicit source-array peak
 per rank, and a conservative planning value that includes source-level
 OpenMP eigensystem scratch and a configurable safety factor. MPI/OpenMP,
@@ -327,7 +330,7 @@ with which the pair densities of the tight-binding states are exact instead of p
 The size of the file is printed before anything is computed; above 1 GB the scripts ask for
 confirmation, and stop when they cannot ask (a batch job), unless `--yes` is given. The layout (a
 little-endian stream in single precision, for `access='stream'`) is described in
-`utils/wtb_formfactor.py`, which the three scripts share. WanTiBEXOS does not read these files yet.
+`utils/wtb_formfactor.py`, which the three scripts share. The BSE reads them with `BSE_FF` (below).
 
 - SIESTA, `siesta2wtb.py file.fdf --formfactor --mesh ...`: the numerical orbitals of the
   `*.ion.nc` or `*.ion.xml` files, integrated where they overlap (`--ff-spacing`, default 0.1 A);
@@ -342,6 +345,45 @@ little-endian stream in single precision, for `access='stream'`) is described in
   real Wannier functions only. `--ff-radius` (default 5) times the square root of each spread sets
   their radii; the plot supercell should reach that far. The script prints the norm of each function
   within its radius and how far `F(R; 0)` is from the identity: check both.
+
+The optical BSE (`BSE= T`, Q=0, at zero and finite temperature) uses them with
+
+```
+BSE_FF= T                    # default F: the file is not read
+BSE_FF_FILE= "hbn_ff.bin"
+BSE_FF_EXCHANGE= T           # optional, default F: the exchange term
+BSE_FF_ECUT= 50              # optional: the G of the exchange term up to 50 eV (default: all)
+```
+
+(quote file names that contain a `/`, as for `OUTPUT`). `BSE_FF= T` replaces the point-centre
+vertices of the direct kernel (the Wannier-centre phases of `BSE_CENTER_FILE` for `DFT=W`, the
+orbital centres of `basis_set-*` for `DFT=S`) by the pair densities of the orbitals,
+
+```
+<c k1| exp(iq.r) |c' k2> = sum_mn c_m(k1)^* c'_n(k2) sum_R exp(ik2.R) F_mn(R; q),
+```
+
+at each shortest image q of k1-k2, for `DFT=W` and `DFT=S` alike. The optical vertex does not
+change (`BSE_CENTER_FILE` gives the position matrix). The number of orbitals and the lattice must be
+those of the tight-binding file, and the BSE mesh must divide the `--mesh` of the file; the solver
+checks that every q of the BSE mesh is in the file, and writes to the log the largest deviation of
+the overlaps of the BSE bands, computed from F(R; 0), from the identity (for `DFT=S`, F(R; 0) is
+S(R)). `BSE_FF_EXCHANGE= T` adds the exchange term with the G != 0 of the file,
+
+```
+K^x(vck, v'c'k') = spinf sum_G v(G) <c k| exp(iG.r) |v k> <v' k'| exp(-iG.r) |c' k'>,
+```
+
+v(G) = e^2/(eps0 G^2 N_k Omega) the bare Coulomb interaction (for `SYSDIM= "2D"` truncated at half the
+cell height, as `V2DT`; 1D and 0D systems are not implemented), spinf = 2 for the singlets of an
+unpolarized (NP) model and 1 otherwise. G = 0 is left out, so the BSE gives the macroscopic
+dielectric function with local fields, as Yambo's exchange term (`BSENGexx`); without the exchange
+term the excitons of an unpolarized model are the triplets. In a layer the G along the axis hardly
+couple in-plane transitions (for h-BN they do not move the lowest exciton); the first shell with an
+in-plane component is at 32 eV, and 60 eV give 95% of the shift of 100 eV, the default of
+`--ff-ecut`. `BSE_FF_ECUT` converges the term with one file. Saved Hamiltonians
+(`BSE_HAM_SAVE`) record whether the form factors and the exchange term were used. `BSE_CENTER_GRAD`
+cannot be combined with `BSE_FF`, and the q-path BSE (`BSE_BND`) keeps the centre phases.
 
 Citing
    ------

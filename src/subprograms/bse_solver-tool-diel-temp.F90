@@ -17,9 +17,11 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 #endif
 	use omp_lib
 	use hamiltonian_input_variables
-	use input_variables, only: bsecenterfile, bsecentgrad
+	use input_variables, only: bsecenterfile, bsecentgrad, bseff, bsefffile, bseffexch, bseffecut, sysdim
 	use bse_q_optics, only: rmn_data, rmn_destroy, rmn_center_setup, &
 		center_phase_build, rmn_apply_q0_optical_correction, rmn_dfts_dipoles
+	use bse_formfactor, only: ff_data, ff_read, ff_destroy, ff_setup_check, ff_mesh_check, &
+		ff_overlap_check, ff_exchange_setup
 
 	implicit none
 
@@ -154,6 +156,10 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	logical :: use_rmn,use_center_phase,use_center_grad,rmn_ok,use_dmat
 	real,allocatable,dimension(:,:,:,:) :: dmat !DFT=S orbital dipoles (BSE_CENTER_FILE)
 	character(len=256) :: rmn_message
+	type(ff_data) :: ffdat
+	logical :: use_ff,ff_ok
+	character(len=256) :: ff_message
+	real :: ffspin,ffdev
 	real,allocatable,dimension(:,:) :: wannier_centers
 
 	integer :: MPIError, Node, Nodes
@@ -241,13 +247,18 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	! As in bsesolver: BSE_CENTER_FILE, the position matrix <m,0|r|n,R> of the
 	! basis (DFT=W: Wannier90's seedname_r.dat; DFT=S: siesta2wtb.py
 	! --rmatrix), gives the optical vertex, and for DFT=W the Wannier centres
-	! of the kernel (DFT=S takes the orbital centres of basis_set-*).
+	! of the kernel (DFT=S takes the orbital centres of basis_set-*). BSE_FF
+	! puts the form factors of the orbitals in the kernel instead.
 	use_rmn=len_trim(bsecenterfile) > 0
 	use_dmat=use_rmn .and. dft == 'S'
-	use_center_phase=use_rmn .and. dft /= 'S'
+	use_ff=bseff
+	use_center_phase=use_rmn .and. dft /= 'S' .and. .not. use_ff
 	use_center_grad=bsecentgrad .and. use_center_phase
 	if (bsecentgrad .and. .not. use_rmn) stop 'BSE_CENTER_GRAD requires BSE_CENTER_FILE'
-	if (bsecentgrad .and. dft == 'S') stop 'BSE_CENTER_GRAD is implemented for DFT=W only'
+	if (bsecentgrad .and. dft == 'S') stop 'BSE_CENTER_GRAD is implemented for DFT=W; for DFT=S use BSE_FF'
+	if (bsecentgrad .and. use_ff) stop 'BSE_CENTER_GRAD and BSE_FF both correct the kernel vertices: use one of them'
+	if (use_ff .and. len_trim(bsefffile) == 0) stop 'BSE_FF= T requires BSE_FF_FILE'
+	if (bseffexch .and. .not. use_ff) stop 'BSE_FF_EXCHANGE= T requires BSE_FF= T'
 	allocate(wannier_centers(3,w90basis))
 	wannier_centers=0.0
 	if (use_rmn) then
@@ -272,6 +283,25 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 				write(300,*) 'G=0 direct Coulomb embedding: Wannier-centre phases enabled'
 			end if
 		end if
+	end if
+	! BSE_FF, as in bsesolver
+	if (use_ff) then
+		call ff_read(trim(bsefffile),ffdat,ff_ok,ff_message)
+		if (ff_ok) call ff_setup_check(ffdat,w90basis,rlat,ngrid,ff_ok,ff_message)
+		if (.not. ff_ok) then
+			write(*,*) trim(ff_message)
+			stop 'Unable to initialize the form factors (BSE_FF_FILE)'
+		end if
+		ffdat%direct=.true.
+		if (Node == 0) then
+			write(300,'(3A,I0,A,I0,A)') ' Form factors: ',trim(bsefffile),' (',ffdat%norb,' orbitals, ', &
+				ffdat%nr,' lattice vectors)'
+			write(300,'(A,I0,A,3(1X,I0),A,I0,A,F0.1,A)') ' Form factors: ',ffdat%ndir,' direct Q (mesh', &
+				ffdat%mesh,'), ',ffdat%nexc,' exchange G up to ',ffdat%ecut,' eV'
+			write(300,*) 'G=0 direct Coulomb embedding: orbital form factors (BSE_FF)'
+		end if
+	else if (Node == 0 .and. len_trim(bsefffile) > 0) then
+		write(300,*) 'BSE_FF_FILE not read: BSE_FF= F'
 	end if
 
 	!ediel(2) = edielh
@@ -828,11 +858,38 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		call bse_hamiltonian_memory_report(300,'BSE Hamiltonian, global dense equivalent',dimbse,dimbse)
 	end if
 
+	! BSE_FF, as in bsesolver; the exchange term is weighted by the
+	! occupations with the rest of the kernel (matrizelbsetemp)
+	if (use_ff) then
+		call ff_mesh_check(ffdat,kpt_bse,rlat,ff_ok,ff_message)
+		if (.not. ff_ok) then
+			write(*,*) trim(ff_message)
+			stop 'The form factors do not hold the q of the BSE mesh (BSE_FF_FILE)'
+		end if
+		call ff_overlap_check(ffdat,stt_bse,vector,kpt_bse,rlat,ffdev)
+		if (Node == 0) write(300,'(A,ES9.2)') ' Form factors: max |<n k|m k> - delta_nm| of the BSE bands '// &
+			'from F(R;0): ',ffdev
+		if (bseffexch .and. .not. bsehamread) then
+			ffspin=1.0
+			if (systype == "NP") ffspin=2.0
+			call ff_exchange_setup(ffdat,stt_bse,vector,kpt_bse,rlat,ngrid,sysdim,ffspin,bseffecut,ff_ok,ff_message)
+			if (.not. ff_ok) then
+				write(*,*) trim(ff_message)
+				stop 'Unable to set up the exchange term (BSE_FF_EXCHANGE)'
+			end if
+			ffdat%exchange=.true.
+			if (Node == 0) write(300,'(A,I0,A,F0.1,A,F0.1)') ' Exchange term (BSE_FF_EXCHANGE): ',ffdat%ng, &
+				' G up to ',ffdat%gmax,' eV, spin factor ',ffspin
+		end if
+	end if
+
 	if (Nodes == 1) then
 		! The second field identifies the temperature-dependent BSE Hamiltonian.
 		bseham_metadata = (/ dimbse,2,1 /)
 		if (use_center_phase) bseham_metadata(3) = 3
 		if (use_center_grad) bseham_metadata(3) = 7   ! 5: the kernel before the pair-midpoint term
+		if (use_ff) bseham_metadata(3) = bseham_metadata(3)+16   ! BSE_FF
+		if (use_ff .and. bseffexch) bseham_metadata(3) = bseham_metadata(3)+32   ! BSE_FF_EXCHANGE
 		bseham_path = trim(outputfolder)//trim(bsehamfile)
 		allocate(hbse(dimbse,dimbse))
 		if (bsehamread) then
@@ -854,7 +911,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 					    vector(:,stt_bse(2,j),stt_bse(4,j)),kpt_bse(:,stt_bse(4,j)),temp,dft,nvec,rvec,&
 					    sk(:,:,stt_bse(4,i)),sk(:,:,stt_bse(4,j)),use_center_phase, &
 					    center_phase(:,stt_bse(4,i)),center_phase(:,stt_bse(4,j)), &
-					    use_center_grad,rmn,wannier_centers)
+					    use_center_grad,rmn,wannier_centers,ffdat)
 				end do
 			end do
 			!$omp end parallel do
@@ -893,6 +950,8 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		if (trim(bsealgo) == 'elpa') bseham_metadata(3) = 2
 		if (use_center_phase) bseham_metadata(3) = bseham_metadata(3)+2
 		if (use_center_grad) bseham_metadata(3) = bseham_metadata(3)+4   ! +2: before the pair-midpoint term
+		if (use_ff) bseham_metadata(3) = bseham_metadata(3)+16   ! BSE_FF
+		if (use_ff .and. bseffexch) bseham_metadata(3) = bseham_metadata(3)+32   ! BSE_FF_EXCHANGE
 		bseham_path = trim(outputfolder)//trim(bsehamfile)
 
 		if (bsehamread) then
@@ -923,7 +982,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 						    vector(:,stt_bse(2,jg),stt_bse(4,jg)),kpt_bse(:,stt_bse(4,jg)),temp,dft,nvec,rvec,&
 						    sk(:,:,stt_bse(4,ig)),sk(:,:,stt_bse(4,jg)),use_center_phase, &
 						    center_phase(:,stt_bse(4,ig)),center_phase(:,stt_bse(4,jg)), &
-						    use_center_grad,rmn,wannier_centers)
+						    use_center_grad,rmn,wannier_centers,ffdat)
 					end if
 				end do
 			end do
@@ -941,6 +1000,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		stop "MPI/ScaLAPACK path requested without MPI support"
 #endif
 	end if
+	if (use_ff) call ff_destroy(ffdat)
 
 #ifdef MPI
 	task_elapsed = MPI_WTIME() - task_start

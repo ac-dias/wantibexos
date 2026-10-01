@@ -280,6 +280,9 @@ module input_variables
 	character(len=70) :: bsecenterfile
 	logical :: bsecentgrad
 	logical :: bsermatkey
+	logical :: bseff,bseffexch
+	character(len=70) :: bsefffile
+	real :: bseffecut
 		
 
 	logical :: bandscalc,doscalc
@@ -453,6 +456,10 @@ subroutine input_read
 	bsecenterfile = ""
 	bsecentgrad = .false.
 	bsermatkey = .false.
+	bseff = .false.
+	bsefffile = ""
+	bseffexch = .false.
+	bseffecut = 0.0
 	bsekpathcheckpoint = .false.
 	bsekpathcheckpointfile = "bse_kpath_checkpoint"
 	
@@ -649,6 +656,22 @@ subroutine input_read
 	case ("BSE_CENTER_GRAD=")
 
 		read(b,*) bsecentgrad
+
+	case ("BSE_FF=")
+
+		read(b,*) bseff
+
+	case ("BSE_FF_FILE=")
+
+		bsefffile = b
+
+	case ("BSE_FF_EXCHANGE=")
+
+		read(b,*) bseffexch
+
+	case ("BSE_FF_ECUT=")
+
+		read(b,*) bseffecut
 
 	case ("dK=")
 

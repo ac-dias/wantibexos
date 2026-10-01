@@ -676,7 +676,7 @@ if formfactor:
  for iR, R in enumerate(ffR):
   S = Ssiesta[sc.index(tuple(int(v) for v in R))] if tuple(int(v) for v in R) in sc else 0.0
   dS = max(dS, float(np.abs(np.asarray(ff["F"][iq0, iR, :nbasis, :nbasis]).T - S).max()))
- print("%s written (grid %dx%dx%d per cell); max |F(R;0) - S(SIESTA)| = %.1e" % (
+ print("%s written (BSE_FF_FILE; grid %dx%dx%d per cell); max |F(R;0) - S(SIESTA)| = %.1e" % (
      ffname, *ffgrid.M, dS))
 
 ####################################################################	

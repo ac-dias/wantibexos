@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import math
 import re
+import struct
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -186,6 +187,17 @@ def qpoint_count(path: Path) -> int:
     return (endpoints // 2) * points_per_segment
 
 
+def formfactor_bytes(path: Path, dimension: int, exchange: bool) -> tuple[int, int]:
+    """the form-factor table of BSE_FF_FILE (layout of utils/wtb_formfactor.py) and the
+    exchange vectors U(G,T) of BSE_FF_EXCHANGE (at most all the G of the file)"""
+    with open(path, "rb") as handle:
+        if handle.read(8) != b"WTBFF001":
+            raise ValueError(f"{path} is not a form-factor file of utils/wtb_formfactor.py")
+        norb, nr, nq, ndir, nexc = struct.unpack("<5i", handle.read(20))
+    table = norb * norb * nr * nq * COMPLEX_BYTES + (3 * nr + 3 * nq) * 8 + 3 * nr * REAL_BYTES
+    return table, (max(nexc, 1) * dimension * COMPLEX_BYTES if exchange else 0)
+
+
 def human_bytes(value: int) -> str:
     if value >= GIB:
         return f"{value / GIB:,.3f} GiB"
@@ -317,15 +329,22 @@ def print_optical_estimate(
     threads: int,
     thread_reserve: int,
     safety_factor: float,
+    formfactors: tuple[int, int] = (0, 0),
 ) -> None:
     dense = dimension * dimension * COMPLEX_BYTES
     base = base_optical_bytes(nk, dimension, basis, nvec, nc, nv, dft)
+    # BSE_FF: every rank holds the form factors (and the exchange vectors) while it builds
+    # its part of H; they are freed before the diagonalization
+    building = sum(formfactors)
     thread_scratch = threads * (eigsys_thread_scratch_bytes(basis, nvec) + thread_reserve)
     print("\nOptical BSE (BSE=T)")
     print(f"  Dense Hamiltonian H({dimension},{dimension}): {human_bytes(dense)}")
+    if building:
+        print(f"  BSE_FF form factors {human_bytes(formfactors[0])}, exchange vectors "
+              f"{human_bytes(formfactors[1])} per rank while H is built")
     if ranks == 1:
         workspace = serial_workspace_bytes(algorithm, dimension)
-        source_peak = base + dense + workspace
+        source_peak = base + dense + max(workspace, building)
         planning_peak = math.ceil((source_peak + thread_scratch) * safety_factor)
         print(f"  BSE_ALGO={algorithm} source workspace: {human_bytes(workspace)}")
         print(f"  Explicit source peak, one rank: {human_bytes(source_peak)}")
@@ -333,7 +352,7 @@ def print_optical_estimate(
         return
 
     locals_ = local_matrix_bytes(dimension, ranks)
-    source_peak = base + 2 * max(locals_)
+    source_peak = base + max(locals_) + max(max(locals_), building)
     planning_peak = math.ceil((source_peak + thread_scratch) * safety_factor)
     rows, columns = process_grid(ranks)
     print(f"  MPI process grid: {rows} x {columns}; 64 x 64 ScaLAPACK blocks")
@@ -433,8 +452,13 @@ def main() -> int:
 
     try:
         if optical_selected:
+            formfactors = (0, 0)
+            if data.logical("BSE_FF"):
+                formfactors = formfactor_bytes(resolve_from_input(args.input, data.text("BSE_FF_FILE")),
+                                               dimension, data.logical("BSE_FF_EXCHANGE"))
             print_optical_estimate(nk, dimension, hamiltonian.basis, hamiltonian.nvec, nc, nv, dft,
-                                   algorithm, args.ranks, threads, thread_reserve, args.safety_factor)
+                                   algorithm, args.ranks, threads, thread_reserve, args.safety_factor,
+                                   formfactors)
         if qpath_selected:
             qfile = resolve_from_input(args.input, data.text("KPATH_BSE"))
             nq = qpoint_count(qfile)

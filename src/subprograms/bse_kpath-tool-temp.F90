@@ -10,7 +10,7 @@ subroutine bsebndstemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 #endif
 	use omp_lib
 	use hamiltonian_input_variables
-	use input_variables, only: bsecenterfile, bsecentgrad
+	use input_variables, only: bsecenterfile, bsecentgrad, bseff
 	use bse_q_optics, only: rmn_data, rmn_destroy, rmn_center_setup
 
 	implicit none
@@ -195,8 +195,8 @@ subroutine bsebndstemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	end select
 
 	! BSE_CENTER_FILE: for DFT=W the Wannier-centre phases in the direct and
-	! exchange kernels, as in the Q=0 solver (its optical vertex and BSE_CENTER_GRAD
-	! are Q=0 only); DFT=S takes the orbital centres of basis_set-*.
+	! exchange kernels, as in the Q=0 solver (its optical vertex, BSE_CENTER_GRAD
+	! and BSE_FF are Q=0 only); DFT=S takes the orbital centres of basis_set-*.
 	use_center_phase=len_trim(bsecenterfile) > 0 .and. dft /= 'S'
 	allocate(wannier_centers(3,w90basis))
 	wannier_centers=0.0
@@ -213,6 +213,10 @@ subroutine bsebndstemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 			if (bsecentgrad) write(300,*) 'BSE_CENTER_GRAD is not applied on the q path (Q=0 BSE only)'
 			call flush(300)
 		end if
+	end if
+	if (Node .eq. 0 .and. bseff) then
+		write(300,*) 'BSE_FF is not applied on the q path (Q=0 BSE only)'
+		call flush(300)
 	end if
 	!ediel(2) = edielh
 

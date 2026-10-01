@@ -2,9 +2,10 @@
 function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1,ev1,vbc1 &
 	         ,vbv1,kpt1,est2,ec2,ev2,vbc2,vbv2,kpt2,dft,nvec,rvec,sk,skp, &
 	         use_center_phase,center_phase1,center_phase2, &
-	         use_center_grad,w90dat,centers) !funcao para calcular o elemento de matriz da matriz bse
+	         use_center_grad,w90dat,centers,ffdat) !funcao para calcular o elemento de matriz da matriz bse
 
 	use bse_q_optics, only: rmn_data, rmn_bloch, center_phase_direct_vertices, center_phase_gradient_correction
+	use bse_formfactor, only: ff_data, ff_direct_vertices, ff_exchange_element
 
 	implicit none
 
@@ -26,6 +27,7 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 	complex,dimension(w90basis) :: center_phase1,center_phase2
 	logical :: use_center_grad
 	type(rmn_data),intent(in) :: w90dat
+	type(ff_data),intent(in) :: ffdat
 
 	integer, dimension(4) :: est1,est2
 	real :: ec1,ec2,ev1,ev2
@@ -178,6 +180,17 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 
 	else
 
+		if (ffdat%direct) then
+
+		! BSE_FF: the pair densities of the orbitals of the basis,
+		! <c1|exp(iq.r)|c2> <v2|exp(-iq.r)|v1> at this image q, for DFT=W
+		! and DFT=S alike (F(R; 0) is the overlap)
+		call ff_direct_vertices(ffdat,kpt1-kpt2i,kpt2,est2(4),rlat, &
+			vbc1,vbc2,vbv1,vbv2,vc,vv)
+		melem=vcoul1*vc*vv
+
+		else
+
 			
 		select case (dft)
 		
@@ -248,6 +261,8 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 		 end if
 	         
 		end select
+
+		end if
 	
 		
 
@@ -259,6 +274,8 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 	end do
 
 	matrizelbse=matrizelbse/real(nimg)
+	! BSE_FF_EXCHANGE: the exchange term, independent of q
+	if (ffdat%exchange) matrizelbse=matrizelbse+ff_exchange_element(ffdat,est1(1),est2(1))
 
 end function matrizelbse
 

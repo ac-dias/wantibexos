@@ -276,7 +276,7 @@ def formfactors(pf, a, ff):
     S = np.asarray(F["F"][iq0], dtype=complex)
     dS = max(float(np.abs(S[iR] - (np.eye(len(tau)) if not np.any(R) else 0.0)).max())
              for iR, R in enumerate(ff["R"]))
-    return ("form factors: {} written (grid {}x{}x{} per cell); norm within the radii "
+    return ("form factors: {} written (BSE_FF_FILE; grid {}x{}x{} per cell); norm within the radii "
             "{:.6f}-{:.6f}; max |F(R;0) - delta| {:.1e}").format(
                 ff["name"], *grid.M, kept.min(), kept.max(), dS)
 
