@@ -6,6 +6,8 @@ run, written as WanTiBEXOS input.
     python3 paoflow2wtb.py prefix.save [--configuration minimal] [--basispath DIR]
                            [--pthr 0.95] [--shift auto] [--shift-type 1]
                            [--efermi E] [--seedname paoflow] [--npool 1]
+                           [--formfactor --mesh NGX NGY NGZ [--ff-ecut 100]
+                            [--ff-spacing A] [--ff-tail 1e-6] [--yes]]
     mpirun -np N python3 paoflow2wtb.py ...      (PAOFLOW's own MPI parallelism)
 
 prefix.save is the save directory of a pw.x run on a Monkhorst-Pack grid.
@@ -25,6 +27,22 @@ the current directory:
     DFT= "S"   tb-NP.dat          the layout of siesta2wtb.py, S(R) = 1
                basis_set-NP       the orbital centres
     <seedname>-info.txt           the orbitals and the checks below
+    <seedname>_ff.bin             with --formfactor: the form factors
+                                  <m,0|exp(iQ.r)|n,R> of the Loewdin orbitals
+                                  (utils/wtb_formfactor.py), for the direct
+                                  term of the BSE on the k mesh --mesh and the
+                                  exchange term up to --ff-ecut eV
+
+The Loewdin orbitals are the real-space form of PAOFLOW's orthonormalised
+atomic Bloch sums at the k-points of its grid (calc_atwfc_k, ortho_atwfc_k,
+on the wavefunction cutoff of the pw.x run): |m,0> = N^-1/2 sum_k |m k>, one
+FFT per orbital over the supercell of the grid, on enough points per cell
+for the whole G sphere of a pair and the largest Q (--ff-spacing can refine
+it). The radius of an orbital is where its pseudo-atomic orbital has less
+than --ff-tail of its norm outside: the pairs closer than the sum of their
+radii make the lattice vectors of the file, each integrated over the box
+around both spheres. The file size follows from the radii, so it is printed,
+and above 1 GB confirmed, before PAOFLOW starts; --yes skips the question.
 
 PAOFLOW's Bloch sums carry the structure factor exp(-i(k+G).tau_m) of QE's
 atomic wavefunctions, so H_mn(k) = sum_R exp(+ik.R) H_mn(R) with
@@ -150,6 +168,119 @@ def write_basis_set(path, orbitals):
                 i + 1, o["species"], o["tau"][0], o["tau"][1], o["tau"][2], o["l"], o["m"]))
 
 
+def gsphere(kbohr, bg, ecut):
+    """Miller indices (3, npw) of |k+G|^2 <= ecut (Ry, bohr), bg columns b_i"""
+    nmax = int(np.ceil(np.sqrt(ecut) / np.min(np.linalg.norm(bg, axis=0)))) + 3
+    r = np.arange(-nmax, nmax + 1)
+    h = np.array(np.meshgrid(r, r, r, indexing="ij")).reshape(3, -1)
+    kg = h.T @ bg.T + kbohr
+    return h[:, np.sum(kg * kg, axis=1) <= ecut]
+
+
+def basis_records(pf, a):
+    """the basis records PAOFLOW.projections will build, without projecting"""
+    from PAOFLOW.projection.do_atwfc_proj import build_aewfc_basis, build_pswfc_basis_all
+    arry, attr = pf.data_controller.data_dicts()
+    if a.configuration in (None, "minimal"):
+        return build_pswfc_basis_all(pf.data_controller)[0]
+    from PAOFLOW.inputs.basis_presets import resolve_configuration
+    if a.basispath is not None:
+        attr["basispath"] = os.path.join(a.basispath, "")
+    arry["configuration"] = resolve_configuration(pf.data_controller, a.configuration)
+    return build_aewfc_basis(pf.data_controller)[0]
+
+
+def orbital_radius(rec, tail):
+    """radius (A) outside which the radial function r R(r) of the record has
+    less than tail of its norm"""
+    r, w = np.asarray(rec["r"], float), np.asarray(rec["wfc"], float)
+    cum = np.concatenate([[0.0], np.cumsum(0.5 * (w[1:] ** 2 + w[:-1] ** 2) * np.diff(r))])
+    return float(r[np.argmax(1.0 - cum / cum[-1] < tail)]) * BOHR_A
+
+
+def formfactor_setup(pf, a):
+    """rank 0: the sets of the form-factor file and its size, before projecting"""
+    import wtb_formfactor as wff
+    arry, attr = pf.data_controller.data_dicts()
+    lat = np.asarray(arry["a_vectors"]) * attr["alat"] * BOHR_A
+    recs = basis_records(pf, a)
+    tau = np.array([np.asarray(b["tau"], float) * BOHR_A for b in recs])
+    rad = np.array([orbital_radius(b, a.ff_tail) for b in recs])
+    # no lattice vectors along a direction PAOFLOW's grid does not sample
+    nk = (int(attr["nk1"]), int(attr["nk2"]), int(attr["nk3"]))
+    R = wff.lattice_vectors(lat, tau, rad, periodic=[n > 1 for n in nk])
+    Qd, Qe = wff.direct_q(lat, a.mesh), wff.exchange_g(lat, a.ff_ecut)
+    name = a.seedname + "_ff.bin"
+    wff.confirm_size(name, len(recs), len(R), len(Qd) + len(Qe), a.yes, len(Qd), len(Qe))
+    return {"name": name, "lat": lat, "tau": tau, "rad": rad, "R": R, "Qd": Qd, "Qe": Qe}
+
+
+def formfactors(pf, a, ff):
+    """rank 0: the Loewdin orbitals in real space and their form factors"""
+    import wtb_formfactor as wff
+    from PAOFLOW.projection.do_atwfc_proj import calc_atwfc_k, ortho_atwfc_k
+    arry, attr = pf.data_controller.data_dicts()
+    basis = arry["basis"]
+    lat, tau, rad = ff["lat"], ff["tau"], ff["rad"]
+    nk = np.array([int(attr["nk1"]), int(attr["nk2"]), int(attr["nk3"])])
+    bg = np.asarray(arry["b_vectors"]).T * 2.0 * np.pi / attr["alat"]      # columns b_i, 1/bohr
+    ecut = float(attr["ecutwfc"])
+    # enough points for the G spheres of both orbitals of a pair and the largest
+    # Q (then the sums have no aliasing); --ff-spacing can only refine that
+    hmax = np.abs(gsphere(np.zeros(3), bg, ecut)).max(axis=1) + 1
+    qmax = np.ceil(np.abs(np.vstack([ff["Qd"], ff["Qe"]])).max(axis=0)).astype(int)
+    grid = wff.Grid.with_spacing(lat, a.ff_spacing or 1e9, minimum=2 * hmax + qmax + 1)
+    D = grid.M * nk
+    chis = []
+    for idx in np.ndindex(*nk):
+        kb = (np.array(idx, float) / nk) @ bg.T
+        mill = gsphere(kb, bg, ecut)
+        gk = {"xk": kb, "igwx": mill.shape[1], "mill": mill, "bg": bg, "gamma_only": False}
+        chis.append((tuple((np.array(idx)[:, None] + nk[:, None] * mill) % D[:, None]),
+                     ortho_atwfc_k(calc_atwfc_k(basis, gk))))
+    norm = float(np.prod(D)) / (float(np.prod(nk)) * np.sqrt(abs(np.linalg.det(lat))))
+    # atoms: orbitals with one centre share a box
+    centres = []
+    for m, t in enumerate(tau):
+        for c in centres:
+            if np.linalg.norm(c["tau"] - t) < 1e-6:
+                c["orbs"].append(m)
+                break
+        else:
+            centres.append({"tau": t, "orbs": [m]})
+    # each orbital on one whole period of the grid (the supercell of PAOFLOW's
+    # k grid): its tail is kept wherever the other orbital of a pair is large
+    for c in centres:
+        c["rad"] = float(rad[c["orbs"]].max())
+        c["full"] = np.zeros((len(c["orbs"]),) + tuple(D), dtype=np.complex64)
+    kept = np.zeros(len(tau))
+    for m in range(len(tau)):
+        C = np.zeros(tuple(D), dtype=complex)
+        for K, chi in chis:
+            C[K] = chi[m]
+        w = np.fft.ifftn(C) * norm
+        for c in centres:
+            if m in c["orbs"]:
+                c["full"][c["orbs"].index(m)] = w
+                lo, shape = grid.box(c["tau"], c["rad"], maxwidth=D)
+                ix = np.ix_(*[(lo[i] + np.arange(shape[i])) % D[i] for i in range(3)])
+                kept[m] = float(np.sum(np.abs(w[ix]) ** 2)) * grid.dV
+    groups = [wff.Group(c["orbs"], c["tau"], c["rad"], full=c["full"]) for c in centres]
+    Qc = np.vstack([ff["Qd"], ff["Qe"]])
+    wr = wff.FFWriter(ff["name"], lat, tau, ff["R"], Qc, len(ff["Qd"]), a.mesh, a.ff_ecut)
+    wff.compute(wr, grid, groups, ff["R"], [(ff["Qd"], 0), (ff["Qe"], len(ff["Qd"]))])
+    wr.close()
+    # F(R; 0) is the overlap of orthonormal orbitals
+    F = wff.read_ff(ff["name"])
+    iq0 = int(np.argmin(np.abs(ff["Qd"]).sum(axis=1)))
+    S = np.asarray(F["F"][iq0], dtype=complex)
+    dS = max(float(np.abs(S[iR] - (np.eye(len(tau)) if not np.any(R) else 0.0)).max())
+             for iR, R in enumerate(ff["R"]))
+    return ("form factors: {} written (grid {}x{}x{} per cell); norm within the radii "
+            "{:.6f}-{:.6f}; max |F(R;0) - delta| {:.1e}").format(
+                ff["name"], *grid.M, kept.min(), kept.max(), dS)
+
+
 def convert(pf, a):
     """rank 0: H(k) of the PAOFLOW run -> H(R) -> the files"""
     arry, attr = pf.data_controller.data_dicts()
@@ -224,7 +355,17 @@ def main():
     ap.add_argument("--efermi", type=float, default=None, help="Fermi level written in the files (eV)")
     ap.add_argument("--seedname", default="paoflow", help="name of the DFT= \"W\" files")
     ap.add_argument("--npool", type=int, default=1)
+    ap.add_argument("--formfactor", action="store_true",
+                    help="also write <seedname>_ff.bin, the form factors of the orbitals")
+    ap.add_argument("--mesh", type=int, nargs=3, default=None, help="the k mesh of the BSE (NGX NGY NGZ)")
+    ap.add_argument("--ff-ecut", type=float, default=100.0, help="exchange G up to this energy (eV)")
+    ap.add_argument("--ff-spacing", type=float, default=None,
+                    help="grid spacing of the integrals (A); default: the grid of the cutoff")
+    ap.add_argument("--ff-tail", type=float, default=1e-6, help="norm left outside the orbital radius")
+    ap.add_argument("--yes", action="store_true", help="write the form factors even above 1 GB")
     a = ap.parse_args()
+    if a.formfactor and a.mesh is None:
+        ap.error("--formfactor needs --mesh NGX NGY NGZ, the k-point mesh of the BSE")
 
     from mpi4py import MPI
     comm = MPI.COMM_WORLD
@@ -232,12 +373,22 @@ def main():
         from PAOFLOW import PAOFLOW
         pf = PAOFLOW.PAOFLOW(savedir=a.savedir, outputdir="paoflow2wtb.out", npool=a.npool,
                              smearing=None, verbose=False)
+        ff = None
+        if a.formfactor:
+            ok = 0
+            if comm.Get_rank() == 0:
+                ff = formfactor_setup(pf, a)
+                ok = 1
+            if not comm.bcast(ok, root=0):
+                raise SystemExit(1)
         pf.projections(configuration=a.configuration,
                        basispath=None if a.basispath is None else os.path.join(a.basispath, ""))
         pf.projectability(pthr=a.pthr, shift=a.shift if a.shift == "auto" else float(a.shift))
         pf.pao_hamiltonian(shift_type=a.shift_type)
         if comm.Get_rank() == 0:
             convert(pf, a)
+            if ff is not None:
+                print(formfactors(pf, a, ff), flush=True)
         comm.Barrier()
     except BaseException as e:
         # an exception on one rank would leave the others waiting forever

@@ -168,6 +168,30 @@ def write_rmatrix(fname, geom, X, nspin, source):
 inputfdf=  sys.argv[1]  
 # siesta2wtb.py file.fdf --rmatrix: also write tb-*_r.dat (see position_matrix)
 rmatrix = '--rmatrix' in sys.argv[2:]
+# siesta2wtb.py file.fdf --formfactor --mesh NGX NGY NGZ [--ff-ecut 100]
+# [--ff-spacing 0.1] [--yes]: also write tb-*_ff.bin, the form factors
+# <phi_i,0|exp(iQ.r)|phi_j,R> of the basis, for the direct term of the BSE on
+# that k mesh and the exchange term up to --ff-ecut eV (utils/wtb_formfactor.py).
+# The size of the file is printed before anything is written; above 1 GB the
+# script asks first, unless --yes.
+formfactor = '--formfactor' in sys.argv[2:]
+ffyes = '--yes' in sys.argv[2:]
+
+
+def _option(name, count, cast, default):
+    """the count values after name on the command line, or default"""
+    if name not in sys.argv[2:]:
+        return default
+    i = sys.argv.index(name)
+    values = [cast(v) for v in sys.argv[i + 1:i + 1 + count]]
+    return values if count > 1 else values[0]
+
+
+ffmesh = _option('--mesh', 3, int, None)
+ffecut = _option('--ff-ecut', 1, float, 100.0)
+ffspacing = _option('--ff-spacing', 1, float, 0.1)
+if formfactor and ffmesh is None:
+    sys.exit('--formfactor needs --mesh NGX NGY NGZ, the k-point mesh of the BSE')
 #fermi= sys.argv[2]
 fermi= 0.00
 
@@ -184,6 +208,23 @@ ncell=  tshs.nsc[0]*tshs.nsc[1]*tshs.nsc[2]
 sptype=str(tshs.spin)
 
 sptype2=sptype[5:-1]
+
+if formfactor:
+ import wtb_formfactor as wff
+ ffsuffix, ffnspin = {'unpolarized': ('NP', 1), 'polarized': ('sp', 2),
+                      'non-colinear': ('nc', 2), 'spin-orbit': ('soc', 2)}[sptype2]
+ ffname = "tb-%s_ff.bin" % ffsuffix
+ fflat = np.array(tshs.geometry.cell)
+ fftau, ffrad = [], []
+ for ia, atom in enumerate(tshs.geometry.atoms):
+  for orbital in atom.orbitals:
+   fftau.append(tshs.geometry.xyz[ia])
+   ffrad.append(orbital.R)
+ fftau, ffrad = np.array(fftau), np.array(ffrad)
+ # no lattice vectors along a direction without neighbours in SIESTA's supercell
+ ffR = wff.lattice_vectors(fflat, fftau, ffrad, periodic=[n > 1 for n in tshs.geometry.nsc])
+ ffQd, ffQe = wff.direct_q(fflat, ffmesh), wff.exchange_g(fflat, ffecut)
+ wff.confirm_size(ffname, ffnspin*tshs.no, len(ffR), len(ffQd) + len(ffQe), ffyes, len(ffQd), len(ffQe))
 
 if sptype2 == 'unpolarized' :
 
@@ -599,6 +640,44 @@ if sptype2 == 'spin-orbit' :
  f.close()
 
 #os.system("rm run.out")	
+####################################################################
+
+if formfactor:
+
+ try:
+  for atom in tshs.geometry.atoms.atom:
+   for orbital in atom.orbitals:
+    orbital.psi(np.zeros((1, 3)))
+ except Exception:
+  sys.exit('--formfactor needs the basis functions: run with the '
+           '*.ion.nc or *.ion.xml files SIESTA wrote next to the fdf')
+ ffgrid = wff.Grid.with_spacing(fflat, ffspacing)
+ ffgroups = []
+ for ia, atom in enumerate(tshs.geometry.atoms):
+  A = tshs.geometry.xyz[ia]
+  rmax = max(orbital.R for orbital in atom.orbitals)
+  lo, shape = ffgrid.box(A, rmax)
+  pts = ffgrid.points(lo, shape).reshape(-1, 3) - A
+  values = np.array([orbital.psi(pts) for orbital in atom.orbitals], dtype=np.float32)
+  ffgroups.append(wff.Group(tshs.geometry.a2o(ia, all=True), A, rmax, lo,
+                            values.reshape((len(atom.orbitals),) + tuple(shape))))
+ ffwriter = wff.FFWriter(ffname, fflat, np.vstack([fftau]*ffnspin), ffR, np.vstack([ffQd, ffQe]),
+                         len(ffQd), ffmesh, ffecut)
+ wff.compute(ffwriter, ffgrid, ffgroups, ffR, [(ffQd, 0), (ffQe, len(ffQd))],
+             offsets=[s*tshs.no for s in range(ffnspin)])
+ ffwriter.close()
+ # F(R; Q = 0) is the overlap: against SIESTA's, on every lattice vector of the file
+ ff = wff.read_ff(ffname)
+ iq0 = int(np.argmin(np.abs(ffQd).sum(axis=1)))
+ Ssiesta = tshs.tocsr(tshs.S_idx).toarray().reshape(nbasis, -1, nbasis).transpose(1, 0, 2)
+ sc = [tuple(int(v) for v in o) for o in tshs.geometry.lattice.sc_off]
+ dS = 0.0
+ for iR, R in enumerate(ffR):
+  S = Ssiesta[sc.index(tuple(int(v) for v in R))] if tuple(int(v) for v in R) in sc else 0.0
+  dS = max(dS, float(np.abs(np.asarray(ff["F"][iq0, iR, :nbasis, :nbasis]).T - S).max()))
+ print("%s written (grid %dx%dx%d per cell); max |F(R;0) - S(SIESTA)| = %.1e" % (
+     ffname, *ffgrid.M, dS))
+
 ####################################################################	
 
 if rmatrix:

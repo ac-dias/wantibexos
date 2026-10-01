@@ -302,6 +302,45 @@ model; add a per-thread reserve with `--external-thread-mib` when appropriate.
 The Siesta/Honpas Hamiltonian extract script (siesta2wtb.py) was tested in SISL version 0.16.2, could not be work in other versions.
 `siesta2wtb.py file.fdf --rmatrix` also writes `tb-*_r.dat`, the position matrix `<a,0|r|b,R>` of the basis (see `BSE_RMAT_FILE` above); it needs the `*.ion.nc` or `*.ion.xml` files SIESTA writes next to the fdf.
 The PAOFLOW script, `paoflow2wtb.py prefix.save [--configuration minimal|standard|extended] [--basispath DIR] [--pthr 0.95] [--shift auto]`, builds the PAOFLOW tight-binding Hamiltonian of a Quantum ESPRESSO run (projections, projectability, pao_hamiltonian; the save directory of a pw.x run on a Monkhorst-Pack grid) and writes it for both readers: `paoflow-NP.dat` with `paoflow_r.dat` (the orbital centres, for `BSE_CENTER_FILE`) for `DFT=W`, `tb-NP.dat` with `basis_set-NP` for `DFT=S`. H(R) is placed at the minimal images of each orbital pair, as Wannier90's `use_ws_distance`. It was tested with PAOFLOW 3.0.0, unpolarized runs only; run it with `mpirun` to use PAOFLOW's MPI parallelism.
+`wannier2wtb.py seedname [--efermi E]` writes `seedname-NP.dat`, the `DFT=W` tight-binding file (the WanTiBEXOS header followed by `seedname_hr.dat`), from a Wannier90 run (`seedname.wout`, `seedname_hr.dat`); `seedname_r.dat` is its `BSE_CENTER_FILE`.
+
+Orbital form factors
+--------------------
+
+`siesta2wtb.py`, `paoflow2wtb.py` and `wannier2wtb.py` take `--formfactor --mesh NGX NGY NGZ` to also write
+`*_ff.bin`, the form factors of the orbitals of the tight-binding basis,
+
+```
+F_mn(R; Q) = <m,0| exp(iQ.r) |n,R>,
+<c k| exp(iQ.r) |c' k'> = sum_mn c_m(k)^* c'_n(k') sum_R exp(ik'.R) F_mn(R; Q),
+```
+
+with which the pair densities of the tight-binding states are exact instead of point-centred
+(`sum_m c_m^* c'_m exp(iQ.t_m)`); `F(R; 0)` is the overlap. The file holds two sets of Q:
+
+- every shortest image q - G of the vectors q of the BSE mesh `NGX NGY NGZ`, ties on the zone
+  boundary included, as `bse_q_images` chooses them: the direct term;
+- the G != 0 with hbar^2 G^2/2m up to `--ff-ecut` (default 100 eV): the exchange term (the local
+  fields).
+
+The size of the file is printed before anything is computed; above 1 GB the scripts ask for
+confirmation, and stop when they cannot ask (a batch job), unless `--yes` is given. The layout (a
+little-endian stream in single precision, for `access='stream'`) is described in
+`utils/wtb_formfactor.py`, which the three scripts share. WanTiBEXOS does not read these files yet.
+
+- SIESTA, `siesta2wtb.py file.fdf --formfactor --mesh ...`: the numerical orbitals of the
+  `*.ion.nc` or `*.ion.xml` files, integrated where they overlap (`--ff-spacing`, default 0.1 A);
+  `F(R; 0)` is checked against SIESTA's overlap.
+- PAOFLOW, `paoflow2wtb.py prefix.save ... --formfactor --mesh ...`: the Loewdin orbitals of the
+  model, from PAOFLOW's orthonormalised Bloch sums on its k grid; `--ff-tail` (default 1e-6) sets
+  their radii from the norm of the pseudo-atomic orbitals.
+- Wannier90, `wannier2wtb.py seedname --formfactor --mesh ...`: the Wannier functions Wannier90
+  plots (`wannier_plot = .true.`, `wannier_plot_format = xcrysden`, `wannier_plot_mode = crystal`,
+  a `wannier_plot_supercell` that holds each function, on UNK files of pw2wannier90 with
+  `write_unk = .true.` and `reduce_unk = .false.`), with their phases matched to `seedname_r.dat`;
+  real Wannier functions only. `--ff-radius` (default 5) times the square root of each spread sets
+  their radii; the plot supercell should reach that far. The script prints the norm of each function
+  within its radius and how far `F(R; 0)` is from the identity: check both.
 
 Citing
    ------
