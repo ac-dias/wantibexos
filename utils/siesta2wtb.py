@@ -170,7 +170,7 @@ inputfdf=  sys.argv[1]
 # siesta2wtb.py file.fdf --rmatrix: also write tb-*_r.dat (see position_matrix)
 rmatrix = '--rmatrix' in sys.argv[2:]
 # siesta2wtb.py file.fdf --formfactor --mesh NGX NGY NGZ [--ff-ecut 100]
-# [--ff-spacing 0.1] [--yes]: also write tb-*_ff.bin, the form factors
+# [--ff-spacing 0.15] [--yes]: also write tb-*_ff.bin, the form factors
 # <phi_i,0|exp(iQ.r)|phi_j,R> of the basis, for the direct term of the BSE on
 # that k mesh and the exchange term up to --ff-ecut eV (utils/wtb_formfactor.py).
 # The size of the file is printed before anything is written; above 1 GB the
@@ -190,7 +190,9 @@ def _option(name, count, cast, default):
 
 ffmesh = _option('--mesh', 3, int, None)
 ffecut = _option('--ff-ecut', 1, float, 100.0)
-ffspacing = _option('--ff-spacing', 1, float, 0.1)
+# 0.15 A: for h-BN (DZP, 36x36) the lowest exciton within 0.01 meV of 0.1 A in a
+# fifth of the time; 0.3 A moves it by 10 meV
+ffspacing = _option('--ff-spacing', 1, float, 0.15)
 if formfactor and ffmesh is None:
     sys.exit('--formfactor needs --mesh NGX NGY NGZ, the k-point mesh of the BSE')
 #fermi= sys.argv[2]

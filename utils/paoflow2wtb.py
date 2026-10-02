@@ -7,7 +7,7 @@ run, written as WanTiBEXOS input.
                            [--pthr 0.95] [--shift auto] [--shift-type 1]
                            [--efermi E] [--seedname paoflow] [--npool 1]
                            [--formfactor --mesh NGX NGY NGZ [--ff-ecut 100]
-                            [--ff-spacing A] [--ff-tail 1e-6] [--yes]]
+                            [--ff-spacing A] [--ff-tail 1e-3] [--yes]]
     mpirun -np N python3 paoflow2wtb.py ...      (PAOFLOW's own MPI parallelism)
 
 prefix.save is the save directory of a pw.x run on a Monkhorst-Pack grid.
@@ -410,7 +410,7 @@ def main():
     ap.add_argument("--ff-ecut", type=float, default=100.0, help="exchange G up to this energy (eV)")
     ap.add_argument("--ff-spacing", type=float, default=None,
                     help="grid spacing of the integrals (A); default: the grid of the cutoff")
-    ap.add_argument("--ff-tail", type=float, default=1e-6,
+    ap.add_argument("--ff-tail", type=float, default=1e-3,
                     help="norm left outside the radius of each Loewdin orbital (the box-state bases "
                          "standard and extended need a larger one: see README)")
     ap.add_argument("--yes", action="store_true", help="write the form factors even above 1 GB")
