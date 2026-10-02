@@ -119,7 +119,7 @@ def file_size(norb, nR, nQ):
     return header_bytes(norb, nR, nQ) + 8 * norb * norb * nR * nQ
 
 
-def confirm_size(path, norb, nR, nQ, yes, ndir=None, nexc=None):
+def confirm_size(path, norb, nR, nQ, yes, ndir=None, nexc=None, hint=""):
     """print the size the form-factor file will have; above LIMIT ask (or stop)"""
     size = file_size(norb, nR, nQ)
     parts = "" if ndir is None else " ({} direct, {} exchange)".format(ndir, nexc)
@@ -133,7 +133,8 @@ def confirm_size(path, norb, nR, nQ, yes, ndir=None, nexc=None):
         if ans.strip().lower() in ("y", "yes"):
             return True
         raise SystemExit("stopped before computing the form factors")
-    raise SystemExit(msg + "; run again with --yes to write it anyway (or reduce --mesh or --ff-ecut)")
+    raise SystemExit(msg + "; run again with --yes to write it anyway (or reduce --mesh or --ff-ecut"
+                     + hint + ")")
 
 
 class FFWriter:

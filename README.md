@@ -337,7 +337,14 @@ little-endian stream in single precision, for `access='stream'`) is described in
   `F(R; 0)` is checked against SIESTA's overlap.
 - PAOFLOW, `paoflow2wtb.py prefix.save ... --formfactor --mesh ...`: the Loewdin orbitals of the
   model, from PAOFLOW's orthonormalised Bloch sums on its k grid; `--ff-tail` (default 1e-6) sets
-  their radii from the norm of the pseudo-atomic orbitals.
+  their radii from their own norm. The pseudo-atomic orbitals, whose radii are smaller, give the
+  first estimate of the size printed before PAOFLOW starts; the final size follows before the
+  integrals. The Loewdin orbitals of the box-state bases (`--configuration standard`,
+  `extended`) are delocalized: for monolayer h-BN 1% of their norm lies beyond 6-11 A, and the
+  default tail gives radii of 27-49 A and files of 46 GB (standard) and 76 GB (extended) on a
+  36x36 mesh, against 0.17 GB for the minimal basis; `--ff-tail 1e-2` gives 2.1 and 3.7 GB, and
+  `1e-3` 4.6 and 8.5 GB. Radii from the pseudo-atomic orbitals, as before, left 1-11% of their
+  norm out and moved the lowest exciton by 5-12 meV.
 - Wannier90, `wannier2wtb.py seedname --formfactor --mesh ...`: the Wannier functions Wannier90
   plots (`wannier_plot = .true.`, `wannier_plot_format = xcrysden`, `wannier_plot_mode = crystal`,
   a `wannier_plot_supercell` that holds each function, on UNK files of pw2wannier90 with

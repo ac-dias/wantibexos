@@ -38,11 +38,16 @@ atomic Bloch sums at the k-points of its grid (calc_atwfc_k, ortho_atwfc_k,
 on the wavefunction cutoff of the pw.x run): |m,0> = N^-1/2 sum_k |m k>, one
 FFT per orbital over the supercell of the grid, on enough points per cell
 for the whole G sphere of a pair and the largest Q (--ff-spacing can refine
-it). The radius of an orbital is where its pseudo-atomic orbital has less
-than --ff-tail of its norm outside: the pairs closer than the sum of their
-radii make the lattice vectors of the file, each integrated over the box
-around both spheres. The file size follows from the radii, so it is printed,
-and above 1 GB confirmed, before PAOFLOW starts; --yes skips the question.
+it). The radius of an orbital is where the Loewdin orbital itself has less
+than --ff-tail of its norm outside, on the supercell where it is built: the
+pairs closer than the sum of their radii make the lattice vectors of the
+file, each integrated over the box around both spheres. The Loewdin orbitals
+reach further than the pseudo-atomic orbitals they are made of (for the
+box-state bases standard and extended, up to 11% of the norm lies outside
+the radius of the pseudo-atomic orbital), so these give only a first, smaller
+estimate of the file size, printed (and above 1 GB confirmed) before PAOFLOW
+starts; the size from the Loewdin radii is printed, and above 1 GB confirmed
+again when it grew, before the integrals. --yes skips both questions.
 
 PAOFLOW's Bloch sums carry the structure factor exp(-i(k+G).tau_m) of QE's
 atomic wavefunctions, so H_mn(k) = sum_R exp(+ik.R) H_mn(R) with
@@ -198,8 +203,36 @@ def orbital_radius(rec, tail):
     return float(r[np.argmax(1.0 - cum / cum[-1] < tail)]) * BOHR_A
 
 
+def loewdin_radii(full, grid, nk, centre, tail, width=0.01):
+    """radius (A) of each orbital of full (the orbitals of one centre on the
+    supercell of the k grid, where they are periodic) outside which it has less
+    than tail of its norm: |w|^2 against the distance to the centre, the minimum
+    image in the supercell, in bins of width"""
+    D = np.array(full.shape[1:])
+    fc = np.asarray(centre, float) @ np.linalg.inv(grid.lat)       # crystal coordinates
+    f = []
+    for i in range(3):
+        x = np.arange(D[i]) / grid.M[i] - fc[i]
+        f.append(x - nk[i] * np.round(x / nk[i]))
+    x23 = f[1][:, None, None] * grid.lat[1] + f[2][None, :, None] * grid.lat[2]
+    nb = int(0.5 * float(np.sum(nk * np.linalg.norm(grid.lat, axis=1))) / width) + 2
+    hist = np.zeros((full.shape[0], nb))
+    for i1 in range(D[0]):
+        d = np.linalg.norm(x23 + f[0][i1] * grid.lat[0], axis=-1).ravel()
+        b = np.minimum((d / width).astype(int), nb - 1)
+        for j in range(full.shape[0]):
+            hist[j] += np.bincount(b, weights=np.abs(full[j, i1]).ravel() ** 2, minlength=nb)
+    out = np.cumsum(hist[:, ::-1], axis=1)[:, ::-1]        # the norm from each bin outwards
+    rad = np.empty(full.shape[0])
+    for j in range(full.shape[0]):
+        small = out[j] < tail * out[j, 0]
+        rad[j] = width * (np.argmax(small) if small.any() else nb)
+    return rad
+
+
 def formfactor_setup(pf, a):
-    """rank 0: the sets of the form-factor file and its size, before projecting"""
+    """rank 0: the sets of the form-factor file and a first estimate of its
+    size, with the radii of the pseudo-atomic orbitals, before projecting"""
     import wtb_formfactor as wff
     arry, attr = pf.data_controller.data_dicts()
     lat = np.asarray(arry["a_vectors"]) * attr["alat"] * BOHR_A
@@ -211,7 +244,8 @@ def formfactor_setup(pf, a):
     R = wff.lattice_vectors(lat, tau, rad, periodic=[n > 1 for n in nk])
     Qd, Qe = wff.direct_q(lat, a.mesh), wff.exchange_g(lat, a.ff_ecut)
     name = a.seedname + "_ff.bin"
-    wff.confirm_size(name, len(recs), len(R), len(Qd) + len(Qe), a.yes, len(Qd), len(Qe))
+    wff.confirm_size(name, len(recs), len(R), len(Qd) + len(Qe), a.yes, len(Qd), len(Qe),
+                     hint=", or raise --ff-tail")
     return {"name": name, "lat": lat, "tau": tau, "rad": rad, "R": R, "Qd": Qd, "Qe": Qe}
 
 
@@ -251,9 +285,7 @@ def formfactors(pf, a, ff):
     # each orbital on one whole period of the grid (the supercell of PAOFLOW's
     # k grid): its tail is kept wherever the other orbital of a pair is large
     for c in centres:
-        c["rad"] = float(rad[c["orbs"]].max())
         c["full"] = np.zeros((len(c["orbs"]),) + tuple(D), dtype=np.complex64)
-    kept = np.zeros(len(tau))
     for m in range(len(tau)):
         C = np.zeros(tuple(D), dtype=complex)
         for K, chi in chis:
@@ -262,13 +294,30 @@ def formfactors(pf, a, ff):
         for c in centres:
             if m in c["orbs"]:
                 c["full"][c["orbs"].index(m)] = w
-                lo, shape = grid.box(c["tau"], c["rad"], maxwidth=D)
-                ix = np.ix_(*[(lo[i] + np.arange(shape[i])) % D[i] for i in range(3)])
-                kept[m] = float(np.sum(np.abs(w[ix]) ** 2)) * grid.dV
+    # the radii of the Loewdin orbitals themselves, and with them the lattice
+    # vectors, the boxes and the size of the file
+    rad = np.array(rad, dtype=float)
+    for c in centres:
+        rad[c["orbs"]] = loewdin_radii(c["full"], grid, nk, c["tau"], a.ff_tail)
+        c["rad"] = float(rad[c["orbs"]].max())
+    R = wff.lattice_vectors(lat, tau, rad, periodic=[n > 1 for n in nk])
+    print("form factors: radii of the Loewdin orbitals {:.2f}-{:.2f} A (pseudo-atomic orbitals "
+          "{:.2f}-{:.2f} A), {} lattice vectors (first estimate {})".format(
+              rad.min(), rad.max(), ff["rad"].min(), ff["rad"].max(), len(R), len(ff["R"])), flush=True)
+    wff.confirm_size(ff["name"], len(tau), len(R), len(ff["Qd"]) + len(ff["Qe"]),
+                     a.yes or len(R) <= len(ff["R"]), len(ff["Qd"]), len(ff["Qe"]),
+                     hint=", or raise --ff-tail")
+    ff["R"] = R
+    kept = np.zeros(len(tau))
+    for c in centres:
+        lo, shape = grid.box(c["tau"], c["rad"], maxwidth=D)
+        ix = np.ix_(*[(lo[i] + np.arange(shape[i])) % D[i] for i in range(3)])
+        for j, m in enumerate(c["orbs"]):
+            kept[m] = float(np.sum(np.abs(c["full"][j][ix]) ** 2)) * grid.dV
     groups = [wff.Group(c["orbs"], c["tau"], c["rad"], full=c["full"]) for c in centres]
     Qc = np.vstack([ff["Qd"], ff["Qe"]])
-    wr = wff.FFWriter(ff["name"], lat, tau, ff["R"], Qc, len(ff["Qd"]), a.mesh, a.ff_ecut)
-    wff.compute(wr, grid, groups, ff["R"], [(ff["Qd"], 0), (ff["Qe"], len(ff["Qd"]))])
+    wr = wff.FFWriter(ff["name"], lat, tau, R, Qc, len(ff["Qd"]), a.mesh, a.ff_ecut)
+    wff.compute(wr, grid, groups, R, [(ff["Qd"], 0), (ff["Qe"], len(ff["Qd"]))])
     wr.close()
     # F(R; 0) is the overlap of orthonormal orbitals
     F = wff.read_ff(ff["name"])
@@ -361,7 +410,9 @@ def main():
     ap.add_argument("--ff-ecut", type=float, default=100.0, help="exchange G up to this energy (eV)")
     ap.add_argument("--ff-spacing", type=float, default=None,
                     help="grid spacing of the integrals (A); default: the grid of the cutoff")
-    ap.add_argument("--ff-tail", type=float, default=1e-6, help="norm left outside the orbital radius")
+    ap.add_argument("--ff-tail", type=float, default=1e-6,
+                    help="norm left outside the radius of each Loewdin orbital (the box-state bases "
+                         "standard and extended need a larger one: see README)")
     ap.add_argument("--yes", action="store_true", help="write the form factors even above 1 GB")
     a = ap.parse_args()
     if a.formfactor and a.mesh is None:
