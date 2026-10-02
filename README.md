@@ -348,8 +348,10 @@ little-endian stream in single precision, for `access='stream'`) is described in
   8.5 GB (extended), 2.1 and 3.7 GB at `1e-2`, 46 and 76 GB at `1e-6`. For them use
   `--ff-tail 1e-1`: 0.88 GB (standard) and 1.33 GB (extended) on a 36x36 mesh; for standard it
   puts the lowest exciton 0.8 meV above that of the exact plane-wave vertices and the exchange
-  term within 0.1 meV of them (V2DTPV, 2+2 bands), and the file takes 42 min on 4 cores;
-  extended has not been checked at that tail. Radii from the pseudo-atomic orbitals, before,
+  term within 0.1 meV of them (V2DTPV, 2+2 bands), and the file takes 42 min on 4 cores; for
+  extended it puts the lowest exciton 3.4 meV above and splits its E' doublet by 1.1 meV, with
+  the exchange term within 0.1 meV (1 h 49 min on one core), so a smaller tail (`3e-2`-`5e-2`,
+  1.8-2.3 GB, not checked) suits it better. Radii from the pseudo-atomic orbitals, before,
   left 1-11% of their norm out and moved the lowest exciton by 5-12 meV.
 - Wannier90, `wannier2wtb.py seedname --formfactor --mesh ...`: the Wannier functions Wannier90
   plots (`wannier_plot = .true.`, `wannier_plot_format = xcrysden`, `wannier_plot_mode = crystal`,
