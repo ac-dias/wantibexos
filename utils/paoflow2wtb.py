@@ -265,13 +265,19 @@ def formfactors(pf, a, ff):
     qmax = np.ceil(np.abs(np.vstack([ff["Qd"], ff["Qe"]])).max(axis=0)).astype(int)
     grid = wff.Grid.with_spacing(lat, a.ff_spacing or 1e9, minimum=2 * hmax + qmax + 1)
     D = grid.M * nk
-    chis = []
-    for idx in np.ndindex(*nk):
-        kb = (np.array(idx, float) / nk) @ bg.T
-        mill = gsphere(kb, bg, ecut)
+    # the orthonormalised Bloch sums of every k-point in one array, so that it
+    # is freed in one piece before the integrals; spheres: where the G sphere
+    # of each k-point lies on the grid of the supercell
+    ks = list(np.ndindex(*nk))
+    kbs = [(np.array(idx, float) / nk) @ bg.T for idx in ks]
+    mills = [gsphere(kb, bg, ecut) for kb in kbs]
+    chi = np.zeros((len(ks), len(tau), max(mill.shape[1] for mill in mills)), dtype=complex)
+    spheres = []
+    for ik, (idx, kb, mill) in enumerate(zip(ks, kbs, mills)):
         gk = {"xk": kb, "igwx": mill.shape[1], "mill": mill, "bg": bg, "gamma_only": False}
-        chis.append((tuple((np.array(idx)[:, None] + nk[:, None] * mill) % D[:, None]),
-                     ortho_atwfc_k(calc_atwfc_k(basis, gk))))
+        chi[ik, :, :mill.shape[1]] = ortho_atwfc_k(calc_atwfc_k(basis, gk))
+        spheres.append(tuple((np.array(idx)[:, None] + nk[:, None] * mill) % D[:, None]))
+    del mills
     norm = float(np.prod(D)) / (float(np.prod(nk)) * np.sqrt(abs(np.linalg.det(lat))))
     # atoms: orbitals with one centre share a box
     centres = []
@@ -286,14 +292,20 @@ def formfactors(pf, a, ff):
     # k grid): its tail is kept wherever the other orbital of a pair is large
     for c in centres:
         c["full"] = np.zeros((len(c["orbs"]),) + tuple(D), dtype=np.complex64)
+    C = np.zeros(tuple(D), dtype=complex)
     for m in range(len(tau)):
-        C = np.zeros(tuple(D), dtype=complex)
-        for K, chi in chis:
-            C[K] = chi[m]
-        w = np.fft.ifftn(C) * norm
+        C[...] = 0
+        for ik, K in enumerate(spheres):
+            C[K] = chi[ik, m, :len(K[0])]
+        w = np.fft.ifftn(C)
+        w *= norm
         for c in centres:
             if m in c["orbs"]:
                 c["full"][c["orbs"].index(m)] = w
+        del w
+    # the integrals need only the orbitals: the coefficients and the work array
+    # (2 GB for the box-state bases) are freed before them
+    del chi, spheres, C
     # the radii of the Loewdin orbitals themselves, and with them the lattice
     # vectors, the boxes and the size of the file
     rad = np.array(rad, dtype=float)
