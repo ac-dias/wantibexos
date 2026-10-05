@@ -345,14 +345,15 @@ little-endian stream in single precision, for `access='stream'`) is described in
   minimal basis the default tail gives a 0.042 GB file on a 36x36 mesh, with the lowest exciton
   within 0.15 meV and the exchange term unchanged against `1e-6` (0.17 GB, nine times the time);
   the box-state bases have radii of 8.6-16 A at that tail and files of 4.6 GB (standard) and
-  8.5 GB (extended), 2.1 and 3.7 GB at `1e-2`, 46 and 76 GB at `1e-6`. For them use
-  `--ff-tail 1e-1`: 0.88 GB (standard) and 1.33 GB (extended) on a 36x36 mesh; for standard it
-  puts the lowest exciton 0.8 meV above that of the exact plane-wave vertices and the exchange
-  term within 0.1 meV of them (V2DTPV, 2+2 bands), and the file takes 42 min on 4 cores; for
-  extended it puts the lowest exciton 3.4 meV above and splits its E' doublet by 1.1 meV, with
-  the exchange term within 0.1 meV (1 h 49 min on one core), so a smaller tail (`3e-2`-`5e-2`,
-  1.8-2.3 GB, not checked) suits it better. Radii from the pseudo-atomic orbitals, before,
-  left 1-11% of their norm out and moved the lowest exciton by 5-12 meV.
+  8.5 GB (extended), 2.1 and 3.7 GB at `1e-2`, 46 and 76 GB at `1e-6`. For standard use
+  `--ff-tail 1e-1` (0.88 GB on a 36x36 mesh): it puts the lowest exciton 0.8 meV above that of
+  the exact plane-wave vertices and the exchange term within 0.1 meV of them (V2DTPV, 2+2
+  bands), and the file takes 42 min on 4 cores. For extended use `3e-2` (2.32 GB): the lowest
+  exciton 0.6 meV above, its E' doublet split by 0.12 meV and the exchange term within 0.03 meV,
+  in 7.7 h on one core with a peak of 7.5 GiB of memory, of which the Loewdin orbitals on
+  the supercell of PAOFLOW's k grid take 3.3 GiB (24x24); at `1e-1` (1.33 GB) the lowest
+  exciton is 3.4 meV above and the doublet splits by 1.1 meV. Radii from the pseudo-atomic
+  orbitals, before, left 1-11% of their norm out and moved the lowest exciton by 5-12 meV.
 - Wannier90, `wannier2wtb.py seedname --formfactor --mesh ...`: the Wannier functions Wannier90
   plots (`wannier_plot = .true.`, `wannier_plot_format = xcrysden`, `wannier_plot_mode = crystal`,
   a `wannier_plot_supercell` that holds each function, on UNK files of pw2wannier90 with

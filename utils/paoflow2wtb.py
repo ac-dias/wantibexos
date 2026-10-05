@@ -423,8 +423,8 @@ def main():
     ap.add_argument("--ff-spacing", type=float, default=None,
                     help="grid spacing of the integrals (A); default: the grid of the cutoff")
     ap.add_argument("--ff-tail", type=float, default=1e-3,
-                    help="norm left outside the radius of each Loewdin orbital (the box-state bases "
-                         "standard and extended: 1e-1, see README)")
+                    help="norm left outside the radius of each Loewdin orbital (the box-state bases: "
+                         "1e-1 for standard, 3e-2 for extended, see README)")
     ap.add_argument("--yes", action="store_true", help="write the form factors even above 1 GB")
     a = ap.parse_args()
     if a.formfactor and a.mesh is None:
