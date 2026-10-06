@@ -201,6 +201,42 @@ centre phases). BSE Hamiltonians
 (`BSE_HAM_SAVE`) and q-path checkpoints written by earlier builds hold the
 earlier kernel and must be regenerated.
 
+DFT=S direct kernel from per-state vectors
+-------------------------------------------
+
+For `DFT=S` every element of the direct kernel needs two vertices, the electron one
+(c1 k1 -> c2 k2) and the hole one (v1 k1 -> v2 k2), each a sandwich of the states
+`l` (at k1) and `r` (at k2) with the overlap matrices of the non-orthogonal basis,
+
+```
+V = 1/2 sum_ij conj(l_i) [ S(k1)_ij exp(iq.tau_j) + S(k2)_ij exp(iq.tau_i) ] r_j,    q = k1 - k2 - G.
+```
+
+Evaluated per element this is a dense N x N double sum (N = the number of basis functions),
+repeated for every band pair that shares the same k1, k2: 78 ms per element on 4 threads for
+the 4 x 4 x 1 MoSi2N4 supercell (N = 3104), about 3e6 core-seconds for a 9x9 mesh with 8+8 bands.
+The phase factorizes, `exp(iq.tau_j) = e_j(k1) conj(e_j(k2)) conj(eG_j)`, so the default kernel
+computes four vectors per state, once, with the overlap matrix of one k point at a time,
+
+```
+A = e(k1) * S(k1)^T conj(l),   L = conj(l) * e(k1),   R = conj(e(k2)) * r,   B = conj(e(k2)) * S(k2) r,
+```
+
+tabulates `V = 1/2 sum_j conj(eG_j) [A_j R_j + L_j B_j]` for all band pairs of every (k1, k2, image)
+with small matrix products, and a kernel element is two table lookups. It is the same arithmetic in
+another order: the elements differ from the per-element kernel by single-precision rounding
+(`max |old - fast|` 3e-7 eV of a largest element of 2.6 eV, 4 x 4 supercell, 3x3 mesh, 8+8 bands,
+2080 elements; 2e-7 of the largest element for the unit cell at 12x12), the excitons by less than 4e-6 eV.
+The Hamiltonian of the supercell smoke test (3x3 mesh, 2+2 bands) takes 52 s with the per-element kernel
+and 0.15 s with the table, the unit cell (12x12, 2+2 bands) 3.95 s and 0.14 s; the 81 overlap
+matrices of a 9x9 mesh (6.2 GB) are no longer all stored. What is left is the diagonalization of
+H(k) for every k and the single-particle optics.
+
+`WTB_KERNEL` (environment variable) selects it: `fast` (default), `old` (the per-element sandwich),
+or `check` (both, on a regular sample of about 60 x 60 / 2 elements, the largest difference is
+written to `log_bse_optics.dat`). The table is used for `DFT= "S"` without `BSE_FF`; `BSE_FF`, finite
+temperature, `DFT= "W"` and the q-path BSE keep their kernels.
+
 ELPA BSE diagonalization
 -------------------------
 

@@ -24,6 +24,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		center_phase_build, rmn_apply_q0_optical_correction, rmn_dfts_dipoles
 	use bse_formfactor, only: ff_data, ff_read, ff_destroy, ff_setup_check, ff_mesh_check, &
 		ff_overlap_check, ff_exchange_setup
+	use bse_fastkernel, only: fk_active, fk_vertex, fk_setup
 
 	implicit none
 
@@ -93,6 +94,14 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	type(ff_data) :: ffdat
 	logical :: use_ff,ff_ok
 	character(len=256) :: ff_message
+	! WTB_KERNEL= fast (default) | old | check: the DFT=S direct kernel from the vertex table of bse_fastkernel,
+	! the per-element sandwich of sandwich_phase, or both on a sample of elements (then fast)
+	character(len=16) :: kmode
+	logical :: fastk,kcheck
+	integer :: nsk,fk_maxnimg,ipass,ichk,jchk,nchk,stepchk
+	double precision :: fk_t1,fk_t2
+	complex,dimension(2) :: ekern
+	real :: dchk,echk
 	real :: ffspin,ffdev
 	real,allocatable,dimension(:,:) :: wannier_centers
 
@@ -617,15 +626,28 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 
 	! Store each k-point overlap matrix contiguously: sk(:,:,ik).
-	allocate(sk(w90basis,w90basis,ngkpt))
+	kmode = 'fast'
+	call get_environment_variable('WTB_KERNEL',kmode)
+	if (len_trim(kmode) == 0) kmode = 'fast'
+	fastk = (dft .eq. "S") .and. (.not. use_ff) .and. (trim(kmode) .ne. 'old')
+	kcheck = fastk .and. (trim(kmode) .eq. 'check')
+	if (fastk .and. .not. kcheck) then
+		! the vertex table of bse_fastkernel needs one S(k) at a time (scratch), not the table of all k
+		nsk = 1
+	else
+		nsk = ngkpt
+	end if
+	allocate(sk(w90basis,w90basis,nsk))
 	if (dft .eq. "S") then
-		
+
+		if (nsk .eq. ngkpt) then
 		do i=1,ngkpt
-		
+
 			call overlap(w90basis,nvec,rvec,ovp,kpt(i,1),kpt(i,2),kpt(i,3),sk(:,:,i))
-		
+
 		end do
-		
+		end if
+
 		if (Node == 0) then
 			write(300,*) 'overlap matrices calculated'
 			call flush(300)
@@ -819,6 +841,59 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		end do
 	end do
 	
+	fk_active = .false.
+	if (Node == 0) then
+		if (fastk) then
+			write(300,*) 'BSE kernel: vertex table from per-state vectors (bse_fastkernel), WTB_KERNEL= ',trim(kmode)
+		else
+			write(300,*) 'BSE kernel: sandwich_phase per matrix element, WTB_KERNEL= ',trim(kmode)
+		end if
+		call flush(300)
+	end if
+	if (fastk) then
+		call fk_setup(w90basis,nvec,nc+nv,ngkpt,rvec,ovp,kpt_bse,rlat,vector,tau,fk_maxnimg,fk_t1,fk_t2)
+		fk_active = .true.
+		if (Node == 0) then
+			write(300,"(A,F10.3,A,F10.3,A,I0,A)") ' fast kernel: per-state vectors ',fk_t1,' s, vertex table ',fk_t2, &
+				' s, up to ',fk_maxnimg,' images per k pair'
+			call flush(300)
+		end if
+	end if
+
+	! WTB_KERNEL=check: the same elements from the vertex table and from sandwich_phase (all of the
+	! elements when dimbse <= 60, otherwise a regular sample), reported on rank 0
+	if (kcheck .and. Node == 0) then
+		stepchk = max(1,dimbse/60)
+		nchk = 0
+		dchk = 0.0
+		echk = 0.0
+		do ichk=1,dimbse,stepchk
+			do jchk=ichk,dimbse,stepchk
+				do ipass=1,2
+					fk_active = (ipass == 2)
+					ekern(ipass)= matrizelbse(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,rlat,stt_bse(:,ichk),&
+					    eigv(stt_bse(4,ichk),stt_bse(3,ichk)),eigv(stt_bse(4,ichk),stt_bse(2,ichk)),&
+					    vector(:,stt_bse(3,ichk),stt_bse(4,ichk)),vector(:,stt_bse(2,ichk),stt_bse(4,ichk)),&
+					    kpt_bse(:,stt_bse(4,ichk)),stt_bse(:,jchk),eigv(stt_bse(4,jchk),stt_bse(3,jchk)),&
+					    eigv(stt_bse(4,jchk),stt_bse(2,jchk)),vector(:,stt_bse(3,jchk),stt_bse(4,jchk)),&
+					    vector(:,stt_bse(2,jchk),stt_bse(4,jchk)),kpt_bse(:,stt_bse(4,jchk)),dft,nvec,rvec,&
+					    sk(:,:,min(stt_bse(4,ichk),nsk)),sk(:,:,min(stt_bse(4,jchk),nsk)),use_center_phase, &
+					    center_phase(:,stt_bse(4,ichk)),center_phase(:,stt_bse(4,jchk)), &
+					    use_center_grad,rmn,wannier_centers,ffdat)
+				end do
+				fk_active = .true.
+				nchk = nchk + 1
+				dchk = max(dchk,abs(ekern(1)-ekern(2)))
+				echk = max(echk,abs(ekern(1)))
+			end do
+		end do
+		write(300,"(A,I0,A,ES10.3,A,ES10.3,A,ES10.3)") ' WTB_KERNEL=check: ',nchk,' elements, max |old - fast| = ',dchk, &
+			', max |old| = ',echk,', relative ',dchk/max(echk,tiny(1.0))
+		write(*,"(A,I0,A,ES10.3,A,ES10.3)") ' WTB_KERNEL=check: ',nchk,' elements, max |old - fast| = ',dchk, &
+			', max |old| = ',echk
+		call flush(300)
+	end if
+
 	!go to 789
 
 
@@ -890,7 +965,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 					    vector(:,stt_bse(2,i),stt_bse(4,i)),kpt_bse(:,stt_bse(4,i)),stt_bse(:,j),eigv(stt_bse(4,j),stt_bse(3,j))&
 					    ,eigv(stt_bse(4,j),stt_bse(2,j)) &
 					    ,vector(:,stt_bse(3,j),stt_bse(4,j)),vector(:,stt_bse(2,j),stt_bse(4,j)),kpt_bse(:,stt_bse(4,j)),dft,nvec,rvec,&
-					    sk(:,:,stt_bse(4,i)),sk(:,:,stt_bse(4,j)),use_center_phase, &
+					    sk(:,:,min(stt_bse(4,i),nsk)),sk(:,:,min(stt_bse(4,j),nsk)),use_center_phase, &
 					    center_phase(:,stt_bse(4,i)),center_phase(:,stt_bse(4,j)), &
 					    use_center_grad,rmn,wannier_centers,ffdat)
 				end do
@@ -964,7 +1039,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 						    eigv(stt_bse(4,ig),stt_bse(3,ig)),eigv(stt_bse(4,ig),stt_bse(2,ig)),vector(:,stt_bse(3,ig),stt_bse(4,ig)),&
 						    vector(:,stt_bse(2,ig),stt_bse(4,ig)),kpt_bse(:,stt_bse(4,ig)),stt_bse(:,jg),eigv(stt_bse(4,jg),stt_bse(3,jg)),&
 						    eigv(stt_bse(4,jg),stt_bse(2,jg)),vector(:,stt_bse(3,jg),stt_bse(4,jg)),vector(:,stt_bse(2,jg),stt_bse(4,jg)),&
-						    kpt_bse(:,stt_bse(4,jg)),dft,nvec,rvec,sk(:,:,stt_bse(4,ig)),sk(:,:,stt_bse(4,jg)), &
+						    kpt_bse(:,stt_bse(4,jg)),dft,nvec,rvec,sk(:,:,min(stt_bse(4,ig),nsk)),sk(:,:,min(stt_bse(4,jg),nsk)), &
 						    use_center_phase,center_phase(:,stt_bse(4,ig)),center_phase(:,stt_bse(4,jg)), &
 						    use_center_grad,rmn,wannier_centers,ffdat)
 					end if

@@ -6,6 +6,7 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 
 	use bse_q_optics, only: rmn_data, rmn_bloch, center_phase_direct_vertices, center_phase_gradient_correction
 	use bse_formfactor, only: ff_data, ff_direct_vertices, ff_exchange_element
+	use bse_fastkernel, only: fk_active, fk_vertex
 
 	implicit none
 
@@ -203,11 +204,17 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 		 ! atomic gauge: the orbital centres enter as exp(i q.tau), q the
 		 ! transfer of this image, as the Wannier centres do below; without
 		 ! them C3 is broken and the E' exciton doublet of h-BN splits
+		 if (fk_active) then
+			! the same two sandwiches from the table of bse_fastkernel (band columns est(3) = c, est(2) = v)
+			vc = fk_vertex(est1(3),est2(3),img,est2(4),est1(4))
+			vv = fk_vertex(est1(2),est2(2),img,est2(4),est1(4))
+		 else
 		 call orbital_centres(w90basis,tau)
 		 call sandwich_phase(w90basis,vbc1,sk,skp,vbc2,kpt1-kpt2i,tau,vc)
 		 ! hole vertex <v k2|v k1> = conjg(<v k1|v k2>)
 		 call sandwich_phase(w90basis,vbv1,sk,skp,vbv2,kpt1-kpt2i,tau,vv)
-		 
+		 end if
+
 		 melem=  vcoul1*vc*conjg(vv)		
 		
 		case default
