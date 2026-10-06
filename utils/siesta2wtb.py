@@ -162,11 +162,59 @@ def write_rmatrix(fname, geom, X, nspin, source):
                             print('%5d%5d%5d%5d%5d' % (r1, r2, r3, s2*no+m+1, s*no+n_+1)
                                   + ''.join('%16.10f%16.10f' % (v, 0.0) for v in x), file=f)
 
+def write_tb_binary(tshs, sptype2, scs, fermi):
+    """tb-NP.bin, tb-sp.bin, tb-nc.bin or tb-soc.bin: the H(R) and S(R) that the text writers below print element by
+    element, from the sparse matrices of sisl a lattice vector at a time (wtb_tbfile.py describes the layout). The blocks
+    are those of the text writers: the up-up, up-down, down-up and down-down blocks of the spin components of sisl."""
+    import wtb_tbfile
+    suffix, ncomp = {'unpolarized': ('NP', 1), 'polarized': ('sp', 2), 'non-colinear': ('nc', 4),
+                     'spin-orbit': ('soc', 8)}[sptype2]
+    no = tshs.no
+    nimg = tshs.nsc[0]*tshs.nsc[1]*tshs.nsc[2]
+    nbasis = no if sptype2 == 'unpolarized' else 2*no
+    # the Cartesian translation of each image (Angstrom), as in the first three columns of the text file
+    rvec = np.array([tshs.geometry.o2sc(i*no) for i in range(nimg)], dtype=np.float64)
+    comp = [tshs.tocsr(c) for c in range(ncomp)]
+    over = tshs.tocsr(tshs.S_idx)
+    fname = "tb-%s.bin" % suffix
+    w = wtb_tbfile.BinaryWriter(fname, calctype(sptype2), scs, fermi, tshs.cell, rvec, nbasis)
+    z = np.zeros((no, no))
+    for i in range(nimg):
+        sl = slice(i*no, (i + 1)*no)
+        c = [m[:, sl].toarray() for m in comp]
+        s = over[:, sl].toarray()
+        if sptype2 == 'unpolarized':
+            re, im, sm = c[0], z, s
+        elif sptype2 == 'polarized':
+            re, im, sm = np.block([[c[0], z], [z, c[1]]]), np.zeros((nbasis, nbasis)), np.block([[s, z], [z, s]])
+        elif sptype2 == 'non-colinear':
+            # up-down Re = D2, Im = D3; down-up Re = D2, Im = -D3 (sisl: H_ud = D2 + i D3, H_du = D2 - i D3)
+            re = np.block([[c[0], c[2]], [c[2], c[1]]])
+            im = np.block([[z, c[3]], [-c[3], z]])
+            sm = np.block([[s, z], [z, s]])
+        else:
+            re = np.block([[c[0], c[2]], [c[6], c[1]]])
+            im = np.block([[c[4], c[3]], [c[7], c[5]]])
+            sm = np.block([[s, z], [z, s]])
+        w.add_block(re, im, sm)
+    w.close()
+    print("%s written (PARAMS_FILE; binary, %d of %d elements stored, %.1f MB)" % (
+        fname, w.stored, nimg*nbasis**2, os.path.getsize(fname)/1e6))
+
 ###############################################################################
 
 #inputfdf=  './teste-honpas/mos2.fdf'
 
 inputfdf=  sys.argv[1]  
+# siesta2wtb.py file.fdf --format binary|text: the layout of the tight-binding file tb-*.bin (binary, the default:
+# sparse, single precision, what wtb.x reads with PARAMS_FORMAT= "binary", see utils/wtb_tbfile.py) or tb-*.dat (text,
+# PARAMS_FORMAT= "text"; the same numbers, ~12 times larger, ~420 times slower to read, and written by a Python loop
+# over every element).
+tbformat = 'binary'
+if '--format' in sys.argv[2:]:
+    tbformat = sys.argv[sys.argv.index('--format') + 1]
+    if tbformat not in ('binary', 'text'):
+        sys.exit("--format takes binary or text, not '%s'" % tbformat)
 # siesta2wtb.py file.fdf --rmatrix: also write tb-*_r.dat (see position_matrix)
 rmatrix = '--rmatrix' in sys.argv[2:]
 # siesta2wtb.py file.fdf --formfactor --mesh NGX NGY NGZ [--ff-ecut 100]
@@ -240,35 +288,38 @@ if sptype2 == 'unpolarized' :
  sptype=str(tshs.spin)
 
 
- f = open("tb-NP.dat", "w")
+ if tbformat == 'text':
+  f = open("tb-NP.dat", "w")
 
- print(calctype(sptype2),file=f,flush=True)
- print(ncases(scs),file=f,flush=True)
- #os.system("grep 'siesta:         Fermi =' run.out | awk '{print $4;}' >>  honpas_tb-NP.dat")
- print(fermi,file=f)
- print(ncases(tshs.cell[0,0]),'',ncases(tshs.cell[0,1]),'',ncases(tshs.cell[0,2]),file=f)
- print(ncases(tshs.cell[1,0]),'',ncases(tshs.cell[1,1]),'',ncases(tshs.cell[1,2]),file=f)
- print(ncases(tshs.cell[2,0]),'',ncases(tshs.cell[2,1]),'',ncases(tshs.cell[2,2]),file=f)
- print(nbasis,file=f)
- print(ncell,file=f)
- print('#rcell x',' ','rcell y',' ','rcell z',' ','i',' ','j',' ','ReH',' ','ImH',' ','S',file=f)
+  print(calctype(sptype2),file=f,flush=True)
+  print(ncases(scs),file=f,flush=True)
+  #os.system("grep 'siesta:         Fermi =' run.out | awk '{print $4;}' >>  honpas_tb-NP.dat")
+  print(fermi,file=f)
+  print(ncases(tshs.cell[0,0]),'',ncases(tshs.cell[0,1]),'',ncases(tshs.cell[0,2]),file=f)
+  print(ncases(tshs.cell[1,0]),'',ncases(tshs.cell[1,1]),'',ncases(tshs.cell[1,2]),file=f)
+  print(ncases(tshs.cell[2,0]),'',ncases(tshs.cell[2,1]),'',ncases(tshs.cell[2,2]),file=f)
+  print(nbasis,file=f)
+  print(ncell,file=f)
+  print('#rcell x',' ','rcell y',' ','rcell z',' ','i',' ','j',' ','ReH',' ','ImH',' ','S',file=f)
 
- #row index j runs fastest (Wannier90 _hr order), as hamiltonian_nort_input_read expects
- for i in range(0,ncell):
-  for k in range(0,nbasis):
-   for j in range(0,nbasis):
+  #row index j runs fastest (Wannier90 _hr order), as hamiltonian_nort_input_read expects
+  for i in range(0,ncell):
+   for k in range(0,nbasis):
+    for j in range(0,nbasis):
 
-    a = tshs.geometry.o2sc(k+i*nbasis)[0]
-    b = tshs.geometry.o2sc(k+i*nbasis)[1]
-    c = tshs.geometry.o2sc(k+i*nbasis)[2]
+     a = tshs.geometry.o2sc(k+i*nbasis)[0]
+     b = tshs.geometry.o2sc(k+i*nbasis)[1]
+     c = tshs.geometry.o2sc(k+i*nbasis)[2]
 		
-    d = tshs.H[j,k+i*nbasis]
-    e = tshs.S[j,k+i*nbasis]
+     d = tshs.H[j,k+i*nbasis]
+     e = tshs.S[j,k+i*nbasis]
 	
-    print(ncases(a),' ',ncases(b), ' ',ncases(c), ' ',j+1,' ',k+1,' ',ncases(d),' ',ncases(0.00),' ',ncases(e),file=f)
+     print(ncases(a),' ',ncases(b), ' ',ncases(c), ' ',j+1,' ',k+1,' ',ncases(d),' ',ncases(0.00),' ',ncases(e),file=f)
 
 
- f.close()
+  f.close()
+ else:
+  write_tb_binary(tshs, sptype2, scs, fermi)
 
  f = open("basis_set-NP", "w")
 
@@ -318,90 +369,93 @@ if sptype2 == 'polarized' :
  f.close()
 
 
- f = open("tb-sp.dat", "w")
+ if tbformat == 'text':
+  f = open("tb-sp.dat", "w")
 
- print(calctype(sptype2),file=f,flush=True)
- print(ncases(scs),file=f,flush=True)
- #os.system("grep 'siesta:         Fermi =' run.out | awk '{print $4;}' >>  honpas_tb-sp.dat")
- print(fermi,file=f)
- print(ncases(tshs.cell[0,0]),'',ncases(tshs.cell[0,1]),'',ncases(tshs.cell[0,2]),file=f)
- print(ncases(tshs.cell[1,0]),'',ncases(tshs.cell[1,1]),'',ncases(tshs.cell[1,2]),file=f)
- print(ncases(tshs.cell[2,0]),'',ncases(tshs.cell[2,1]),'',ncases(tshs.cell[2,2]),file=f)
- print(2*nbasis,file=f)
- print(ncell,file=f)
- print('#rcell x',' ','rcell y',' ','rcell z',' ','i',' ','j',' ','ReH',' ','ImH',' ','S',file=f)
-#np.empty aloca todos os arrays vazios
-#alocando todos os arrays com 0
+  print(calctype(sptype2),file=f,flush=True)
+  print(ncases(scs),file=f,flush=True)
+  #os.system("grep 'siesta:         Fermi =' run.out | awk '{print $4;}' >>  honpas_tb-sp.dat")
+  print(fermi,file=f)
+  print(ncases(tshs.cell[0,0]),'',ncases(tshs.cell[0,1]),'',ncases(tshs.cell[0,2]),file=f)
+  print(ncases(tshs.cell[1,0]),'',ncases(tshs.cell[1,1]),'',ncases(tshs.cell[1,2]),file=f)
+  print(ncases(tshs.cell[2,0]),'',ncases(tshs.cell[2,1]),'',ncases(tshs.cell[2,2]),file=f)
+  print(2*nbasis,file=f)
+  print(ncell,file=f)
+  print('#rcell x',' ','rcell y',' ','rcell z',' ','i',' ','j',' ','ReH',' ','ImH',' ','S',file=f)
+ #np.empty aloca todos os arrays vazios
+ #alocando todos os arrays com 0
 
- S = np.zeros((ncell+1,(2*nbasis)+2,(2*nbasis)+2))
- reH = np.zeros((ncell+1,(2*nbasis)+2,(2*nbasis)+2))
- imH = np.zeros((ncell+1,(2*nbasis)+2,(2*nbasis)+2))
+  S = np.zeros((ncell+1,(2*nbasis)+2,(2*nbasis)+2))
+  reH = np.zeros((ncell+1,(2*nbasis)+2,(2*nbasis)+2))
+  imH = np.zeros((ncell+1,(2*nbasis)+2,(2*nbasis)+2))
 
- a = np.zeros((ncell+1,(2*nbasis)+2))
- b = np.zeros((ncell+1,(2*nbasis)+2))
- c = np.zeros((ncell+1,(2*nbasis)+2))
+  a = np.zeros((ncell+1,(2*nbasis)+2))
+  b = np.zeros((ncell+1,(2*nbasis)+2))
+  c = np.zeros((ncell+1,(2*nbasis)+2))
 
 
- for i in range(0,ncell):
-  for j in range(0,nbasis): 
-   for k in range(0,nbasis):
+  for i in range(0,ncell):
+   for j in range(0,nbasis): 
+    for k in range(0,nbasis):
 
-#parte up-up
+ #parte up-up
   
-    reH[i+1,j+1,k+1] = tshs[j,k+i*nbasis][0]
-    #imH[i+1,j+1,k+1] = tshs[j,k+i*nbasis][4]
-    S[i+1,j+1,k+1] = tshs.S[j,k+i*nbasis]
+     reH[i+1,j+1,k+1] = tshs[j,k+i*nbasis][0]
+     #imH[i+1,j+1,k+1] = tshs[j,k+i*nbasis][4]
+     S[i+1,j+1,k+1] = tshs.S[j,k+i*nbasis]
 
     
 
-#parte up-dn
+ #parte up-dn
 
-    #reH[i+1,(j+1),(k+1)+nbasis] = tshs[j,k+i*nbasis][2]
-    #imH[i+1,(j+1),(k+1)+nbasis] = tshs[j,k+i*nbasis][3]
-    #S[i+1,(j+1),(k+1)+nbasis] = 0.0
+     #reH[i+1,(j+1),(k+1)+nbasis] = tshs[j,k+i*nbasis][2]
+     #imH[i+1,(j+1),(k+1)+nbasis] = tshs[j,k+i*nbasis][3]
+     #S[i+1,(j+1),(k+1)+nbasis] = 0.0
 
-#parte dn-up
+ #parte dn-up
 
-    #reH[i+1,(j+1)+nbasis,(k+1)] = tshs[j,k+i*nbasis][6]
-    #imH[i+1,(j+1)+nbasis,(k+1)] = tshs[j,k+i*nbasis][7]
-    #S[i+1,(j+1)+nbasis,(k+1)] = 0.0
+     #reH[i+1,(j+1)+nbasis,(k+1)] = tshs[j,k+i*nbasis][6]
+     #imH[i+1,(j+1)+nbasis,(k+1)] = tshs[j,k+i*nbasis][7]
+     #S[i+1,(j+1)+nbasis,(k+1)] = 0.0
 
-#parte dn-dn
+ #parte dn-dn
 
-    reH[i+1,(j+1)+nbasis,(k+1)+nbasis] = tshs[j,k+i*nbasis][1]
-    #imH[i+1,(j+1)+nbasis,(k+1)+nbasis] = tshs[j,k+i*nbasis][5]
-    S[i+1,(j+1)+nbasis,(k+1)+nbasis] = tshs.S[j,k+i*nbasis]
+     reH[i+1,(j+1)+nbasis,(k+1)+nbasis] = tshs[j,k+i*nbasis][1]
+     #imH[i+1,(j+1)+nbasis,(k+1)+nbasis] = tshs[j,k+i*nbasis][5]
+     S[i+1,(j+1)+nbasis,(k+1)+nbasis] = tshs.S[j,k+i*nbasis]
     
-#escrevendo a localização dos atomos da base
+ #escrevendo a localização dos atomos da base
 
- for i in range(0,ncell):
-  for k in range(0,nbasis): 
+  for i in range(0,ncell):
+   for k in range(0,nbasis): 
 
-   a[i+1,k+1] = tshs.geometry.o2sc(k+i*nbasis)[0]
-   b[i+1,k+1] = tshs.geometry.o2sc(k+i*nbasis)[1]
-   c[i+1,k+1] = tshs.geometry.o2sc(k+i*nbasis)[2]
+    a[i+1,k+1] = tshs.geometry.o2sc(k+i*nbasis)[0]
+    b[i+1,k+1] = tshs.geometry.o2sc(k+i*nbasis)[1]
+    c[i+1,k+1] = tshs.geometry.o2sc(k+i*nbasis)[2]
 	
-   a[i+1,(k+1)+nbasis] = tshs.geometry.o2sc(k+i*nbasis)[0]
-   b[i+1,(k+1)+nbasis] = tshs.geometry.o2sc(k+i*nbasis)[1]
-   c[i+1,(k+1)+nbasis] = tshs.geometry.o2sc(k+i*nbasis)[2]
+    a[i+1,(k+1)+nbasis] = tshs.geometry.o2sc(k+i*nbasis)[0]
+    b[i+1,(k+1)+nbasis] = tshs.geometry.o2sc(k+i*nbasis)[1]
+    c[i+1,(k+1)+nbasis] = tshs.geometry.o2sc(k+i*nbasis)[2]
 	
 
- #row index j runs fastest (Wannier90 _hr order), as hamiltonian_nort_input_read expects
- for i in range(1,ncell+1):
-  for k in range(1,(2*nbasis)+1):
-   for j in range(1,(2*nbasis)+1):
+  #row index j runs fastest (Wannier90 _hr order), as hamiltonian_nort_input_read expects
+  for i in range(1,ncell+1):
+   for k in range(1,(2*nbasis)+1):
+    for j in range(1,(2*nbasis)+1):
   	
-#   a = tshs.geometry.o2sc(k+i*nbasis)[0]
-#   b = tshs.geometry.o2sc(k+i*nbasis)[1]
-#   c = tshs.geometry.o2sc(k+i*nbasis)[2]
+ #   a = tshs.geometry.o2sc(k+i*nbasis)[0]
+ #   b = tshs.geometry.o2sc(k+i*nbasis)[1]
+ #   c = tshs.geometry.o2sc(k+i*nbasis)[2]
 		
-#   d = tshs.H[j,k+i*nbasis]
-#   e = tshs.S[j,k+i*nbasis]
+ #   d = tshs.H[j,k+i*nbasis]
+ #   e = tshs.S[j,k+i*nbasis]
 	
-    print(ncases(a[i,k]),' ',ncases(b[i,k]), ' ',ncases(c[i,k]), ' ',j,' ',k,' ',ncases(reH[i,j,k]),' ',ncases(imH[i,j,k]),' ',ncases(S[i,j,k]),file=f)
+     print(ncases(a[i,k]),' ',ncases(b[i,k]), ' ',ncases(c[i,k]), ' ',j,' ',k,' ',ncases(reH[i,j,k]),' ',ncases(imH[i,j,k]),' ',ncases(S[i,j,k]),file=f)
 
 
- f.close()
+  f.close()
+ else:
+  write_tb_binary(tshs, sptype2, scs, fermi)
 
 ####################################################################
 
@@ -437,91 +491,94 @@ if sptype2 == 'non-colinear' :
  f.close()
 
 
- f = open("tb-nc.dat", "w")
+ if tbformat == 'text':
+  f = open("tb-nc.dat", "w")
 
- print(calctype(sptype2),file=f,flush=True)
- print(ncases(scs),file=f,flush=True)
- #os.system("grep 'siesta:         Fermi =' run.out | awk '{print $4;}' >>  honpas_tb-nc.dat")
- print(fermi,file=f)
- print(ncases(tshs.cell[0,0]),'',ncases(tshs.cell[0,1]),'',ncases(tshs.cell[0,2]),file=f)
- print(ncases(tshs.cell[1,0]),'',ncases(tshs.cell[1,1]),'',ncases(tshs.cell[1,2]),file=f)
- print(ncases(tshs.cell[2,0]),'',ncases(tshs.cell[2,1]),'',ncases(tshs.cell[2,2]),file=f)
- print(2*nbasis,file=f)
- print(ncell,file=f)
- print('#rcell x',' ','rcell y',' ','rcell z',' ','i',' ','j',' ','ReH',' ','ImH',' ','S',file=f)
+  print(calctype(sptype2),file=f,flush=True)
+  print(ncases(scs),file=f,flush=True)
+  #os.system("grep 'siesta:         Fermi =' run.out | awk '{print $4;}' >>  honpas_tb-nc.dat")
+  print(fermi,file=f)
+  print(ncases(tshs.cell[0,0]),'',ncases(tshs.cell[0,1]),'',ncases(tshs.cell[0,2]),file=f)
+  print(ncases(tshs.cell[1,0]),'',ncases(tshs.cell[1,1]),'',ncases(tshs.cell[1,2]),file=f)
+  print(ncases(tshs.cell[2,0]),'',ncases(tshs.cell[2,1]),'',ncases(tshs.cell[2,2]),file=f)
+  print(2*nbasis,file=f)
+  print(ncell,file=f)
+  print('#rcell x',' ','rcell y',' ','rcell z',' ','i',' ','j',' ','ReH',' ','ImH',' ','S',file=f)
 
-#np.empty aloca todos os arrays vazios
-#alocando todos os arrays com 0
+ #np.empty aloca todos os arrays vazios
+ #alocando todos os arrays com 0
 
- S = np.zeros((ncell+1,(2*nbasis)+2,(2*nbasis)+2))
- reH = np.zeros((ncell+1,(2*nbasis)+2,(2*nbasis)+2))
- imH = np.zeros((ncell+1,(2*nbasis)+2,(2*nbasis)+2))
+  S = np.zeros((ncell+1,(2*nbasis)+2,(2*nbasis)+2))
+  reH = np.zeros((ncell+1,(2*nbasis)+2,(2*nbasis)+2))
+  imH = np.zeros((ncell+1,(2*nbasis)+2,(2*nbasis)+2))
 
- a = np.zeros((ncell+1,(2*nbasis)+2))
- b = np.zeros((ncell+1,(2*nbasis)+2))
- c = np.zeros((ncell+1,(2*nbasis)+2))
+  a = np.zeros((ncell+1,(2*nbasis)+2))
+  b = np.zeros((ncell+1,(2*nbasis)+2))
+  c = np.zeros((ncell+1,(2*nbasis)+2))
 
 
- for i in range(0,ncell):
-  for j in range(0,nbasis): 
-   for k in range(0,nbasis):
+  for i in range(0,ncell):
+   for j in range(0,nbasis): 
+    for k in range(0,nbasis):
 
-#parte up-up
+ #parte up-up
   
-     reH[i+1,j+1,k+1] = tshs[j,k+i*nbasis][0]
-    #imH[i+1,j+1,k+1] = tshs[j,k+i*nbasis][4]
-     S[i+1,j+1,k+1] = tshs.S[j,k+i*nbasis]
+      reH[i+1,j+1,k+1] = tshs[j,k+i*nbasis][0]
+     #imH[i+1,j+1,k+1] = tshs[j,k+i*nbasis][4]
+      S[i+1,j+1,k+1] = tshs.S[j,k+i*nbasis]
 
     
 
-#parte up-dn (sisl: H_ud = D2 + i D3, H_du = D2 - i D3)
+ #parte up-dn (sisl: H_ud = D2 + i D3, H_du = D2 - i D3)
 
-     reH[i+1,(j+1),(k+1)+nbasis] = tshs[j,k+i*nbasis][2]
-     imH[i+1,(j+1),(k+1)+nbasis] = tshs[j,k+i*nbasis][3]
-     S[i+1,(j+1),(k+1)+nbasis] = 0.0
+      reH[i+1,(j+1),(k+1)+nbasis] = tshs[j,k+i*nbasis][2]
+      imH[i+1,(j+1),(k+1)+nbasis] = tshs[j,k+i*nbasis][3]
+      S[i+1,(j+1),(k+1)+nbasis] = 0.0
 
-#parte dn-up
+ #parte dn-up
 
-     reH[i+1,(j+1)+nbasis,(k+1)] = tshs[j,k+i*nbasis][2]
-     imH[i+1,(j+1)+nbasis,(k+1)] = -tshs[j,k+i*nbasis][3]
-     S[i+1,(j+1)+nbasis,(k+1)] = 0.0
+      reH[i+1,(j+1)+nbasis,(k+1)] = tshs[j,k+i*nbasis][2]
+      imH[i+1,(j+1)+nbasis,(k+1)] = -tshs[j,k+i*nbasis][3]
+      S[i+1,(j+1)+nbasis,(k+1)] = 0.0
 
-#parte dn-dn
+ #parte dn-dn
 
-     reH[i+1,(j+1)+nbasis,(k+1)+nbasis] = tshs[j,k+i*nbasis][1]
-    #imH[i+1,(j+1)+nbasis,(k+1)+nbasis] = tshs[j,k+i*nbasis][5]
-     S[i+1,(j+1)+nbasis,(k+1)+nbasis] = tshs.S[j,k+i*nbasis]
+      reH[i+1,(j+1)+nbasis,(k+1)+nbasis] = tshs[j,k+i*nbasis][1]
+     #imH[i+1,(j+1)+nbasis,(k+1)+nbasis] = tshs[j,k+i*nbasis][5]
+      S[i+1,(j+1)+nbasis,(k+1)+nbasis] = tshs.S[j,k+i*nbasis]
     
-#escrevendo a localização dos atomos da base
+ #escrevendo a localização dos atomos da base
 
- for i in range(0,ncell):
-  for k in range(0,nbasis): 
+  for i in range(0,ncell):
+   for k in range(0,nbasis): 
 
-   a[i+1,k+1] = tshs.geometry.o2sc(k+i*nbasis)[0]
-   b[i+1,k+1] = tshs.geometry.o2sc(k+i*nbasis)[1]
-   c[i+1,k+1] = tshs.geometry.o2sc(k+i*nbasis)[2]
+    a[i+1,k+1] = tshs.geometry.o2sc(k+i*nbasis)[0]
+    b[i+1,k+1] = tshs.geometry.o2sc(k+i*nbasis)[1]
+    c[i+1,k+1] = tshs.geometry.o2sc(k+i*nbasis)[2]
 	
-   a[i+1,(k+1)+nbasis] = tshs.geometry.o2sc(k+i*nbasis)[0]
-   b[i+1,(k+1)+nbasis] = tshs.geometry.o2sc(k+i*nbasis)[1]
-   c[i+1,(k+1)+nbasis] = tshs.geometry.o2sc(k+i*nbasis)[2]
+    a[i+1,(k+1)+nbasis] = tshs.geometry.o2sc(k+i*nbasis)[0]
+    b[i+1,(k+1)+nbasis] = tshs.geometry.o2sc(k+i*nbasis)[1]
+    c[i+1,(k+1)+nbasis] = tshs.geometry.o2sc(k+i*nbasis)[2]
 	
 
- #row index j runs fastest (Wannier90 _hr order), as hamiltonian_nort_input_read expects
- for i in range(1,ncell+1):
-  for k in range(1,(2*nbasis)+1):
-   for j in range(1,(2*nbasis)+1):
+  #row index j runs fastest (Wannier90 _hr order), as hamiltonian_nort_input_read expects
+  for i in range(1,ncell+1):
+   for k in range(1,(2*nbasis)+1):
+    for j in range(1,(2*nbasis)+1):
   	
-#   a = tshs.geometry.o2sc(k+i*nbasis)[0]
-#   b = tshs.geometry.o2sc(k+i*nbasis)[1]
-#   c = tshs.geometry.o2sc(k+i*nbasis)[2]
+ #   a = tshs.geometry.o2sc(k+i*nbasis)[0]
+ #   b = tshs.geometry.o2sc(k+i*nbasis)[1]
+ #   c = tshs.geometry.o2sc(k+i*nbasis)[2]
 		
-#   d = tshs.H[j,k+i*nbasis]
-#   e = tshs.S[j,k+i*nbasis]
+ #   d = tshs.H[j,k+i*nbasis]
+ #   e = tshs.S[j,k+i*nbasis]
 	
-    print(ncases(a[i,k]),' ',ncases(b[i,k]), ' ',ncases(c[i,k]), ' ',j,' ',k,' ',ncases(reH[i,j,k]),' ',ncases(imH[i,j,k]),' ',ncases(S[i,j,k]),file=f)
+     print(ncases(a[i,k]),' ',ncases(b[i,k]), ' ',ncases(c[i,k]), ' ',j,' ',k,' ',ncases(reH[i,j,k]),' ',ncases(imH[i,j,k]),' ',ncases(S[i,j,k]),file=f)
 
 
- f.close()
+  f.close()
+ else:
+  write_tb_binary(tshs, sptype2, scs, fermi)
 
 ####################################################################
 
@@ -556,91 +613,94 @@ if sptype2 == 'spin-orbit' :
  f.close()
 
 
- f = open("tb-soc.dat", "w")
+ if tbformat == 'text':
+  f = open("tb-soc.dat", "w")
 
- print(calctype(sptype2),file=f,flush=True)
- print(ncases(scs),file=f,flush=True)
- #os.system("grep 'siesta:         Fermi =' run.out | awk '{print $4;}' >>  honpas_tb-soc.dat")
- print(fermi,file=f)
- print(ncases(tshs.cell[0,0]),'',ncases(tshs.cell[0,1]),'',ncases(tshs.cell[0,2]),file=f)
- print(ncases(tshs.cell[1,0]),'',ncases(tshs.cell[1,1]),'',ncases(tshs.cell[1,2]),file=f)
- print(ncases(tshs.cell[2,0]),'',ncases(tshs.cell[2,1]),'',ncases(tshs.cell[2,2]),file=f)
- print(2*nbasis,file=f)
- print(ncell,file=f)
- print('#rcell x',' ','rcell y',' ','rcell z',' ','i',' ','j',' ','ReH',' ','ImH',' ','S',file=f)
+  print(calctype(sptype2),file=f,flush=True)
+  print(ncases(scs),file=f,flush=True)
+  #os.system("grep 'siesta:         Fermi =' run.out | awk '{print $4;}' >>  honpas_tb-soc.dat")
+  print(fermi,file=f)
+  print(ncases(tshs.cell[0,0]),'',ncases(tshs.cell[0,1]),'',ncases(tshs.cell[0,2]),file=f)
+  print(ncases(tshs.cell[1,0]),'',ncases(tshs.cell[1,1]),'',ncases(tshs.cell[1,2]),file=f)
+  print(ncases(tshs.cell[2,0]),'',ncases(tshs.cell[2,1]),'',ncases(tshs.cell[2,2]),file=f)
+  print(2*nbasis,file=f)
+  print(ncell,file=f)
+  print('#rcell x',' ','rcell y',' ','rcell z',' ','i',' ','j',' ','ReH',' ','ImH',' ','S',file=f)
 
-#np.empty aloca todos os arrays vazios
-#alocando todos os arrays com 0
+ #np.empty aloca todos os arrays vazios
+ #alocando todos os arrays com 0
 
- S = np.zeros((ncell+1,(2*nbasis)+2,(2*nbasis)+2))
- reH = np.zeros((ncell+1,(2*nbasis)+2,(2*nbasis)+2))
- imH = np.zeros((ncell+1,(2*nbasis)+2,(2*nbasis)+2))
+  S = np.zeros((ncell+1,(2*nbasis)+2,(2*nbasis)+2))
+  reH = np.zeros((ncell+1,(2*nbasis)+2,(2*nbasis)+2))
+  imH = np.zeros((ncell+1,(2*nbasis)+2,(2*nbasis)+2))
 
- a = np.zeros((ncell+1,(2*nbasis)+2))
- b = np.zeros((ncell+1,(2*nbasis)+2))
- c = np.zeros((ncell+1,(2*nbasis)+2))
+  a = np.zeros((ncell+1,(2*nbasis)+2))
+  b = np.zeros((ncell+1,(2*nbasis)+2))
+  c = np.zeros((ncell+1,(2*nbasis)+2))
 
 
- for i in range(0,ncell):
-  for j in range(0,nbasis): 
-   for k in range(0,nbasis):
+  for i in range(0,ncell):
+   for j in range(0,nbasis): 
+    for k in range(0,nbasis):
 
-#parte up-up
+ #parte up-up
   
-    reH[i+1,j+1,k+1] = tshs[j,k+i*nbasis][0]
-    imH[i+1,j+1,k+1] = tshs[j,k+i*nbasis][4]
-    S[i+1,j+1,k+1] = tshs.S[j,k+i*nbasis]
+     reH[i+1,j+1,k+1] = tshs[j,k+i*nbasis][0]
+     imH[i+1,j+1,k+1] = tshs[j,k+i*nbasis][4]
+     S[i+1,j+1,k+1] = tshs.S[j,k+i*nbasis]
 
     
 
-#parte up-dn
+ #parte up-dn
 
-    reH[i+1,(j+1),(k+1)+nbasis] = tshs[j,k+i*nbasis][2]
-    imH[i+1,(j+1),(k+1)+nbasis] = tshs[j,k+i*nbasis][3]
-    S[i+1,(j+1),(k+1)+nbasis] = 0.0
+     reH[i+1,(j+1),(k+1)+nbasis] = tshs[j,k+i*nbasis][2]
+     imH[i+1,(j+1),(k+1)+nbasis] = tshs[j,k+i*nbasis][3]
+     S[i+1,(j+1),(k+1)+nbasis] = 0.0
 
-#parte dn-up
+ #parte dn-up
 
-    reH[i+1,(j+1)+nbasis,(k+1)] = tshs[j,k+i*nbasis][6]
-    imH[i+1,(j+1)+nbasis,(k+1)] = tshs[j,k+i*nbasis][7]
-    S[i+1,(j+1)+nbasis,(k+1)] = 0.0
+     reH[i+1,(j+1)+nbasis,(k+1)] = tshs[j,k+i*nbasis][6]
+     imH[i+1,(j+1)+nbasis,(k+1)] = tshs[j,k+i*nbasis][7]
+     S[i+1,(j+1)+nbasis,(k+1)] = 0.0
 
-#parte dn-dn
+ #parte dn-dn
 
-    reH[i+1,(j+1)+nbasis,(k+1)+nbasis] = tshs[j,k+i*nbasis][1]
-    imH[i+1,(j+1)+nbasis,(k+1)+nbasis] = tshs[j,k+i*nbasis][5]
-    S[i+1,(j+1)+nbasis,(k+1)+nbasis] = tshs.S[j,k+i*nbasis]
+     reH[i+1,(j+1)+nbasis,(k+1)+nbasis] = tshs[j,k+i*nbasis][1]
+     imH[i+1,(j+1)+nbasis,(k+1)+nbasis] = tshs[j,k+i*nbasis][5]
+     S[i+1,(j+1)+nbasis,(k+1)+nbasis] = tshs.S[j,k+i*nbasis]
     
-#escrevendo a localização dos atomos da base
+ #escrevendo a localização dos atomos da base
 
- for i in range(0,ncell):
-  for k in range(0,nbasis): 
+  for i in range(0,ncell):
+   for k in range(0,nbasis): 
 
-   a[i+1,k+1] = tshs.geometry.o2sc(k+i*nbasis)[0]
-   b[i+1,k+1] = tshs.geometry.o2sc(k+i*nbasis)[1]
-   c[i+1,k+1] = tshs.geometry.o2sc(k+i*nbasis)[2]
+    a[i+1,k+1] = tshs.geometry.o2sc(k+i*nbasis)[0]
+    b[i+1,k+1] = tshs.geometry.o2sc(k+i*nbasis)[1]
+    c[i+1,k+1] = tshs.geometry.o2sc(k+i*nbasis)[2]
 	
-   a[i+1,(k+1)+nbasis] = tshs.geometry.o2sc(k+i*nbasis)[0]
-   b[i+1,(k+1)+nbasis] = tshs.geometry.o2sc(k+i*nbasis)[1]
-   c[i+1,(k+1)+nbasis] = tshs.geometry.o2sc(k+i*nbasis)[2]
+    a[i+1,(k+1)+nbasis] = tshs.geometry.o2sc(k+i*nbasis)[0]
+    b[i+1,(k+1)+nbasis] = tshs.geometry.o2sc(k+i*nbasis)[1]
+    c[i+1,(k+1)+nbasis] = tshs.geometry.o2sc(k+i*nbasis)[2]
 	
 
- #row index j runs fastest (Wannier90 _hr order), as hamiltonian_nort_input_read expects
- for i in range(1,ncell+1):
-  for k in range(1,(2*nbasis)+1):
-   for j in range(1,(2*nbasis)+1):
+  #row index j runs fastest (Wannier90 _hr order), as hamiltonian_nort_input_read expects
+  for i in range(1,ncell+1):
+   for k in range(1,(2*nbasis)+1):
+    for j in range(1,(2*nbasis)+1):
   	
-#   a = tshs.geometry.o2sc(k+i*nbasis)[0]
-#   b = tshs.geometry.o2sc(k+i*nbasis)[1]
-#   c = tshs.geometry.o2sc(k+i*nbasis)[2]
+ #   a = tshs.geometry.o2sc(k+i*nbasis)[0]
+ #   b = tshs.geometry.o2sc(k+i*nbasis)[1]
+ #   c = tshs.geometry.o2sc(k+i*nbasis)[2]
 		
-#   d = tshs.H[j,k+i*nbasis]
-#   e = tshs.S[j,k+i*nbasis]
+ #   d = tshs.H[j,k+i*nbasis]
+ #   e = tshs.S[j,k+i*nbasis]
 	
-    print(ncases(a[i,k]),' ',(b[i,k]), ' ',ncases(c[i,k]), ' ',j,' ',k,' ',ncases(reH[i,j,k]),' ',ncases(imH[i,j,k]),' ',ncases(S[i,j,k]),file=f)
+     print(ncases(a[i,k]),' ',(b[i,k]), ' ',ncases(c[i,k]), ' ',j,' ',k,' ',ncases(reH[i,j,k]),' ',ncases(imH[i,j,k]),' ',ncases(S[i,j,k]),file=f)
 
 
- f.close()
+  f.close()
+ else:
+  write_tb_binary(tshs, sptype2, scs, fermi)
 
 #os.system("rm run.out")	
 ####################################################################

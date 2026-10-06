@@ -97,6 +97,13 @@ def first_integer(record: str) -> int | None:
 
 
 def read_hamiltonian(path: Path, dft: str) -> HamiltonianInfo:
+    if dft == "S":
+        # PARAMS_FORMAT= "binary" (utils/wtb_tbfile.py): 'WTBTB001', version, w90basis, nvec in the first 20 bytes
+        with open(path, "rb") as handle:
+            head = handle.read(20)
+        if head[:8] == b"WTBTB001":
+            _, basis, nvec = struct.unpack("<iii", head[8:20])
+            return HamiltonianInfo(path, basis, nvec, "non-orthogonal (binary)")
     records = [line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
     if len(records) < 2:
         raise ValueError(f"Hamiltonian file {path} is too short")

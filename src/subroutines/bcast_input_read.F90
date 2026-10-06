@@ -10,6 +10,7 @@
 subroutine bcast_input_read()
 
 use input_variables
+use hamiltonian_input_variables, only: paramsformat,paramsformatset
 use mpi
 
 implicit none
@@ -96,6 +97,8 @@ call MPI_BCAST(ifactor,1,MPI_REAL,root,MPI_COMM_WORLD,ierr)
 
 ! Characters
 call MPI_BCAST(params,70,MPI_CHARACTER,root,MPI_COMM_WORLD,ierr)
+call MPI_BCAST(paramsformat,6,MPI_CHARACTER,root,MPI_COMM_WORLD,ierr)
+call MPI_BCAST(paramsformatset,1,MPI_LOGICAL,root,MPI_COMM_WORLD,ierr)
 call MPI_BCAST(orbw,70,MPI_CHARACTER,root,MPI_COMM_WORLD,ierr)
 call MPI_BCAST(kpaths,70,MPI_CHARACTER,root,MPI_COMM_WORLD,ierr)
 call MPI_BCAST(kpathsbse,70,MPI_CHARACTER,root,MPI_COMM_WORLD,ierr)

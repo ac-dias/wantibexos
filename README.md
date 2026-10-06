@@ -437,6 +437,41 @@ in-plane component is at 32 eV, and 60 eV give 95% of the shift of 100 eV, the d
 (`BSE_HAM_SAVE`) record whether the form factors and the exchange term were used. `BSE_CENTER_GRAD`
 cannot be combined with `BSE_FF`, and the q-path BSE (`BSE_BND`) keeps the centre phases.
 
+Tight-binding file layout (`DFT=S`)
+-----------------------------------
+
+`siesta2wtb.py` writes the Hamiltonian and overlap matrices `H_ij(R)`, `S_ij(R)` as a binary file,
+`tb-NP.bin`, `tb-sp.bin`, `tb-nc.bin` or `tb-soc.bin`, and `wtb.x` reads that layout by default
+(`PARAMS_FORMAT= "binary"`):
+
+```
+PARAMS_FILE= "tb-soc.bin"
+```
+
+The file holds only the non-zero elements, in single precision (what WanTiBEXOS keeps in memory;
+SIESTA's HSX file is single precision too), 20 bytes each. For the 4 x 4 x 1 MoSi2N4 supercell
+(3104 spinor states, 9 lattice vectors, 7 % of the elements non-zero) the text file of earlier
+versions is 11.5 GB, takes 2 h to write (a Python loop over every element) and 204 s to read; the
+binary file is 0.12 GB (95 times smaller), `siesta2wtb.py` takes a few seconds and `wtb.x` 0.3 s to read
+it (unit cell, 194 states: 246 MB and 7.6 MB). The text layout stays available:
+
+- `siesta2wtb.py file.fdf --format text` writes `tb-*.dat` as before (byte for byte), and `wtb.x` reads
+  it as text (`PARAMS_FORMAT= "text"` says so and skips the note);
+- `python3 utils/wtb_tbfile.py convert tb-soc.dat tb-soc.bin` (or the reverse) converts a file of
+  either layout, `wtb_tbfile.py info file` prints its header, and `wtb_tbfile.read_tb(file)` reads
+  either layout from Python (`H[image, row, column]`, `S`, the lattice and the translations). The
+  binary layout is described at the top of `utils/wtb_tbfile.py`.
+
+Without the keyword the binary layout is expected, and a file that is not binary (it lacks `WTBTB001`
+at its start) is read as text, with a note on the screen, so that existing inputs keep working. With
+`PARAMS_FORMAT` set the layout is strict: a file of the other layout stops the run with a message.
+`PARAMS_FORMAT` applies to `DFT= "S"` only; the files of `DFT= "W"` (Wannier90's `seedname_hr.dat`
+layout) stay text, and `paoflow2wtb.py` still writes the text `tb-NP.dat`. The text file has 13
+significant digits: converting it to binary can change an element by one unit in the last place of
+single precision (one element of 5.5 million in a spin-polarized test, one of 87 million in the
+supercell, none in the others); the writer rounds the values of SIESTA once.
+`utils/bse_memory_estimate.py` reads the header of either layout.
+
 Citing
    ------
 

@@ -24,6 +24,11 @@ module hamiltonian_input_variables
 
 	character(len=4) :: systype
 
+	! layout of PARAMS_FILE for DFT= "S": "binary" (default; siesta2wtb.py, utils/wtb_tbfile.py) or "text". Without the
+	! keyword a file that is not binary is read as text; with it the layout must be the one that was asked for
+	character(len=6) :: paramsformat = 'binary'
+	logical :: paramsformatset = .false.
+
 	!real :: lc
 	
 	!variables for spin polarized hamiltonian w90
@@ -48,6 +53,13 @@ subroutine hamiltonian_nort_input_read(unidade,inputfile)
 	integer :: flagaux
 	character(len=70) :: inputfile,charflag
 	character(len=1) :: cflag
+
+	! PARAMS_FORMAT= "binary" (default): the file of siesta2wtb.py in its binary layout, utils/wtb_tbfile.py
+	call params_format_check(inputfile)
+	if (trim(paramsformat) .eq. 'binary') then
+		call hamiltonian_nort_binary_read(unidade,inputfile)
+		return
+	end if
 
 	OPEN(UNIT=unidade, FILE= inputfile,STATUS='old', IOSTAT=erro)
     	if (erro/=0) stop "Error opening non-ortogonal hr input file"
@@ -86,6 +98,144 @@ subroutine hamiltonian_nort_input_read(unidade,inputfile)
 	ffactor = 1  	
     	
 end subroutine hamiltonian_nort_input_read
+
+subroutine params_format_check(inputfile)
+
+	! PARAMS_FILE of DFT= "S" has the layout of PARAMS_FORMAT: say so, instead of failing inside a read statement
+	use hamiltonian_input_variables, only: paramsformat,paramsformatset
+	implicit none
+	character(len=70) :: inputfile
+	character(len=8) :: magic
+	integer :: iun,erro,ios
+	logical :: isbin
+
+	if (trim(paramsformat) .ne. 'binary' .and. trim(paramsformat) .ne. 'text') then
+		write(*,*) 'PARAMS_FORMAT= ',trim(paramsformat),': it must be "binary" (default) or "text"'
+		error stop 'PARAMS_FORMAT'
+	end if
+	open(newunit=iun, file=trim(inputfile), access='stream', form='unformatted', status='old', action='read', iostat=erro)
+	if (erro/=0) error stop "Error opening non-ortogonal hr input file"
+	magic = ''
+	read(iun,iostat=ios) magic
+	close(iun)
+	isbin = (ios == 0 .and. magic == 'WTBTB001')
+	if (isbin .and. trim(paramsformat) .eq. 'text') then
+		write(*,*) trim(inputfile),' is a binary tight-binding file (WTBTB001):'
+		write(*,*) 'set PARAMS_FORMAT= "binary" (the default)'
+		error stop 'PARAMS_FORMAT'
+	else if (.not. isbin .and. trim(paramsformat) .eq. 'binary') then
+		if (paramsformatset) then
+			write(*,*) 'PARAMS_FORMAT= "binary", but ',trim(inputfile),' is not a binary tight-binding file.'
+			write(*,*) 'A text file needs PARAMS_FORMAT= "text"; python3 utils/wtb_tbfile.py convert file.dat file.bin'
+			write(*,*) 'makes the binary one.'
+			error stop 'PARAMS_FORMAT'
+		else
+			! the default is the binary layout, but the text file of earlier versions is still read, as text
+			paramsformat = 'text'
+			write(*,*) trim(inputfile),' is not a binary tight-binding file: read as text.'
+			write(*,*) 'PARAMS_FORMAT= "text" says so; utils/wtb_tbfile.py convert makes the (much smaller) binary file.'
+		end if
+	end if
+
+end subroutine params_format_check
+
+subroutine hamiltonian_nort_binary_read(unidade,inputfile)
+
+	! binary layout of utils/wtb_tbfile.py: header, the translations of the lattice vectors, then for each of them the
+	! elements that are not zero (row, column, Re H, Im H, S); the arrays are those of the text reader
+	use hamiltonian_input_variables
+	implicit none
+	integer,parameter :: i8 = selected_int_kind(18)
+	integer :: unidade,erro,version,i,p
+	character(len=70) :: inputfile
+	character(len=8) :: magic
+	real,dimension(3,3) :: rtmp
+	integer(i8) :: nnz
+	integer,allocatable,dimension(:) :: rows,cols
+	real,allocatable,dimension(:) :: re,im,sv
+
+	OPEN(UNIT=unidade, FILE= trim(inputfile), ACCESS='stream', FORM='unformatted', STATUS='old', ACTION='read', IOSTAT=erro)
+	if (erro/=0) error stop "Error opening non-ortogonal hr input file"
+
+	read(unidade,iostat=erro) magic,version,w90basis,nvec,scs,efermi,systype,rtmp
+	if (erro/=0 .or. magic /= 'WTBTB001') error stop "Error reading the header of the binary tight-binding file"
+	if (version /= 1) then
+		write(*,*) 'binary tight-binding file of version ',version,': this wtb.x reads version 1'
+		error stop 'PARAMS_FORMAT'
+	end if
+	rlat = transpose(rtmp)
+
+	allocate(ffactor(nvec))
+	allocate(rvec(nvec,3),hopmatrices(nvec,w90basis,w90basis),ihopmatrices(nvec,w90basis,w90basis))
+	allocate(ovp(nvec,w90basis,w90basis))
+
+	read(unidade,iostat=erro) rvec
+	if (erro/=0) error stop "Error reading the lattice vectors of the binary tight-binding file"
+
+	hopmatrices = 0.0
+	ihopmatrices = 0.0
+	ovp = 0.0
+
+	do i=1,nvec
+
+		read(unidade,iostat=erro) nnz
+		if (erro/=0) error stop "Error reading the binary tight-binding file"
+		allocate(rows(nnz),cols(nnz),re(nnz),im(nnz),sv(nnz))
+		read(unidade,iostat=erro) rows
+		if (erro==0) read(unidade,iostat=erro) cols
+		if (erro==0) read(unidade,iostat=erro) re
+		if (erro==0) read(unidade,iostat=erro) im
+		if (erro==0) read(unidade,iostat=erro) sv
+		if (erro/=0) error stop "Error reading the binary tight-binding file (it ends inside a lattice vector)"
+		do p=1,nnz
+			hopmatrices(i,rows(p),cols(p)) = re(p)
+			ihopmatrices(i,rows(p),cols(p)) = im(p)
+			ovp(i,rows(p),cols(p)) = sv(p)
+		end do
+		deallocate(rows,cols,re,im,sv)
+
+	end do
+
+	close(unidade)
+	ffactor = 1
+
+end subroutine hamiltonian_nort_binary_read
+
+subroutine params_header_read(inputfile,stype,scissor,fermi,rl)
+
+	! the header of PARAMS_FILE that the main program needs (calculation type, scissor, Fermi level, lattice vectors as
+	! the rows of rl) in either layout; the text layout is also that of DFT= "W", which has no binary layout
+	use hamiltonian_input_variables, only: paramsformat
+	implicit none
+	character(len=70) :: inputfile
+	character(len=4) :: stype
+	real :: scissor,fermi
+	real,dimension(3,3) :: rl
+	integer,parameter :: unit_hdr = 2055
+	integer :: erro,version,nb,nv
+	character(len=8) :: magic
+	real,dimension(3,3) :: rtmp
+
+	call params_format_check(inputfile)
+	if (trim(paramsformat) .eq. 'binary') then
+		OPEN(UNIT=unit_hdr, FILE= trim(inputfile), ACCESS='stream', FORM='unformatted', STATUS='old', ACTION='read', IOSTAT=erro)
+		if (erro/=0) error stop "Error opening hamiltonian input file (main)"
+		read(unit_hdr,iostat=erro) magic,version,nb,nv,scissor,fermi,stype,rtmp
+		if (erro/=0) error stop "Error reading the header of the binary tight-binding file"
+		rl = transpose(rtmp)
+	else
+		OPEN(UNIT=unit_hdr, FILE= inputfile,STATUS='old', IOSTAT=erro)
+		if (erro/=0) stop "Error opening hamiltonian input file (main)"
+		read(unit_hdr,*) stype
+		read(unit_hdr,*) scissor
+		read(unit_hdr,*) fermi
+		read(unit_hdr,*) rl(1,1),rl(1,2),rl(1,3)
+		read(unit_hdr,*) rl(2,1),rl(2,2),rl(2,3)
+		read(unit_hdr,*) rl(3,1),rl(3,2),rl(3,3)
+	end if
+	close(unit_hdr)
+
+end subroutine params_header_read
 
 subroutine hamiltonian_input_read(unidade,inputfile)
 	
@@ -364,6 +514,7 @@ subroutine input_read
 	character(len=70) :: a,b
 	character(len=70) :: add
 	integer :: erro
+	integer :: ic
 
 
 	!default values
@@ -935,6 +1086,15 @@ subroutine input_read
 
 		params = b
 
+	case ("PARAMS_FORMAT=")
+
+		paramsformat = adjustl(b)
+		paramsformatset = .true.
+		do ic=1,len(paramsformat)
+			if (paramsformat(ic:ic) >= 'A' .and. paramsformat(ic:ic) <= 'Z') &
+				paramsformat(ic:ic) = achar(iachar(paramsformat(ic:ic)) + 32)
+		end do
+
 	case ("KPATH_FILE=")
 
 		kpaths = b
@@ -1144,6 +1304,7 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
         use mpi
 #endif
 	use input_variables, only: tpv_kappa,tpv_qtf,tpv_hwp,tpv_thickness,tpv_alpha
+	use hamiltonian_input_variables, only: paramsformat
 	implicit none
 	integer :: unitout
 
@@ -1245,6 +1406,7 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	write(unitout,"(A8,A70)") "OUTPUT= ", outputfolder
 	write(unitout,"(A11,A70)") "CALC_DATA= ", calcparms
 	write(unitout,"(A13,A70)") "PARAMS_FILE= ", params
+	write(unitout,"(A15,A6)") "PARAMS_FORMAT= ", paramsformat
 	write(unitout,"(A12,A70)") "KPATH_FILE= ", kpaths
 	write(unitout,"(A11,A70)") "KPATH_BSE= ", kpathsbse
 	write(unitout,"(A7,A70)") "ORB_W= ", orbw

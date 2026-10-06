@@ -112,6 +112,10 @@ program main
     end if
 
     if (Node == 0 ) then
+	if (dft .eq. "S") then
+	! PARAMS_FORMAT= "binary" (default) or "text"
+	call params_header_read(params,systype,scs,efermi,rlatv)
+	else
 	OPEN(UNIT=2055, FILE= params,STATUS='unknown', IOSTAT=erro)
     	if (erro/=0) stop "Error opening hamiltonian input file (main)"	
 
@@ -126,6 +130,7 @@ program main
 	read(2055,*) rlatv(2,1),rlatv(2,2),rlatv(2,3)
 	read(2055,*) rlatv(3,1),rlatv(3,2),rlatv(3,3)
     close(2055)
+	end if
     endif
 
 #ifdef MPI
