@@ -126,9 +126,20 @@ dipoles between basis orbitals
 <c|D|v>,    D_ab(R) = <a,0| r - (t_a+t_b+R)/2 |b,R>,
 ```
 
-which makes the vertex the full interband dipole of the basis. For monolayer
-h-BN they lower the strength of the gap transition at K by 11% and bring the
-momentum matrix elements to within 1.5% of plane-wave (Quantum ESPRESSO)
+With `Delta=Ec-Ev` and `eta=SIGMA`, the combined vertex is
+`[<c|dH/dk-(Ec+Ev)/2 dS/dk|v> + i Delta <c|D|v>]/(Delta+i eta)`.
+Both terms use the same regularization. At `SIGMA=0` and a nonzero gap this
+is `i` times the full interband dipole of the basis. The eigenvalues in the
+numerator use the original Hamiltonian reference: the code restores the
+header Fermi energy and `FERMI_SHIFT` after undoing the conduction-band
+scissor and temperature gap correction. Occupations and output transition
+energies retain their shifted values. `SIGMA` regularizes optical matrix
+elements; `CSHIFT` separately broadens spectral peaks. Earlier versions
+passed `CSHIFT` to these optical vertices in all four application paths;
+set `SIGMA` to the former `CSHIFT` value to retain that regularization.
+
+For monolayer h-BN the residual dipoles lower the strength of the gap
+transition at K by 11% and bring the momentum matrix elements to within 1.5% of plane-wave (Quantum ESPRESSO)
 values with the same pseudopotentials, from 8-21% too large. The kernel does
 not change, and neither do exciton energies.
 
@@ -436,6 +447,41 @@ in-plane component is at 32 eV, and 60 eV give 95% of the shift of 100 eV, the d
 `--ff-ecut`. `BSE_FF_ECUT` converges the term with one file. Saved Hamiltonians
 (`BSE_HAM_SAVE`) record whether the form factors and the exchange term were used. `BSE_CENTER_GRAD`
 cannot be combined with `BSE_FF`, and the q-path BSE (`BSE_BND`) keeps the centre phases.
+
+Optical conductivity: units and scope
+------------------------------------
+
+The `ipa_opt_cond_*` and `bse_opt_cond_*` files contain Gaussian conductivity
+in **s^-1**, using `exp(-i omega t)` and
+`sigma_ab = -i omega (epsilon_ab-delta_ab)/(4 pi)`. The vacuum subtraction
+is one for diagonal and circular channels, and zero for Cartesian cross
+terms (`xy`, `xz`, `yz`). Convert to SI S/m with
+`sigma_SI = 4 pi epsilon_0 sigma_Gaussian`. For an in-plane 2D sheet represented
+by a vacuum supercell, multiply this SI volume response by the perpendicular
+cell height in metres to obtain sheet conductivity in S.
+
+The dielectric construction uses positive-frequency resonant poles and
+omits intraband/Drude terms. `RNMD= T` (the internal `renorm` flag) modifies the imaginary dielectric
+part independently of the real part, so the pair is not generally
+Kramers-Kronig consistent. These outputs are therefore a resonant interband
+approximation, with additional limits on static and broadband complex
+conductivity. Scalar refractive-index, reflectivity, loss and transmittance
+formulas applied to individual Cartesian cross terms are not tensor optical
+observables; the conductivity correction does not change those columns.
+
+Use `RNMD= F` to disable that clipping. The built-in spectra use the total
+Lorentzian half-width `CSHIFT + 10*(Emax-Emin)/Ntransitions`, so equal
+`CSHIFT` values alone do not fix the width across meshes or band windows.
+
+Run `make -j1 test-nonorth-optics` for the independent two-orbital vertex and
+conductivity regression. Use an isolated `BUILD_DIR` when another build is
+present, since Fortran module files depend on the compiler and build flags.
+`python3 tests/test_nonorth_optics_app.py /absolute/path/to/wtb.x` exercises
+IPA, `OPT_BZ`, and zero/finite-temperature BSE with a generated insulating
+model: Fermi-reference and scissor invariance, separation of `SIGMA` from
+`CSHIFT`, and the dielectric-to-conductivity conversion. It keeps each run
+in a fresh temporary directory for inspection. This checks implementation
+consistency; it does not replace material-specific convergence tests.
 
 Tight-binding file layout (`DFT=S`)
 -----------------------------------

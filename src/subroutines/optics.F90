@@ -216,7 +216,9 @@ subroutine optsp_s(ev,vv,ec,vc,kx,ky,kz,sme,w90basis,nvec,rvec,&
 
 	! optsp for the non-orthogonal DFT=S basis:
 	!   hr = <c| dH/dk - (ec+ev)/2 dS/dk |v> / (ec - ev + i sme)
-	! with both derivatives in the atomic gauge (hlm_s). For the
+	! with ec and ev in the original input Hamiltonian reference (undo
+	! efermi+fermishift, scissor and temperature gap corrections at the caller).
+	! Both derivatives are in the atomic gauge (hlm_s). For the
 	! S-orthonormal eigenvectors of CHEGV, i<c|dH - (ec+ev)/2 dS|v> =
 	! (ev-ec) A_cv, A_cv = i<c|S dv> + (i/2)<c|dS|v> the (Hermitian)
 	! interband connection, up to the dipoles <a|r-(r_a+r_b)/2|b> between
@@ -232,25 +234,26 @@ subroutine optsp_s(ev,vv,ec,vc,kx,ky,kz,sme,w90basis,nvec,rvec,&
 end subroutine optsp_s
 
 
-subroutine optdip_s(vv,vc,kx,ky,kz,w90basis,nvec,rvec,dmat,hrx,hry,hrz)
+subroutine optdip_s(delta,sme,vv,vc,kx,ky,kz,w90basis,nvec,rvec,dmat,hrx,hry,hrz)
 
 	implicit none
 
 	integer :: i
 	integer :: w90basis,nvec
-	real :: kx,ky,kz
+	real :: kx,ky,kz,delta,sme
 	real,dimension(nvec,3) :: rvec
 	real,dimension(nvec,w90basis,w90basis,3) :: dmat
 	complex,dimension(w90basis) :: vc,vv
 	complex :: hrx,hry,hrz
-	complex :: ph,drx,dry,drz
+	complex :: ph,drx,dry,drz,factor
 	complex,dimension(w90basis,w90basis) :: dx,dy,dz
 
-	! Adds to the DFT=S optical vertex hr of optsp_s the dipoles between basis
-	! orbitals, i<c|D(k)|v>, D(k) = sum_R exp(ik.R) D(R) with D(R) from
-	! rmn_dfts_dipoles (between the lattice-gauge eigenvectors the orbital-
-	! centre phases of the atomic gauge cancel). hr is then i r_cv, r_cv the
-	! interband dipole of the basis without approximation.
+	! Add the residual position term with the same regularization as optsp_s:
+	!   hr = [M_mid + i delta <c|D(k)|v>] / (delta + i sme).
+	! delta is the DFT gap before scissor/temperature corrections. At sme=0
+	! this recovers i r_cv for nondegenerate interband transitions. D(R) comes
+	! from rmn_dfts_dipoles; the lattice-gauge eigenvectors need no extra phases.
+	factor = cmplx(0.0,1.0)*delta/cmplx(delta,sme)
 	dx = 0.0
 	dy = 0.0
 	dz = 0.0
@@ -263,9 +266,9 @@ subroutine optdip_s(vv,vc,kx,ky,kz,w90basis,nvec,rvec,dmat,hrx,hry,hrz)
 	call sandwich(w90basis,vc,dx,vv,drx)
 	call sandwich(w90basis,vc,dy,vv,dry)
 	call sandwich(w90basis,vc,dz,vv,drz)
-	hrx = hrx+cmplx(0.0,1.0)*drx
-	hry = hry+cmplx(0.0,1.0)*dry
-	hrz = hrz+cmplx(0.0,1.0)*drz
+	hrx = hrx+factor*drx
+	hry = hry+factor*dry
+	hrz = hrz+factor*drz
 
 end subroutine optdip_s
 

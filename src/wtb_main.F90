@@ -306,6 +306,8 @@ program main
 	
 	end if
 
+	! SIGMA (sme) regularizes the optical vertices; CSHIFT broadens spectra
+	! in the dielectric postprocessing below. Keep the two inputs separate.
 	!calculo optica
 	
 	if (bse) then
@@ -316,7 +318,7 @@ program main
 		if (temp .eq. 0.0) then
 		
 		call bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
-		     ebse0,ebsef,numbse,cshift,ktol,params,kpaths,kpathsbse,orbw,ediel, &
+		     ebse0,ebsef,numbse,sme,ktol,params,kpaths,kpathsbse,orbw,ediel, &
 		     exc,mshift,coultype,ez,w,r0,lc,rk,meshtype,bsewf,excwf0,excwff,dtfull,cpol,tmcoef,&
 		     nocpf,fermishift,bsealgo,bsehamwrite,bsehamread,bsehamfile,dft,mag)
 
@@ -328,7 +330,7 @@ program main
 			else
 
 			call bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
-		     ebse0,ebsef,numbse,cshift,ktol,params,kpaths,kpathsbse,orbw,ediel, &
+		     ebse0,ebsef,numbse,sme,ktol,params,kpaths,kpathsbse,orbw,ediel, &
 		     exc,mshift,coultype,ez,w,r0,lc,rk,meshtype,bsewf,excwf0,excwff,dtfull,&
 		     cpol,tmcoef,st,phavg,ta,temp,nocpf,fermishift,bsealgo,bsehamwrite,bsehamread,bsehamfile,dft,mag)
 		
@@ -376,7 +378,7 @@ program main
 	if (spdiel .and. Node == 0) then
 
 	call spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
-		     cshift,params,exc,mshift,tmcoef,nocpf,fermishift,mag)
+		     sme,params,exc,mshift,tmcoef,nocpf,fermishift,mag)
 
 	 write(2077,*) "Single particle dielectric calculation finished"
          call flush(2077)
@@ -387,7 +389,7 @@ program main
 	if (sppolbz) then
 
 	 call spoptpolbz(nthreads,dft,outputfolder,ngrid,nc,nv, &
-		     cshift,params,exc,mshift,nocpf,fermishift,meshgen,mag)
+		     sme,params,exc,mshift,nocpf,fermishift,meshgen,mag)
 
 	 write(2077,*) "Single particle optical activity in BZ finished"
          call flush(2077)

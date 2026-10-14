@@ -111,8 +111,8 @@ subroutine bseoptprop(numbse,outputfolder,tmax,ni,ns)
 	write(400,*) "#","  ","energy","  ","xx","  ","yy","  ","zz","  ","xy","  ","xz","  ","yz"
 	write(500,*) "#","  ","energy","  ","xx","  ","yy","  ","zz","  ","xy","  ","xz","  ","yz"
 	write(600,*) "#","  ","energy","  ","xx","  ","yy","  ","zz","  ","xy","  ","xz","  ","yz"	
-	write(700,*) "#","  ","energy","  ","xx","  ","yy","  ","zz","  ","xy","  ","xz","  ","yz"
-	write(800,*) "#","  ","energy","  ","xx","  ","yy","  ","zz","  ","xy","  ","xz","  ","yz"	
+	write(700,*) "#","  ","energy","  ","xx","  ","yy","  ","zz","  ","xy","  ","xz","  ","yz","  (s^-1)"
+	write(800,*) "#","  ","energy","  ","xx","  ","yy","  ","zz","  ","xy","  ","xz","  ","yz","  (s^-1)"
 	write(900,*) "#","  ","energy","  ","xx","  ","yy","  ","zz","  ","xy","  ","xz","  ","yz"
 	write(901,*) "#","  ","energy","  ","xx","  ","yy","  ","zz","  ","xy","  ","xz","  ","yz"
 	write(902,*) "#","  ","energy","  ","xx","  ","yy","  ","zz","  ","xy","  ","xz","  ","yz"
@@ -164,12 +164,12 @@ subroutine bseoptprop(numbse,outputfolder,tmax,ni,ns)
 
 		write(600,"(7F15.6)") energy(i),els_xx,els_yy,els_zz,els_xy,els_xz,els_yz		
 
-		call optcondcalc(rxx(i),ixx(i),energy(i),optc_xx)
-		call optcondcalc(ryy(i),iyy(i),energy(i),optc_yy)
-		call optcondcalc(rzz(i),izz(i),energy(i),optc_zz)
-		call optcondcalc(rxy(i),ixy(i),energy(i),optc_xy)
-		call optcondcalc(rxz(i),ixz(i),energy(i),optc_xz)
-		call optcondcalc(ryz(i),iyz(i),energy(i),optc_yz)										
+		call optcondcalc(rxx(i),ixx(i),energy(i),1.0,optc_xx)
+		call optcondcalc(ryy(i),iyy(i),energy(i),1.0,optc_yy)
+		call optcondcalc(rzz(i),izz(i),energy(i),1.0,optc_zz)
+		call optcondcalc(rxy(i),ixy(i),energy(i),0.0,optc_xy)
+		call optcondcalc(rxz(i),ixz(i),energy(i),0.0,optc_xz)
+		call optcondcalc(ryz(i),iyz(i),energy(i),0.0,optc_yz)
 
 		write(700,"(1F15.6,6E15.6)") energy(i),real(optc_xx),real(optc_yy),real(optc_zz),real(optc_xy),real(optc_xz),real(optc_yz)
 		write(800,"(1F15.6,6E15.6)") energy(i),aimag(optc_xx),aimag(optc_yy),aimag(optc_zz),aimag(optc_xy),aimag(optc_xz),aimag(optc_yz)

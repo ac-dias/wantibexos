@@ -315,6 +315,8 @@ end do
 		end if
 	end if
 
+	! DFT=S vertices also restore efermi+fermishift: H and dH/dk retain
+	! the input energy reference, while eigsys returns Fermi-shifted energies.
 	! The optical vertex takes the DFT energies: the scissor scs, which eigsys
 	! adds to the conduction bands, shifts the transition energies (BSE
 	! diagonal, IPA spectra) but not the eigenvectors, so it must not change
@@ -334,8 +336,8 @@ end do
 	do i=1,dimrpa
 
 		if (dft .eq. "S") then
-		call optspbz_s(eigv(j,stto(j,i,2)),vector(j,stto(j,i,2),:),&
-		     eigv(j,stto(j,i,3))-scs,vector(j,stto(j,i,3),:),&
+		call optspbz_s(eigv(j,stto(j,i,2))+efermi+fermishift,vector(j,stto(j,i,2),:),&
+		     eigv(j,stto(j,i,3))-scs+efermi+fermishift,vector(j,stto(j,i,3),:),&
 		     kpt(j,1),kpt(j,2),kpt(j,3),&
 		     w90basis,nvec,rvec,hopmatrices,ihopmatrices,ovp,tau,&
 		     hxsp,hysp,hzsp)
@@ -351,7 +353,8 @@ end do
 		hxsp= hxsp/(cmplx(eigv(j,stto(j,i,3))-scs-eigv(j,stto(j,i,2)),sme))
 		hysp= hysp/(cmplx(eigv(j,stto(j,i,3))-scs-eigv(j,stto(j,i,2)),sme))
 		hzsp= hzsp/(cmplx(eigv(j,stto(j,i,3))-scs-eigv(j,stto(j,i,2)),sme))
-		if (use_dmat) call optdip_s(vector(j,stto(j,i,2),:),vector(j,stto(j,i,3),:),&
+		if (use_dmat) call optdip_s(eigv(j,stto(j,i,3))-scs-eigv(j,stto(j,i,2)),sme,&
+		     vector(j,stto(j,i,2),:),vector(j,stto(j,i,3),:),&
 		     kpt(j,1),kpt(j,2),kpt(j,3),w90basis,nvec,rvec,dmat,hxsp,hysp,hzsp)
 		if (use_rmn .and. .not. use_dmat) then
 			call rmn_apply_q0_optical_correction(rmn,kpt(j,:),rlat,&

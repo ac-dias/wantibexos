@@ -113,6 +113,14 @@ $(BUILD_DIR)/tests/test_bse_q0_optics.x: tests/test_bse_q0_optics.F90 $(BUILD_DI
 	@mkdir -p $(dir $@)
 	$(FOR) $< $(BUILD_DIR)/subroutines/bse_q_optics.o -o $@ $(L_FLAGS)
 
+# Link the real optics, generalized eigensolver and postprocessor routines.
+test-nonorth-optics: $(BUILD_DIR)/tests/test_nonorth_optics.x
+	@$(BUILD_DIR)/tests/test_nonorth_optics.x
+
+$(BUILD_DIR)/tests/test_nonorth_optics.x: tests/test_nonorth_optics.F90 $(LIB_FILE) makefile.inc
+	@mkdir -p $(dir $@)
+	$(FOR) $< -o $@ -L$(BUILD_DIR) -lwtb $(L_FLAGS)
+
 $(MAIN_EXEC): $(LIB_FILE) $(MAIN_SRC) makefile.inc
 	@mkdir -p $(BIN_DIR)
 	@echo "--- Linking Main Executable: $@ ---"
@@ -176,4 +184,4 @@ clean:
 
 #$(BUILD_DIR)/subroutines/coulomb_pot.o: $(BUILD_DIR)/subroutines/ei_spec_funct.o
 
-.PHONY: all pp clean main test-bse-q-optics test-bse-q0-optics
+.PHONY: all pp clean main test-bse-q-optics test-bse-q0-optics test-nonorth-optics

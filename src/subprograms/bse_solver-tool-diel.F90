@@ -726,6 +726,8 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 		 ! $omp parallel default(shared) private(i,w90basis,rlat,rvec,hopmatrices,ihopmatrices)
 
+	! DFT=S vertices also restore efermi+fermishift: H and dH/dk retain
+	! the input energy reference, while eigsys returns Fermi-shifted energies.
 	! The optical vertex takes the DFT energies: the scissor scs, which eigsys
 	! adds to the conduction bands, shifts the transition energies (BSE
 	! diagonal, IPA spectra) but not the eigenvectors, so it must not change
@@ -739,12 +741,13 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		!ev = eigv(stt(i,4),stt(i,2))
 
 		if (dft .eq. "S") then
-		call optsp_s(eigv(stt(i,4),stt(i,2)),vector(:,stt(i,2),stt(i,4)),&
-		     eigv(stt(i,4),stt(i,3))-scs,vector(:,stt(i,3),stt(i,4)),&
+		call optsp_s(eigv(stt(i,4),stt(i,2))+efermi+fermishift,vector(:,stt(i,2),stt(i,4)),&
+		     eigv(stt(i,4),stt(i,3))-scs+efermi+fermishift,vector(:,stt(i,3),stt(i,4)),&
 		     kpt(stt(i,4),1),kpt(stt(i,4),2),kpt(stt(i,4),3),sme,&
 		     w90basis,nvec,rvec,hopmatrices,ihopmatrices,ovp,tau,&
 		     hrx(i),hry(i),hrz(i))
-		if (use_dmat) call optdip_s(vector(:,stt(i,2),stt(i,4)),vector(:,stt(i,3),stt(i,4)),&
+		if (use_dmat) call optdip_s(eigv(stt(i,4),stt(i,3))-scs-eigv(stt(i,4),stt(i,2)),sme,&
+		     vector(:,stt(i,2),stt(i,4)),vector(:,stt(i,3),stt(i,4)),&
 		     kpt(stt(i,4),1),kpt(stt(i,4),2),kpt(stt(i,4),3),w90basis,nvec,rvec,dmat,&
 		     hrx(i),hry(i),hrz(i))
 		else

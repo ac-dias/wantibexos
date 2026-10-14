@@ -35,12 +35,12 @@ end subroutine reflectance
 
 
 
-subroutine optcondcalc(e1,e2,efoton,optcond)
+subroutine optcondcalc(e1,e2,efoton,delta_ab,optcond)
 
 	implicit none
 	
 	complex,parameter :: imag=cmplx(0.0,-1.0)
-	real :: e1,e2
+	real :: e1,e2,delta_ab
 	complex :: edielec,optcond
 	real,parameter :: hbar = 6.582119569E-16 !hbar planck's constant
 	real,parameter:: pi=acos(-1.)
@@ -52,7 +52,9 @@ subroutine optcondcalc(e1,e2,efoton,optcond)
 	
 	aux = omega/(4.0*pi)
 	
-	optcond = imag*aux*(edielec-1.0)
+	! Gaussian conductivity (s^-1), exp(-i omega t) convention.
+	! delta_ab=1 for diagonal/circular channels and 0 for Cartesian cross terms.
+	optcond = imag*aux*(edielec-delta_ab)
 
 
 end subroutine optcondcalc
