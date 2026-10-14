@@ -99,6 +99,10 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	character(len=16) :: kmode
 	logical :: fastk,kcheck
 	integer :: nsk,fk_maxnimg,ipass,ichk,jchk,nchk,stepchk
+	! sk(:,:,isk) and sk(:,:,jsk) of the two states: the index min(k,nsk) is set before
+	! the call, since gfortran 15 bounds-checks (-fcheck=bounds) an array section passed
+	! as an argument with a MIN subscript against a temporary that is never set
+	integer :: isk,jsk
 	double precision :: fk_t1,fk_t2
 	complex,dimension(2) :: ekern
 	real :: dchk,echk
@@ -872,6 +876,8 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		echk = 0.0
 		do ichk=1,dimbse,stepchk
 			do jchk=ichk,dimbse,stepchk
+				isk = min(stt_bse(4,ichk),nsk)
+				jsk = min(stt_bse(4,jchk),nsk)
 				do ipass=1,2
 					fk_active = (ipass == 2)
 					ekern(ipass)= matrizelbse(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,rlat,stt_bse(:,ichk),&
@@ -880,7 +886,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 					    kpt_bse(:,stt_bse(4,ichk)),stt_bse(:,jchk),eigv(stt_bse(4,jchk),stt_bse(3,jchk)),&
 					    eigv(stt_bse(4,jchk),stt_bse(2,jchk)),vector(:,stt_bse(3,jchk),stt_bse(4,jchk)),&
 					    vector(:,stt_bse(2,jchk),stt_bse(4,jchk)),kpt_bse(:,stt_bse(4,jchk)),dft,nvec,rvec,&
-					    sk(:,:,min(stt_bse(4,ichk),nsk)),sk(:,:,min(stt_bse(4,jchk),nsk)),use_center_phase, &
+					    sk(:,:,isk),sk(:,:,jsk),use_center_phase, &
 					    center_phase(:,stt_bse(4,ichk)),center_phase(:,stt_bse(4,jchk)), &
 					    use_center_grad,rmn,wannier_centers,ffdat)
 				end do
@@ -960,15 +966,17 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 			end if
 		else
 			hbse=0.0
-			!$omp parallel do private(i,j) schedule(dynamic)
+			!$omp parallel do private(i,j,isk,jsk) schedule(dynamic)
 			do j=1,dimbse
+				jsk = min(stt_bse(4,j),nsk)
 				do i=1,j
+					isk = min(stt_bse(4,i),nsk)
 					hbse(i,j)= matrizelbse(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,rlat,stt_bse(:,i),eigv(stt_bse(4,i)&
 					    ,stt_bse(3,i)),eigv(stt_bse(4,i),stt_bse(2,i)),vector(:,stt_bse(3,i),stt_bse(4,i)),&
 					    vector(:,stt_bse(2,i),stt_bse(4,i)),kpt_bse(:,stt_bse(4,i)),stt_bse(:,j),eigv(stt_bse(4,j),stt_bse(3,j))&
 					    ,eigv(stt_bse(4,j),stt_bse(2,j)) &
 					    ,vector(:,stt_bse(3,j),stt_bse(4,j)),vector(:,stt_bse(2,j),stt_bse(4,j)),kpt_bse(:,stt_bse(4,j)),dft,nvec,rvec,&
-					    sk(:,:,min(stt_bse(4,i),nsk)),sk(:,:,min(stt_bse(4,j),nsk)),use_center_phase, &
+					    sk(:,:,isk),sk(:,:,jsk),use_center_phase, &
 					    center_phase(:,stt_bse(4,i)),center_phase(:,stt_bse(4,j)), &
 					    use_center_grad,rmn,wannier_centers,ffdat)
 				end do
@@ -1024,11 +1032,13 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 			end if
 		else
 			hbse_dist = 0.0
-			!$omp parallel do private(li,ig,lj,jg) schedule(dynamic)
+			!$omp parallel do private(li,ig,lj,jg,isk,jsk) schedule(dynamic)
 			do lj=1,locc
 				jg = indxl2g(lj, nb, mycol, 0, npcol)
+				jsk = min(stt_bse(4,jg),nsk)
 				do li=1,locr
 					ig = indxl2g(li, mb, myrow, 0, nprow)
+					isk = min(stt_bse(4,ig),nsk)
 
 #ifdef ELPA
 					! ELPA requires the complete Hermitian matrix.  PCHEEV only
@@ -1042,7 +1052,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 						    eigv(stt_bse(4,ig),stt_bse(3,ig)),eigv(stt_bse(4,ig),stt_bse(2,ig)),vector(:,stt_bse(3,ig),stt_bse(4,ig)),&
 						    vector(:,stt_bse(2,ig),stt_bse(4,ig)),kpt_bse(:,stt_bse(4,ig)),stt_bse(:,jg),eigv(stt_bse(4,jg),stt_bse(3,jg)),&
 						    eigv(stt_bse(4,jg),stt_bse(2,jg)),vector(:,stt_bse(3,jg),stt_bse(4,jg)),vector(:,stt_bse(2,jg),stt_bse(4,jg)),&
-						    kpt_bse(:,stt_bse(4,jg)),dft,nvec,rvec,sk(:,:,min(stt_bse(4,ig),nsk)),sk(:,:,min(stt_bse(4,jg),nsk)), &
+						    kpt_bse(:,stt_bse(4,jg)),dft,nvec,rvec,sk(:,:,isk),sk(:,:,jsk), &
 						    use_center_phase,center_phase(:,stt_bse(4,ig)),center_phase(:,stt_bse(4,jg)), &
 						    use_center_grad,rmn,wannier_centers,ffdat)
 					end if
