@@ -1,3 +1,8 @@
+! Normal incidence on a sheet of thickness tmax (m) and conductivity optcond
+! (Gaussian, s^-1) between media of indices ni (incidence) and ns (substrate):
+! t = 2 ni/(ni+ns+aux2), r = (ni-ns-aux2)/(ni+ns+aux2), aux2 = 4 pi tmax optcond/c,
+! T = (ns/ni)|t|^2 and R = |r|^2, so 1-R-T = 4 ni Re(aux2)/|ni+ns+aux2|^2.
+
 subroutine transmittance(ni,ns,tmax,optcond,tr)
 
 	implicit none
@@ -10,13 +15,15 @@ subroutine transmittance(ni,ns,tmax,optcond,tr)
 	
 	aux2 = (4.0*pi)*tmax*optcond/clight
 	
-	traux = (2.0)/(ni+ns+aux2)
+	traux = (2.0*ni)/(ni+ns+aux2)
 	
-	tr = ns*traux*conjg(traux)
+	tr = (ns/ni)*traux*conjg(traux)
 
 end subroutine transmittance
 
 subroutine reflectance(ni,ns,tmax,optcond,ref)
+
+	implicit none
 
 	real :: ni,ns,tmax,ref
 	complex :: optcond,refaux,aux2
@@ -26,7 +33,7 @@ subroutine reflectance(ni,ns,tmax,optcond,ref)
 	
 	aux2 = (4.0*pi)*tmax*optcond/clight
 	
-	refaux = (ni-ns-aux2)/(1.0+ns+aux2)
+	refaux = (ni-ns-aux2)/(ni+ns+aux2)
 	
 	ref = refaux*conjg(refaux)
 

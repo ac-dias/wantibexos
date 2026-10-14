@@ -12,6 +12,12 @@ program test_nonorth_optics
   logical :: ok
   character(len=256) :: message
   real, parameter :: tol=2.e-6, pi=acos(-1.), hbar=6.582119569e-16
+  ! Sheet optics: incidence/substrate indices, thickness (m), conductivities (s^-1).
+  real, parameter :: nis(4)=[1.,1.5,1.33,2.], nss(4)=[1.47,1.,1.47,3.5], thick=1.252e-9
+  complex, parameter :: sigs(4)=[(0.,0.),(0.,3.e15),(0.,-3.e15),(2.e15,1.e15)]
+  real :: tr, rf, tr2, rf2
+  complex :: y
+  integer :: j
 
   rv=0.; rv(2,:)=[1.,0.3,-0.2]; rv(3,:)=-rv(2,:)
   lat=0.; do i=1,3; lat(i,i)=1.; end do
@@ -89,6 +95,26 @@ program test_nonorth_optics
   call optcondcalc(2.3,0.7,2.,1.,cond)
   call check(abs(cond/cmplx(0.,-2./(4.*pi*hbar))-cmplx(1.3,0.7))<tol, &
     'nonzero diagonal/circular conductivity')
+
+  ! Normal incidence on a sheet: 1-R-T = 4 ni Re(y)/|ni+ns+y|^2, y = 4 pi d sigma/c,
+  ! which vanishes for a lossless sheet, and T is the same from either side.
+  do i=1,size(nis)
+    do j=1,size(sigs)
+      call transmittance(nis(i),nss(i),thick,sigs(j),tr)
+      call reflectance(nis(i),nss(i),thick,sigs(j),rf)
+      call transmittance(nss(i),nis(i),thick,sigs(j),tr2)
+      call reflectance(nss(i),nis(i),thick,sigs(j),rf2)
+      y=4.*pi*thick*sigs(j)/3.e8
+      call check(abs(tr-4.*nis(i)*nss(i)/abs(nis(i)+nss(i)+y)**2)<tol,'sheet transmittance')
+      call check(abs(rf-abs((nis(i)-nss(i)-y)/(nis(i)+nss(i)+y))**2)<tol,'sheet reflectance')
+      call check(abs(1.-rf-tr-4.*nis(i)*real(y)/abs(nis(i)+nss(i)+y)**2)<tol,'sheet absorptance')
+      call check(abs(tr-tr2)<tol,'sheet transmittance from either side')
+      if (real(sigs(j))==0.) then
+        call check(abs(1.-rf-tr)<tol,'lossless sheet energy conservation')
+        call check(abs(1.-rf2-tr2)<tol,'lossless sheet energy conservation, reversed')
+      end if
+    end do
+  end do
   print '(A)', 'nonorth_optics: PASS'
 contains
   subroutine check(condition,label)

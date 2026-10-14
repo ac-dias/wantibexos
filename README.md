@@ -460,6 +460,15 @@ terms (`xy`, `xz`, `yz`). Convert to SI S/m with
 by a vacuum supercell, multiply this SI volume response by the perpendicular
 cell height in metres to obtain sheet conductivity in S.
 
+The `*_transmittance`, `*_reflectance` and `*_absorptance` files treat the
+material as a sheet of thickness `THMAX` (m; default 5E-06, also the maximum
+thickness of `PCE`) at normal incidence from a medium of index `NI` (default 1)
+onto a substrate of index `NS` (default 1.47). With `y = 4 pi THMAX sigma/c`,
+`T = 4 NI NS/|NI+NS+y|^2`, `R = |NI-NS-y|^2/|NI+NS+y|^2` and
+`A = 1-R-T = 4 NI Re(y)/|NI+NS+y|^2`, so a lossless sheet (`Re sigma = 0`)
+does not absorb and `T` is the same from either side. For a vacuum supercell,
+`THMAX` is the cell height.
+
 The dielectric construction uses positive-frequency resonant poles and
 omits intraband/Drude terms. `RNMD= T` (the internal `renorm` flag) modifies the imaginary dielectric
 part independently of the real part, so the pair is not generally
@@ -473,13 +482,14 @@ Use `RNMD= F` to disable that clipping. The built-in spectra use the total
 Lorentzian half-width `CSHIFT + 10*(Emax-Emin)/Ntransitions`, so equal
 `CSHIFT` values alone do not fix the width across meshes or band windows.
 
-Run `make -j1 test-nonorth-optics` for the independent two-orbital vertex and
-conductivity regression. Use an isolated `BUILD_DIR` when another build is
+Run `make -j1 test-nonorth-optics` for the independent two-orbital vertex,
+conductivity and sheet-optics regression. Use an isolated `BUILD_DIR` when another build is
 present, since Fortran module files depend on the compiler and build flags.
 `python3 tests/test_nonorth_optics_app.py /absolute/path/to/wtb.x` exercises
 IPA, `OPT_BZ`, and zero/finite-temperature BSE with a generated insulating
 model: Fermi-reference and scissor invariance, separation of `SIGMA` from
-`CSHIFT`, and the dielectric-to-conductivity conversion. It keeps each run
+`CSHIFT`, the dielectric-to-conductivity conversion, and the sheet
+transmittance, reflectance and absorptance at `NI` and `NS` other than 1. It keeps each run
 in a fresh temporary directory for inspection. This checks implementation
 consistency; it does not replace material-specific convergence tests.
 

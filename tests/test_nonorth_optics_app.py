@@ -74,6 +74,27 @@ def conductivity(path, prefix):
                       [[d[2], -(d[1]-delta)]], label)
 
 
+def sheet(path, prefix, ni, ns, thmax):
+    # Normal incidence on a sheet of conductivity sigma between indices ni and ns.
+    clight = 3.e8
+    for suffix, channels in [('', ['xx', 'yy', 'zz', 'xy', 'xz', 'yz']), ('-pol', ['x', 'y', 'z', 'sp', 'sm'])]:
+        real = rows(path/f'{prefix}_opt_cond_real{suffix}.dat')
+        imag = rows(path/f'{prefix}_opt_cond_imag{suffix}.dat')
+        tr, rf, ab = (rows(path/f'{prefix}_{name}{suffix}.dat') for name in ['transmittance', 'reflectance', 'absorptance'])
+        assert len(tr) == len(rf) == len(ab) == len(real), (prefix, suffix, 'sheet row count')
+        assert all(len(r) == len(channels)+1 for r in tr+rf+ab), (prefix, suffix, 'sheet columns')
+        for j, component in enumerate(channels, start=1):
+            label = f'{prefix} sheet {component}'
+            for re, im, t, r, a in zip(real, imag, tr, rf, ab):
+                close([[t[0], r[0], a[0]]], [[re[0]]*3], label+' energy alignment')
+                y = 4*math.pi*thmax*complex(re[j], im[j])/clight
+                d = abs(ni+ns+y)**2
+                close([[t[j], r[j], a[j]]], [[4*ni*ns/d, abs(ni-ns-y)**2/d, 4*ni*y.real/d]], label)
+                # Diagonal and circular channels are passive; cross terms are not observables.
+                if component not in ('xy', 'xz', 'yz'):
+                    assert a[j] > -3.e-6, (label, a[j])
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('executable', type=Path)
@@ -96,7 +117,7 @@ def main():
                   'IPA': 'T' if mode == 'ipa' else 'F', 'OPT_BZ': 'T' if mode == 'bz' else 'F',
                   'BSE': 'T' if mode.startswith('bse') else 'F', 'BSE_ALGO': 'cheev',
                   'DTDIAG': 'T', 'CPOL': 'T', 'RNMD': 'F', 'SPEC': 'F' if mode == 'bz' else 'T',
-                  'ENSPECI': 1., 'ENSPECF': 4., 'NESPEC': 9,
+                  'ENSPECI': 1., 'ENSPECF': 4., 'NESPEC': 9, 'THMAX': 1.e-8, 'NI': 1.33, 'NS': 1.6,
                   'TEMP': 80 if mode == 'bse-temp' else 0, 'TA': '"VE"', 'ST': .2, 'PHAVG': .005}
         if dipoles:
             config['BSE_CENTER_FILE'] = '"position.dat"'
@@ -111,8 +132,10 @@ def main():
         data = {name: rows(out/name) for name in names}
         if mode != 'bz':
             conductivity(out, 'ipa')
+            sheet(out, 'ipa', 1.33, 1.6, 1.e-8)
             if mode.startswith('bse'):
                 conductivity(out, 'bse')
+                sheet(out, 'bse', 1.33, 1.6, 1.e-8)
         runs += 1
         return data
 
