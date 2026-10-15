@@ -363,6 +363,104 @@ function v2diel(kpt1,kpt2,ediel,rlat,ngrid,tolr)
 end function 
 
 
+! Strictly 2D, constant-screened 1/q interaction as V2DL, with q=0
+! replaced by its average over the reciprocal sampling cell. The cell is
+! the parallelogram spanned by b1/N1 and b2/N2, not an equal-area disk.
+function v2dlavg(kpt1,kpt2,ediel,ngrid,rlat,tolr)
+
+	implicit none
+	real,parameter :: cic=-0.0904756e3 ! -e^2/(2 epsilon_0), eV Angstrom
+	real,dimension(3) :: kpt1,kpt2,ediel
+	real,dimension(3,3) :: rlat
+	integer,dimension(3) :: ngrid
+	real :: tolr,modk,vc,vbz,ed,v2dlavg
+	real(kind=8) :: v2davg_cell
+	logical,save :: cache_valid=.false.
+	integer,dimension(2),save :: cached_ngrid=0
+	real,dimension(2,3),save :: cached_rlat=0.0
+	real,save :: cached_value=0.0
+
+	call modvec(kpt1,kpt2,modk)
+	call vcell2D(rlat,vc)
+	vbz=1.0/((ngrid(1)*ngrid(2)*ngrid(3))*vc)
+	ed=ediel(2)
+	if (modk .lt. tolr) then
+		! Cache only the bare 1/q average. EDIEL, N3 and the third lattice
+		! vector do not enter its geometry; screening/normalization are below.
+		!$omp critical (v2dlavg_cache)
+		if (.not. cache_valid) then
+			cached_value=real(v2davg_cell(ngrid,rlat))
+			cached_ngrid=ngrid(1:2)
+			cached_rlat=rlat(1:2,:)
+			cache_valid=.true.
+		else if (any(cached_ngrid .ne. ngrid(1:2)) .or. &
+		         any(cached_rlat .ne. rlat(1:2,:))) then
+			cached_value=real(v2davg_cell(ngrid,rlat))
+			cached_ngrid=ngrid(1:2)
+			cached_rlat=rlat(1:2,:)
+		end if
+		v2dlavg=vbz*(cic/ed)*cached_value
+		!$omp end critical (v2dlavg_cache)
+	else
+		v2dlavg=vbz*(cic/ed)*(1.0/modk)
+	end if
+
+end function v2dlavg
+
+
+! Exact average of 1/|q| over the centered 2D mesh parallelogram.
+! In its plane, div(q/|q|)=1/|q|. On an edge the outward-normal
+! component of q is its constant distance h from the origin, so the
+! boundary integral is h [asinh(t_end/h)-asinh(t_start/h)]. This removes
+! the integrable singularity without a quadrature or a radial cutoff.
+pure real(kind=8) function v2davg_cell(ngrid,rlat)
+
+	implicit none
+	integer,intent(in) :: ngrid(3)
+	real,intent(in) :: rlat(3,3)
+	real(kind=8),parameter :: pi=acos(-1.0d0)
+	real(kind=8) :: a1(3),a2(3),normal(3),b1(3),b2(3)
+	real(kind=8) :: dq1(3),dq2(3),vertex(3,4),va(3),vb(3),edge(3),crossab(3)
+	real(kind=8) :: area,cell_area,length,h,t_start,t_end,integral
+	integer :: i,j
+
+	a1=dble(rlat(1,:))
+	a2=dble(rlat(2,:))
+	normal=(/a1(2)*a2(3)-a1(3)*a2(2),a1(3)*a2(1)-a1(1)*a2(3), &
+	          a1(1)*a2(2)-a1(2)*a2(1)/)
+	area=sqrt(sum(normal*normal))
+	normal=normal/area
+	! Reciprocal vectors intrinsic to the sheet, independent of the vacuum.
+	b1=(2.0d0*pi/area)*(/a2(2)*normal(3)-a2(3)*normal(2), &
+	    a2(3)*normal(1)-a2(1)*normal(3),a2(1)*normal(2)-a2(2)*normal(1)/)
+	b2=(2.0d0*pi/area)*(/normal(2)*a1(3)-normal(3)*a1(2), &
+	    normal(3)*a1(1)-normal(1)*a1(3),normal(1)*a1(2)-normal(2)*a1(1)/)
+	dq1=b1/dble(ngrid(1))
+	dq2=b2/dble(ngrid(2))
+	vertex(:,1)=0.5d0*(dq1+dq2)
+	vertex(:,2)=0.5d0*(-dq1+dq2)
+	vertex(:,3)=-vertex(:,1)
+	vertex(:,4)=-vertex(:,2)
+	cell_area=(2.0d0*pi)**2/(area*dble(ngrid(1))*dble(ngrid(2)))
+	integral=0.0d0
+	do i=1,4
+		j=mod(i,4)+1
+		va=vertex(:,i)
+		vb=vertex(:,j)
+		edge=vb-va
+		length=sqrt(sum(edge*edge))
+		crossab=(/va(2)*vb(3)-va(3)*vb(2),va(3)*vb(1)-va(1)*vb(3), &
+		           va(1)*vb(2)-va(2)*vb(1)/)
+		h=sqrt(sum(crossab*crossab))/length
+		t_start=dot_product(va,edge)/length
+		t_end=dot_product(vb,edge)/length
+		integral=integral+h*(asinh(t_end/h)-asinh(t_start/h))
+	end do
+	v2davg_cell=integral/cell_area
+
+end function v2davg_cell
+
+
 !potencial 2D truncado (DOI: 10.1103/PhysRevB.73.205119)
 
 function v2dt(kpt1,kpt2,ngrid,rlat,tolr)

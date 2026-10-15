@@ -117,6 +117,13 @@ $(BUILD_DIR)/tests/test_bse_q0_optics.x: tests/test_bse_q0_optics.F90 $(BUILD_DI
 test-nonorth-optics: $(BUILD_DIR)/tests/test_nonorth_optics.x
 	@$(BUILD_DIR)/tests/test_nonorth_optics.x
 
+test-v2dlavg: $(BUILD_DIR)/tests/test_v2dlavg.x
+	@$(BUILD_DIR)/tests/test_v2dlavg.x
+
+$(BUILD_DIR)/tests/test_v2dlavg.x: tests/test_v2dlavg.F90 $(LIB_FILE) makefile.inc
+	@mkdir -p $(dir $@)
+	$(FOR) $< -o $@ -L$(BUILD_DIR) -lwtb $(L_FLAGS)
+
 $(BUILD_DIR)/tests/test_nonorth_optics.x: tests/test_nonorth_optics.F90 $(LIB_FILE) makefile.inc
 	@mkdir -p $(dir $@)
 	$(FOR) $< -o $@ -L$(BUILD_DIR) -lwtb $(L_FLAGS)
@@ -184,4 +191,4 @@ clean:
 
 #$(BUILD_DIR)/subroutines/coulomb_pot.o: $(BUILD_DIR)/subroutines/ei_spec_funct.o
 
-.PHONY: all pp clean main test-bse-q-optics test-bse-q0-optics test-nonorth-optics
+.PHONY: all pp clean main test-bse-q-optics test-bse-q0-optics test-nonorth-optics test-v2dlavg

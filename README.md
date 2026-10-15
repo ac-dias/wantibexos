@@ -174,6 +174,25 @@ back to 1 at large |q|, and without F the interaction would return to the
 point-charge Coulomb there. F = 1 for d = 0. The q = 0 term is W averaged over
 the k-grid cell around q = 0.
 
+`COULOMB_POT= V2DLAVG` is the strictly 2D constant-screened interaction
+`W(q) = e^2 / (2 eps0 A Nk EDIEL |q|)`. For nonzero q it is identical to
+`V2DL`; at q = 0 it averages `1/|q|` over the centered parallelogram spanned
+by the two reciprocal sampling steps `b1/NGX` and `b2/NGY`. The average is
+evaluated analytically by an edge integral, including nonorthogonal cells
+and unequal mesh dimensions. Its normalization uses the sheet area, so it
+does not depend on the vacuum height. `EDIEL= 1` gives the bare interaction;
+other positive values divide both the nonzero-q and averaged q = 0 terms.
+The direct term uses `EDIEL`, while finite-Q exchange is bare; the bare
+form-factor exchange selected by `BSE_FF_EXCHANGE` is unchanged. The option
+is available for zero- and finite-temperature BSE at Q = 0 and finite Q.
+For neutral free-standing graphene, a constant Dirac-RPA factor can be used
+as `EDIEL` (about 5.16 with the saved PBE/TZP Dirac velocity); this remains
+a long-wavelength model rather than full-band screened `W_GG'(q)`.
+Run `make -j1 test-v2dlavg` for independent cell-integral, screening,
+normalization, cache, and zero-/finite-Q kernel checks. The application
+regression is `python3 tests/test_v2dlavg_app.py /path/to/wtb.x`; optionally
+pass `--baseline /path/to/old-wtb.x` and `--mpiexec /path/to/mpiexec`.
+
 `V2DTAVG` and `V2DAVGTPV` instead use the cell-averaged truncated Coulomb
 `4 pi e^2 (1 - exp(-|q| L/2)) / (V q^2)`, divided by `EDIEL` or by eps_TPV(q):
 the point-charge 2D Coulomb times `2 (1 - exp(-|q| L/2)) / (|q| L)`, as if the
