@@ -55,6 +55,7 @@ call MPI_BCAST(tpv_qtf,1,MPI_REAL,root,MPI_COMM_WORLD,ierr)
 call MPI_BCAST(tpv_hwp,1,MPI_REAL,root,MPI_COMM_WORLD,ierr)
 call MPI_BCAST(tpv_thickness,1,MPI_REAL,root,MPI_COMM_WORLD,ierr)
 call MPI_BCAST(tpv_alpha,1,MPI_REAL,root,MPI_COMM_WORLD,ierr)
+call MPI_BCAST(tpv_cellavg,1,MPI_LOGICAL,root,MPI_COMM_WORLD,ierr)
 call MPI_BCAST(bseffecut,1,MPI_REAL,root,MPI_COMM_WORLD,ierr)
 
 call MPI_BCAST(st,1,MPI_REAL,root,MPI_COMM_WORLD,ierr)

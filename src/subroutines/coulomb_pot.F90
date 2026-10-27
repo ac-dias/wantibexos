@@ -813,7 +813,7 @@ function v2dtpv(kpt1,kpt2,ediel,ngrid,rlat,tolr)
 	! q = 0 (v2dtpv_cell).
 
 	use dielectric_models, only: trolle_pedersen_veniard_dielectric,tpv_slab_coulomb_factor
-	use input_variables, only: tpv_kappa,tpv_qtf,tpv_hwp,tpv_thickness,tpv_alpha
+	use input_variables, only: tpv_kappa,tpv_qtf,tpv_hwp,tpv_thickness,tpv_alpha,tpv_cellavg
 
 	implicit none
 
@@ -824,7 +824,7 @@ function v2dtpv(kpt1,kpt2,ediel,ngrid,rlat,tolr)
 	real,dimension(3) :: ediel
 	real :: tolr,modk,vc,vbz,ed
 	real :: v2dtpv
-	real(kind=8) :: v2dtpv_cell
+	real(kind=8) :: v2dtpv_cell,v2dtpv_near
 	logical :: bare
 	logical,save :: cache_valid=.false.
 	integer,dimension(3),save :: cached_ngrid=(/0,0,0/)
@@ -851,6 +851,9 @@ function v2dtpv(kpt1,kpt2,ediel,ngrid,rlat,tolr)
 		end if
 		v2dtpv=vbz*cic*cached_value
 		!$omp end critical (v2dtpv_cache)
+	else if (tpv_cellavg .and. (.not. bare)) then
+		! screened direct term on the k-grid: W averaged over the cell around q (TPV_CELLAVG)
+		v2dtpv=vbz*cic*real(v2dtpv_near(kpt1-kpt2,ngrid,rlat,ediel))
 	else
 		if (bare) then
 			ed=1.0
@@ -862,6 +865,106 @@ function v2dtpv(kpt1,kpt2,ediel,ngrid,rlat,tolr)
 	end if
 
 end function v2dtpv
+
+
+real(kind=8) function v2dtpv_near(qv,ngrid,rlat,ediel)
+
+	! F(|q| d)/(|q| eps_TPV(|q|)) averaged over the k-grid cell centred at q (TPV_CELLAVG = T), the parallelogram spanned
+	! by b1/N1 and b2/N2 that v2dtpv_cell uses around q = 0; the cells tile the plane, so the k sum then approximates the
+	! integral of W instead of sampling it. With EDIEL_T = EDIEL_B = 1 the screening is 1 at q -> 0, W is the bare 1/q for
+	! |q| below ~ 1/r0 (r0 = (kappa-1) d / 2) and ~ 1/(r0 q^2) above, a crossover the point values of the first shells of
+	! cells do not resolve (error ~ 1/N). Gauss-Legendre 8 x 8 on the cells up to 3.5 cells from the centre (Chebyshev
+	! distance in cell units), 4 x 4 up to 10.5 cells, the point value farther out. The cell around q = 0 is v2dtpv_cell.
+
+	use dielectric_models, only: trolle_pedersen_veniard_dielectric,tpv_slab_coulomb_factor
+	use input_variables, only: tpv_kappa,tpv_qtf,tpv_hwp,tpv_thickness,tpv_alpha
+
+	implicit none
+
+	real,dimension(3),intent(in) :: qv
+	integer,dimension(3),intent(in) :: ngrid
+	real,dimension(3,3),intent(in) :: rlat
+	real,dimension(3),intent(in) :: ediel
+	real(kind=8),parameter,dimension(8) :: x8=(/ &
+		-0.9602898564975363d0,-0.7966664774136267d0,-0.5255324099163290d0,-0.1834346424956498d0, &
+		 0.1834346424956498d0, 0.5255324099163290d0, 0.7966664774136267d0, 0.9602898564975363d0 /)
+	real(kind=8),parameter,dimension(8) :: w8=(/ &
+		0.1012285362903763d0,0.2223810344533745d0,0.3137066458778873d0,0.3626837833783620d0, &
+		0.3626837833783620d0,0.3137066458778873d0,0.2223810344533745d0,0.1012285362903763d0 /)
+	real(kind=8),parameter,dimension(4) :: x4=(/ &
+		-0.8611363115940526d0,-0.3399810435848563d0,0.3399810435848563d0,0.8611363115940526d0 /)
+	real(kind=8),parameter,dimension(4) :: w4=(/ &
+		0.3478548451374538d0,0.6521451548625461d0,0.6521451548625461d0,0.3478548451374538d0 /)
+	real(kind=8),parameter :: pi=acos(-1.0d0)
+	real(kind=8),dimension(3) :: a1,a2,a3,cross23,cross31,b1,b2,dq1,dq2,qq,q0
+	real(kind=8),dimension(8) :: xg,wg
+	real(kind=8) :: volume,g11,g22,g12,det,c1,c2,cell,u,v,wt,qn,ed,acc
+	integer :: npts,i,j
+
+	q0=dble(qv)
+	a1=dble(rlat(1,:))
+	a2=dble(rlat(2,:))
+	a3=dble(rlat(3,:))
+	cross23(1)=a2(2)*a3(3)-a2(3)*a3(2)
+	cross23(2)=a2(3)*a3(1)-a2(1)*a3(3)
+	cross23(3)=a2(1)*a3(2)-a2(2)*a3(1)
+	volume=a1(1)*cross23(1)+a1(2)*cross23(2)+a1(3)*cross23(3)
+	cross31(1)=a3(2)*a1(3)-a3(3)*a1(2)
+	cross31(2)=a3(3)*a1(1)-a3(1)*a1(3)
+	cross31(3)=a3(1)*a1(2)-a3(2)*a1(1)
+	b1=(2.0d0*pi/volume)*cross23
+	b2=(2.0d0*pi/volume)*cross31
+	dq1=b1/dble(ngrid(1))
+	dq2=b2/dble(ngrid(2))
+
+	! position of q in cell units: q = c1 dq1 + c2 dq2
+	g11=sum_dot(dq1,dq1)
+	g22=sum_dot(dq2,dq2)
+	g12=sum_dot(dq1,dq2)
+	det=g11*g22-g12*g12
+	c1=(sum_dot(q0,dq1)*g22-sum_dot(q0,dq2)*g12)/det
+	c2=(sum_dot(q0,dq2)*g11-sum_dot(q0,dq1)*g12)/det
+	cell=max(abs(c1),abs(c2))
+
+	if (cell .le. 3.5d0) then
+		npts=8
+		xg=x8
+		wg=w8
+	else if (cell .le. 10.5d0) then
+		npts=4
+		xg(1:4)=x4
+		wg(1:4)=w4
+	else
+		qn=sqrt(sum_dot(q0,q0))
+		ed=dble(trolle_pedersen_veniard_dielectric(real(qn),tpv_thickness,tpv_kappa, &
+		        tpv_qtf,tpv_hwp,ediel(1),ediel(3),tpv_alpha))
+		v2dtpv_near=dble(tpv_slab_coulomb_factor(real(qn),tpv_thickness))/(qn*ed)
+		return
+	end if
+
+	acc=0.0d0
+	do i=1,npts
+		u=0.5d0*xg(i)
+		do j=1,npts
+			v=0.5d0*xg(j)
+			wt=0.25d0*wg(i)*wg(j)
+			qq=q0+u*dq1+v*dq2
+			qn=sqrt(sum_dot(qq,qq))
+			ed=dble(trolle_pedersen_veniard_dielectric(real(qn),tpv_thickness,tpv_kappa, &
+			        tpv_qtf,tpv_hwp,ediel(1),ediel(3),tpv_alpha))
+			acc=acc+wt*dble(tpv_slab_coulomb_factor(real(qn),tpv_thickness))/(qn*ed)
+		end do
+	end do
+	v2dtpv_near=acc
+
+contains
+
+	pure real(kind=8) function sum_dot(p,r)
+		real(kind=8),dimension(3),intent(in) :: p,r
+		sum_dot=p(1)*r(1)+p(2)*r(2)+p(3)*r(3)
+	end function sum_dot
+
+end function v2dtpv_near
 
 
 real(kind=8) function v2dtpv_cell(ngrid,rlat,ediel,bare)

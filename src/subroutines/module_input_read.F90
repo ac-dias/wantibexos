@@ -458,6 +458,7 @@ module input_variables
 
 	real :: ez,w,lc,r0
 	real :: tpv_kappa,tpv_qtf,tpv_hwp,tpv_thickness,tpv_alpha
+	logical :: tpv_cellavg
 	real :: st,phavg,temp
 	
 	real :: ctemp,tmax,eg,egd
@@ -652,6 +653,8 @@ subroutine input_read
 	tpv_hwp = 1.0
 	tpv_thickness = 0.0
 	tpv_alpha = 1.5
+	! W averaged over every k-grid cell near q = 0 (not only the q = 0 cell): off = the old point values
+	tpv_cellavg = .false.
 
 	st = 0.0 
 	phavg = 0.0 
@@ -951,6 +954,10 @@ subroutine input_read
 	case ("TPV_ALPHA=")
 
 		read(b,*) tpv_alpha
+
+	case ("TPV_CELLAVG=")
+
+		read(b,*) tpv_cellavg
 
 	case ("TMCOEF=")
 	
@@ -1303,7 +1310,7 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 #ifdef MPI
         use mpi
 #endif
-	use input_variables, only: tpv_kappa,tpv_qtf,tpv_hwp,tpv_thickness,tpv_alpha
+	use input_variables, only: tpv_kappa,tpv_qtf,tpv_hwp,tpv_thickness,tpv_alpha,tpv_cellavg
 	use hamiltonian_input_variables, only: paramsformat
 	implicit none
 	integer :: unitout
@@ -1494,6 +1501,7 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	write(unitout,"(A9,F8.4)") "TPV_HWP= ",tpv_hwp
 	write(unitout,"(A15,F8.4)") "TPV_THICKNESS= ",tpv_thickness
 	write(unitout,"(A11,F8.4)") "TPV_ALPHA= ",tpv_alpha
+	write(unitout,"(A14,L2)") "TPV_CELLAVG= ",tpv_cellavg
 	write(unitout,*)
 	write(unitout,*) "PARAMETERS FOR BSE with Temperature Effects"
 	write(unitout,*)

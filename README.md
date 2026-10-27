@@ -174,6 +174,27 @@ back to 1 at large |q|, and without F the interaction would return to the
 point-charge Coulomb there. F = 1 for d = 0. The q = 0 term is W averaged over
 the k-grid cell around q = 0.
 
+`TPV_CELLAVG= T` (default `F`) extends that average to the screened term at
+every other q: W(q) is replaced by its mean over the k-grid cell centred at q,
+the parallelogram spanned by `b1/NGX` and `b2/NGY`, so that the k sum
+approximates the integral of W over the Brillouin zone instead of sampling it.
+The mean is taken with 8 x 8 Gauss-Legendre points up to 3.5 cells from the
+centre (the larger of the two cell coordinates of q), 4 x 4 points up to 10.5
+cells, and the point value beyond. The exchange term (`EDIEL= 1`) keeps its
+point values, and with the keyword unset the output is the same as without it.
+It matters when the mesh step is not small against 1/r0, r0 = (`TPV_KAPPA` - 1)
+`TPV_THICKNESS` / 2, where W goes from 1/|q| to about 1/(r0 q^2): the point
+values of the first shells of cells do not resolve that crossover and the
+excitons drift as 1/N with the mesh. For monolayer MoSi2N4 (d = 9.73
+Angstrom, `TPV_KAPPA` 5.7, `EDIEL_T` = `EDIEL_B` = 1, 2+2 bands) the lowest
+bright level A is 1.3243, 1.3184, 1.3118 and 1.3066 eV on the 24x24, 36x36,
+48x48 and 60x60 meshes, and 1.2854, 1.2813, 1.2788, 1.2774 and 1.2766 eV on
+the 24x24 to 72x72 meshes with `TPV_CELLAVG= T` (steps of 4.1, 2.5, 1.4 and
+0.8 meV). The cell is a parallelogram, not the Wigner-Seitz cell, which splits
+levels that the C6 symmetry makes degenerate by up to 0.65 meV. The average is
+recomputed for every k-pair, and the Hamiltonian construction takes 1.4 to 7.7
+times longer (the diagonalization is unchanged).
+
 `COULOMB_POT= V2DLAVG` is the strictly 2D constant-screened interaction
 `W(q) = e^2 / (2 eps0 A Nk EDIEL |q|)`. For nonzero q it is identical to
 `V2DL`; at q = 0 it averages `1/|q|` over the centered parallelogram spanned
