@@ -24,7 +24,20 @@ module bse_fastkernel
 
 	logical :: fk_active = .false.
 	! fk_vertex(b1, b2, image, ik2, ik1): band columns of vector(:, b, ik), image numbered as bse_q_images(k1, k2)
+	! (bse_q_images_fold for BSE_QFOLD > 1: fk_setup_fold)
 	complex,allocatable,dimension(:,:,:,:,:) :: fk_vertex
+
+	! BSE_QFOLD > 1: images, weights and potential W(q) of the last (k1, k2) pair a thread handled. They do not depend on the
+	! band indices, so the transitions of one k pair (nc nv of them, consecutive in the loops of the solver) share them.
+	! The key is (k1, k2, EDIEL, tolerance, potential); the rest of the arguments of W is constant during a run.
+	logical,save :: fk_qc_valid = .false.
+	integer,save :: fk_qc_nimg = 0
+	real,save,dimension(3) :: fk_qc_k1 = 0.0, fk_qc_k2 = 0.0, fk_qc_ediel = 0.0
+	real,save :: fk_qc_tolr = 0.0
+	character(len=10),save :: fk_qc_coul = ''
+	real,allocatable,save,dimension(:,:) :: fk_qc_shift
+	real,allocatable,save,dimension(:) :: fk_qc_wimg, fk_qc_w
+	!$omp threadprivate(fk_qc_valid,fk_qc_nimg,fk_qc_k1,fk_qc_k2,fk_qc_ediel,fk_qc_tolr,fk_qc_coul,fk_qc_shift,fk_qc_wimg,fk_qc_w)
 
 contains
 
@@ -121,5 +134,107 @@ contains
 		t_table = omp_get_wtime() - t0
 
 	end subroutine fk_setup
+
+	! BSE_QFOLD = M > 1: fk_setup with the image sets of bse_q_images_fold (the shortest images of each of the M^2 classes
+	! q + g + Gamma_UC, up to 27 M^2 per k pair; the image numbering is that of matrizelbse). fk_setup above stays as it was, so
+	! that the tables of M = 1 are the same to the last bit.
+	subroutine fk_setup_fold(n,nvec,nb,nk,rvec,ovp,kb,rlat,vector,tau,maxnimg,t_states,t_table)
+
+		use omp_lib
+		use input_variables, only: bse_qfold
+
+		implicit none
+
+		integer,intent(in) :: n,nvec,nb,nk
+		real,dimension(nvec,3),intent(in) :: rvec
+		real,dimension(nvec,n,n),intent(in) :: ovp
+		real,dimension(3,nk),intent(in) :: kb
+		real,dimension(3,3),intent(in) :: rlat
+		complex,dimension(n,nb,nk),intent(in) :: vector
+		real,dimension(n,3),intent(in) :: tau
+		integer,intent(out) :: maxnimg
+		double precision,intent(out) :: t_states,t_table
+
+		complex,allocatable,dimension(:,:,:) :: av,lv,rv,bv
+		complex,allocatable,dimension(:,:) :: stb,tmp,tr,tb
+		complex,allocatable,dimension(:) :: e1,g
+		real,allocatable,dimension(:,:) :: gsh
+		real,allocatable,dimension(:) :: wsh
+		integer :: ik,ik1,ik2,img,nimg,j,b,nmax
+		double precision :: t0
+		complex,parameter :: c0=(0.0,0.0),c1=(1.0,0.0),ch=(0.5,0.0)
+
+		t0 = omp_get_wtime()
+
+		! largest number of images over all k pairs: the shortest ones of each of the M^2 classes (bse_q_images_fold)
+		nmax = 27*bse_qfold**2
+		allocate(gsh(3,nmax),wsh(nmax))
+		maxnimg = 1
+		do ik1=1,nk
+			do ik2=1,nk
+				call bse_q_images_fold(kb(:,ik1),kb(:,ik2),rlat,bse_qfold,nmax,nimg,gsh,wsh)
+				maxnimg = max(maxnimg,nimg)
+			end do
+		end do
+		deallocate(gsh,wsh)
+
+		! per-state vectors, one k at a time (one S(k) in memory)
+		allocate(av(n,nb,nk),lv(n,nb,nk),rv(n,nb,nk),bv(n,nb,nk))
+		allocate(stb(n,n),tmp(n,nb),e1(n))
+		do ik=1,nk
+			call overlap(n,nvec,rvec,ovp,kb(1,ik),kb(2,ik),kb(3,ik),stb)
+			do j=1,n
+				e1(j) = exp(cmplx(0.0,dot_product(kb(:,ik),tau(j,:))))
+			end do
+			! A: S^T conjg(l), then e(k)
+			tmp = conjg(vector(:,:,ik))
+			call cgemm('T','N',n,nb,n,c1,stb,n,tmp,n,c0,av(1,1,ik),n)
+			! B: S r, then conjg(e(k))
+			call cgemm('N','N',n,nb,n,c1,stb,n,vector(1,1,ik),n,c0,bv(1,1,ik),n)
+			do b=1,nb
+				do j=1,n
+					av(j,b,ik) = av(j,b,ik)*e1(j)
+					lv(j,b,ik) = conjg(vector(j,b,ik))*e1(j)
+					rv(j,b,ik) = conjg(e1(j))*vector(j,b,ik)
+					bv(j,b,ik) = bv(j,b,ik)*conjg(e1(j))
+				end do
+			end do
+		end do
+		deallocate(stb,tmp,e1)
+		t_states = omp_get_wtime() - t0
+
+		! vertices of all band pairs for every (k1, k2, image)
+		t0 = omp_get_wtime()
+		if (allocated(fk_vertex)) deallocate(fk_vertex)
+		allocate(fk_vertex(nb,nb,maxnimg,nk,nk))
+		fk_vertex = c0
+		!$omp parallel default(shared) private(ik1,ik2,img,nimg,gsh,wsh,g,tr,tb,j,b)
+		allocate(g(n),tr(n,nb),tb(n,nb),gsh(3,nmax),wsh(nmax))
+		!$omp do collapse(2) schedule(dynamic)
+		do ik1=1,nk
+			do ik2=1,nk
+				call bse_q_images_fold(kb(:,ik1),kb(:,ik2),rlat,bse_qfold,nmax,nimg,gsh,wsh)
+				do img=1,nimg
+					do j=1,n
+						g(j) = exp(cmplx(0.0,-dot_product(gsh(:,img),tau(j,:))))
+					end do
+					do b=1,nb
+						do j=1,n
+							tr(j,b) = g(j)*rv(j,b,ik2)
+							tb(j,b) = g(j)*bv(j,b,ik2)
+						end do
+					end do
+					call cgemm('T','N',nb,nb,n,ch,av(1,1,ik1),n,tr,n,c0,fk_vertex(1,1,img,ik2,ik1),nb)
+					call cgemm('T','N',nb,nb,n,ch,lv(1,1,ik1),n,tb,n,c1,fk_vertex(1,1,img,ik2,ik1),nb)
+				end do
+			end do
+		end do
+		!$omp end do
+		deallocate(g,tr,tb,gsh,wsh)
+		!$omp end parallel
+		deallocate(av,lv,rv,bv)
+		t_table = omp_get_wtime() - t0
+
+	end subroutine fk_setup_fold
 
 end module bse_fastkernel

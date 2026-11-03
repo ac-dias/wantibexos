@@ -195,6 +195,35 @@ levels that the C6 symmetry makes degenerate by up to 0.65 meV. The average is
 recomputed for every k-pair, and the Hamiltonian construction takes 1.4 to 7.7
 times longer (the diagonalization is unchanged).
 
+`BSE_QFOLD= M` (default `1`) is for the BSE of an M x M supercell run (a supercell of the cell
+whose exciton is wanted, with the supercell's own k-mesh `NGX x NGY`). The direct kernel of a pair of
+k-points K, K' needs the transfer q = K - K' + G for every reciprocal vector G of the periodic part of the
+Bloch functions, and by default `wtb.x` keeps one term, the shortest image of q over the reciprocal
+lattice of the run. For the folded states of a unit cell that term is the unit-cell kernel only for the
+pairs whose own shortest transfer is also a shortest image of the supercell lattice (b/M), |q| below
+|b|/(2M): the attraction at larger |q| is dropped and the excitons come out too high, by 21 (A) and 26 (B)
+meV for M = 4 and by 60 and 70 meV for M = 6, whatever the mesh. With `BSE_QFOLD= M` the kernel is the sum
+over the M^2 classes g of Gamma_SC/Gamma_UC, g = i B1 + j B2 (i, j = 0..M-1, B1, B2 the reciprocal vectors of
+the run, Gamma_UC = M Gamma_SC), of the shortest image of {K - K' + g + Gamma_UC}, each with its own
+W(|q|) (and `TPV_CELLAVG`) and its own vertices, weight 1 per class (equally short images within a class,
+1e-4, share it); the vertices of the classes that do not connect two folded states vanish. The result is the
+direct kernel of the unit cell for the folded states. The in-plane lattice vectors of the run (a1, a2) are
+taken as the supercell's (a3 perpendicular to them), the transitions of the diagonal keep the transition
+energy once (with the q = 0 image), and the exchange term is not changed. `BSE_FF= T` (the form-factor
+file holds only the shortest images) and the q-path tools are not supported with M > 1, nor is a non-square fold
+(the program stops for the first two); with `BSE_QFOLD` unset or 1 the output is the same as without it, to the last bit.
+Monolayer MoSi2N4, 4 x 4 supercell (M = 4), `TPV_CELLAVG= T`, `CSHIFT= 0.05`: with all 32+32 bands on the 3x3
+mesh the levels A and B are 1.228959 and 1.347226 eV, 0.21 and 0.22 meV above the 12x12 unit cell
+(1.228752, 1.347008 eV; the two tight-binding models differ by that much), against 1.242593 and 1.365719
+eV without the keyword (+13.8 and +18.7 meV); 24+24 bands give +2.5 and +1.9 meV and 12+12 bands +6.6 and
++14.5 meV (band truncation); on the 6x6 and 9x9 meshes with 12+12 bands the offset to the unit cell falls
+from +23 and +23 meV (A) to +7 and +8 meV, the same truncation. The kernel is evaluated for 16 to 21 images
+per pair of k-points and the vertex table (`WTB_KERNEL= fast`) is that many times larger (0.24 to 3.2 s on the
+6x6 mesh); W is kept for the last k-pair of each thread, so with `TPV_CELLAVG= T` (where the W of every matrix
+element is otherwise recomputed) the Hamiltonian construction is shorter than without the keyword: 1.6 against
+14.2 s on the 6x6 mesh and 8.6 against 49.7 s on the 9x9 mesh (12+12 bands, 4 threads). `make -j1 test-bse-qfold`
+checks the images against brute force and the kernel sums.
+
 `COULOMB_POT= V2DLAVG` is the strictly 2D constant-screened interaction
 `W(q) = e^2 / (2 eps0 A Nk EDIEL |q|)`. For nonzero q it is identical to
 `V2DL`; at q = 0 it averages `1/|q|` over the centered parallelogram spanned

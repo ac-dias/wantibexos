@@ -124,6 +124,13 @@ $(BUILD_DIR)/tests/test_v2dlavg.x: tests/test_v2dlavg.F90 $(LIB_FILE) makefile.i
 	@mkdir -p $(dir $@)
 	$(FOR) $< -o $@ -L$(BUILD_DIR) -lwtb $(L_FLAGS)
 
+test-bse-qfold: $(BUILD_DIR)/tests/test_bse_qfold.x
+	@$(BUILD_DIR)/tests/test_bse_qfold.x
+
+$(BUILD_DIR)/tests/test_bse_qfold.x: tests/test_bse_qfold.F90 $(LIB_FILE) makefile.inc
+	@mkdir -p $(dir $@)
+	$(FOR) $< -o $@ -L$(BUILD_DIR) -lwtb $(L_FLAGS)
+
 $(BUILD_DIR)/tests/test_nonorth_optics.x: tests/test_nonorth_optics.F90 $(LIB_FILE) makefile.inc
 	@mkdir -p $(dir $@)
 	$(FOR) $< -o $@ -L$(BUILD_DIR) -lwtb $(L_FLAGS)

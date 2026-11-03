@@ -17,7 +17,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 #endif
 	use omp_lib
 	use hamiltonian_input_variables
-	use input_variables, only: bsecenterfile, bsecentgrad, bseff, bsefffile, bseffexch, bseffecut, sysdim
+	use input_variables, only: bsecenterfile, bsecentgrad, bseff, bsefffile, bseffexch, bseffecut, sysdim, bse_qfold
 	use bse_q_optics, only: rmn_data, rmn_destroy, rmn_center_setup, &
 		center_phase_build, rmn_apply_q0_optical_correction, rmn_dfts_dipoles
 	use bse_formfactor, only: ff_data, ff_read, ff_destroy, ff_setup_check, ff_mesh_check, &
@@ -259,6 +259,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	if (bsecentgrad .and. use_ff) stop 'BSE_CENTER_GRAD and BSE_FF both correct the kernel vertices: use one of them'
 	if (use_ff .and. len_trim(bsefffile) == 0) stop 'BSE_FF= T requires BSE_FF_FILE'
 	if (bseffexch .and. .not. use_ff) stop 'BSE_FF_EXCHANGE= T requires BSE_FF= T'
+	call bse_qfold_check(bse_qfold,rlat,use_ff)
 	allocate(wannier_centers(3,w90basis))
 	wannier_centers=0.0
 	if (use_rmn) then

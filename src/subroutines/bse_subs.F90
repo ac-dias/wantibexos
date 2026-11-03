@@ -6,7 +6,9 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 
 	use bse_q_optics, only: rmn_data, rmn_bloch, center_phase_direct_vertices, center_phase_gradient_correction
 	use bse_formfactor, only: ff_data, ff_direct_vertices, ff_exchange_element
-	use bse_fastkernel, only: fk_active, fk_vertex
+	use bse_fastkernel, only: fk_active, fk_vertex, fk_qc_valid, fk_qc_nimg, fk_qc_k1, fk_qc_k2, fk_qc_ediel, &
+	                          fk_qc_tolr, fk_qc_coul, fk_qc_shift, fk_qc_wimg, fk_qc_w
+	use input_variables, only: bse_qfold
 
 	implicit none
 
@@ -56,8 +58,10 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 
 	complex :: vc,vv,delta_k
 	real,dimension(3,w90basis),intent(in) :: centers
-	integer :: nimg,img,m,n
-	real,dimension(3,27) :: gshift
+	integer :: nimg,img,m,n,nmax
+	real,dimension(3,27*max(1,bse_qfold)**2) :: gshift
+	real,dimension(27*max(1,bse_qfold)**2) :: wimg
+	logical :: qhit
 	real,dimension(3) :: kpt2i
 	complex,dimension(w90basis) :: phase2i
 	complex :: melem
@@ -81,12 +85,32 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 	! neither periodic in q: use the shortest images q+G, averaged over the
 	! equally short ones on the zone boundary, so that the kernel keeps the
 	! lattice symmetry and does not depend on how the k-grid cell is chosen.
-	call bse_q_images(kpt1,kpt2,rlat,nimg,gshift)
+	! BSE_QFOLD = M > 1 (an M x M supercell run): the images of the M^2 classes q+g+Gamma_UC, weight 1 each (bse_q_images_fold),
+	! with W of every image kept for the k pair, which the nc nv transitions of the pair share
+	nmax=27*max(1,bse_qfold)**2
+	qhit=.false.
+	if (bse_qfold .gt. 1) then
+		if (.not. allocated(fk_qc_w)) allocate(fk_qc_shift(3,nmax),fk_qc_wimg(nmax),fk_qc_w(nmax))
+		qhit=fk_qc_valid .and. all(fk_qc_k1 .eq. kpt1) .and. all(fk_qc_k2 .eq. kpt2) .and. all(fk_qc_ediel .eq. ediel) &
+		     .and. fk_qc_tolr .eq. tolr .and. fk_qc_coul .eq. coultype
+		if (qhit) then
+			nimg=fk_qc_nimg
+			gshift(:,1:nimg)=fk_qc_shift(:,1:nimg)
+			wimg(1:nimg)=fk_qc_wimg(1:nimg)
+		else
+			call bse_q_images_fold(kpt1,kpt2,rlat,bse_qfold,nmax,nimg,gshift,wimg)
+		end if
+	else
+		call bse_q_images(kpt1,kpt2,rlat,nimg,gshift)
+	end if
 	matrizelbse=cmplx(0.0,0.0)
 	do img=1,nimg
 
 	kpt2i=kpt2+gshift(:,img)
 
+	if (qhit) then
+		vcoul1=fk_qc_w(img)
+	else
 	select case (coultype)
 
 	case("V2DK")
@@ -172,12 +196,16 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 		STOP
 
 	end select
+	if (bse_qfold .gt. 1) fk_qc_w(img)=vcoul1
+	end if
 
 	
 
 
 
-	if (est1(1) .eq. est2(1)) then
+	! same transition: <c|c> = <v|v> = 1 at q = 0; with BSE_QFOLD > 1 the other classes (q = -g != 0) go through the
+	! vertices below, which vanish for a crystal that has the unit-cell periodicity
+	if (est1(1) .eq. est2(1) .and. (bse_qfold .le. 1 .or. all(gshift(:,img) .eq. 0.0))) then
 
 
 		melem= (ec1-ev1) + vcoul1
@@ -280,11 +308,29 @@ function matrizelbse(coultype,tolr,w90basis,ediel,lc,ez,w,r0,ngrid,rlat,est1,ec1
 
 	end if
 
-	matrizelbse=matrizelbse+melem
+	if (bse_qfold .gt. 1) then
+		matrizelbse=matrizelbse+wimg(img)*melem
+	else
+		matrizelbse=matrizelbse+melem
+	end if
 
 	end do
 
-	matrizelbse=matrizelbse/real(nimg)
+	if (bse_qfold .gt. 1) then
+		if (.not. qhit) then
+			fk_qc_k1=kpt1
+			fk_qc_k2=kpt2
+			fk_qc_ediel=ediel
+			fk_qc_tolr=tolr
+			fk_qc_coul=coultype
+			fk_qc_nimg=nimg
+			fk_qc_shift(:,1:nimg)=gshift(:,1:nimg)
+			fk_qc_wimg(1:nimg)=wimg(1:nimg)
+			fk_qc_valid=.true.
+		end if
+	else
+		matrizelbse=matrizelbse/real(nimg)
+	end if
 	! BSE_FF_EXCHANGE: the exchange term, independent of q
 	if (ffdat%exchange) matrizelbse=matrizelbse+ff_exchange_element(ffdat,est1(1),est2(1))
 
@@ -976,6 +1022,105 @@ subroutine bse_q_images(kpt1,kpt2,rlat,nimg,shift)
 	end do
 
 end subroutine bse_q_images
+
+
+subroutine bse_q_images_fold(kpt1,kpt2,rlat,mfold,nmax,nimg,shift,wimg)
+	! Images of the transfer q = kpt1-kpt2 for the direct kernel of an M x M supercell run (BSE_QFOLD = M = mfold). rlat is the
+	! supercell lattice (a_1, a_2 in plane, a_3 not folded): its reciprocal lattice Gamma_SC has the spacing |b|/M, b the one of
+	! the unit cell, and Gamma_UC = M Gamma_SC in plane. A pair of supercell k points stands for the M^2 transfers q+g+Gamma_UC
+	! of the unit-cell kernel, g in Gamma_SC/Gamma_UC = {a B_1 + b B_2, a, b = 0..M-1}, B_i the reciprocal vectors of rlat: the
+	! fold pair (g_c, g_c') of the unit-cell states is coupled by the class g = g_c - g_c' and by no other (translation symmetry),
+	! with the transfer that is the SHORTEST over Gamma_UC of its class, as in the unit cell. So every class contributes its
+	! own shortest image(s), weight 1 per class (equally short images of a class, within the 1e-4 of bse_q_images, share it:
+	! wimg = 1/n_class), each with its own W(|q|) and vertices. bse_q_images alone keeps the globally shortest image, i.e. one
+	! class, and drops the attraction at |q| > |b|/(2M).
+	! shift(:,i) is added to kpt2 (q_i = q - shift), as in bse_q_images; shift and wimg hold nmax = 27 M^2 entries.
+	! mfold = 1 is bse_q_images with wimg = 1/nimg.
+	implicit none
+	real,dimension(3),intent(in) :: kpt1,kpt2
+	real,dimension(3,3),intent(in) :: rlat
+	integer,intent(in) :: mfold,nmax
+	integer,intent(out) :: nimg
+	real,dimension(3,nmax),intent(out) :: shift
+	real,dimension(nmax),intent(out) :: wimg
+	real,parameter :: pi=acos(-1.)
+	real,parameter :: tol=1.0e-4
+	real,dimension(3) :: blat1,blat2,blat3,q,p,g,gc,qi
+	real,dimension(3,27) :: gall
+	real,dimension(27) :: qlen
+	integer,dimension(3) :: n0
+	integer :: i1,i2,i3,ic,ia,ib,ntie,imf
+	real :: qmin
+
+	if (mfold .le. 1) then
+		call bse_q_images(kpt1,kpt2,rlat,nimg,shift)
+		wimg(1:nimg)=1.0/real(nimg)
+		return
+	end if
+	imf=mfold
+	call recvec(rlat(1,:),rlat(2,:),rlat(3,:),blat1,blat2,blat3)
+	q=kpt1-kpt2
+	nimg=0
+	do ia=0,mfold-1
+		do ib=0,mfold-1
+			gc=real(ia)*blat1+real(ib)*blat2
+			p=q-gc
+			! crystal coordinates of p in the lattice Gamma_UC (basis M B_1, M B_2, B_3), rounded
+			n0(1)=nint(dot_product(p,rlat(1,:))/(2.0*pi*real(imf)))
+			n0(2)=nint(dot_product(p,rlat(2,:))/(2.0*pi*real(imf)))
+			n0(3)=nint(dot_product(p,rlat(3,:))/(2.0*pi))
+			ic=0
+			do i1=-1,1
+				do i2=-1,1
+					do i3=-1,1
+						ic=ic+1
+						g=gc+real(imf*(n0(1)+i1))*blat1+real(imf*(n0(2)+i2))*blat2+real(n0(3)+i3)*blat3
+						gall(:,ic)=g
+						qi=q-g
+						qlen(ic)=sqrt(dot_product(qi,qi))
+					end do
+				end do
+			end do
+			qmin=minval(qlen)
+			ntie=0
+			do ic=1,27
+				if (qlen(ic) .le. qmin*(1.0+tol)+1.0e-6) ntie=ntie+1
+			end do
+			if (nimg+ntie .gt. nmax) stop 'bse_q_images_fold: too many images (BSE_QFOLD)'
+			do ic=1,27
+				if (qlen(ic) .le. qmin*(1.0+tol)+1.0e-6) then
+					nimg=nimg+1
+					shift(:,nimg)=gall(:,ic)
+					wimg(nimg)=1.0/real(ntie)
+				end if
+			end do
+		end do
+	end do
+
+end subroutine bse_q_images_fold
+
+
+subroutine bse_qfold_check(mfold,rlat,use_ff)
+	! BSE_QFOLD = M > 1: the run is an M x M supercell whose in-plane lattice vectors are a_1, a_2 of rlat (a_3 along the
+	! vacuum), and the pair densities come from the basis itself, not from a form-factor file, which holds the shortest
+	! images of the run's lattice only.
+	implicit none
+	integer,intent(in) :: mfold
+	real,dimension(3,3),intent(in) :: rlat
+	logical,intent(in) :: use_ff
+	real :: c13,c23,l1,l2,l3
+
+	if (mfold .le. 1) return
+	if (use_ff) stop 'BSE_QFOLD > 1 needs BSE_FF= F: the form-factor file (BSE_FF_FILE) holds only the shortest images of q'
+	l1=sqrt(dot_product(rlat(1,:),rlat(1,:)))
+	l2=sqrt(dot_product(rlat(2,:),rlat(2,:)))
+	l3=sqrt(dot_product(rlat(3,:),rlat(3,:)))
+	c13=abs(dot_product(rlat(1,:),rlat(3,:)))/(l1*l3)
+	c23=abs(dot_product(rlat(2,:),rlat(3,:)))/(l2*l3)
+	if (c13 .gt. 1.0e-3 .or. c23 .gt. 1.0e-3) &
+		stop 'BSE_QFOLD > 1 folds the in-plane lattice vectors a_1, a_2: a_3 must be perpendicular to both'
+
+end subroutine bse_qfold_check
 
 
 subroutine orbital_centres(w90basis,tau)
