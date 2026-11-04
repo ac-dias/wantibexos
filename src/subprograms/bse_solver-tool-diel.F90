@@ -19,7 +19,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 #endif
 	use omp_lib
 	use hamiltonian_input_variables
-	use input_variables, only: bsecenterfile, bsecentgrad, bseff, bsefffile, bseffexch, bseffecut, sysdim
+	use input_variables, only: bsecenterfile, bsecentgrad, bseff, bsefffile, bseffexch, bseffecut, sysdim, bse_qfold
 	use bse_q_optics, only: rmn_data, rmn_read, rmn_destroy, rmn_centers, &
 		center_phase_build, rmn_apply_q0_optical_correction, rmn_dfts_dipoles
 	use bse_formfactor, only: ff_data, ff_read, ff_destroy, ff_setup_check, ff_mesh_check, &
@@ -297,6 +297,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	if (bsecentgrad .and. use_ff) stop 'BSE_CENTER_GRAD and BSE_FF both correct the kernel vertices: use one of them'
 	if (use_ff .and. len_trim(bsefffile) == 0) stop 'BSE_FF= T requires BSE_FF_FILE'
 	if (bseffexch .and. .not. use_ff) stop 'BSE_FF_EXCHANGE= T requires BSE_FF= T'
+	call bse_qfold_check(bse_qfold,rlat,use_ff)
 	allocate(wannier_centers(3,w90basis))
 	wannier_centers=0.0
 	if (use_rmn) then
@@ -855,6 +856,10 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	
 	fk_active = .false.
 	if (Node == 0) then
+		if (bse_qfold > 1) then
+			write(300,"(A,I0,A,I0,A)") ' BSE_QFOLD= ',bse_qfold,': direct kernel = sum over the ',bse_qfold**2, &
+				' classes q+g+Gamma_UC of the unit-cell zone, shortest image of each (weight 1 per class)'
+		end if
 		if (fastk) then
 			write(300,*) 'BSE kernel: vertex table from per-state vectors (bse_fastkernel), WTB_KERNEL= ',trim(kmode)
 		else
@@ -916,8 +921,8 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 			end if
 		end if
 #endif
-		call fk_setup(w90basis,nvec,nc+nv,ngkpt,rvec,ovp,kpt_bse,rlat,vector,tau,fk_needr,fk_needc,fk_upper, &
-			fk_nimgtot,fk_t1,fk_t2)
+		call fk_setup(w90basis,nvec,nc+nv,ngkpt,rvec,ovp,kpt_bse,rlat,vector,tau,max(1,bse_qfold),fk_needr,fk_needc, &
+			fk_upper,fk_nimgtot,fk_t1,fk_t2)
 		fk_active = .true.
 		deallocate(fk_needr,fk_needc)
 		fk_mib = dble(size(fk_vertex,kind=8))*8.d0/1048576.d0

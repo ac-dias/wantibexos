@@ -459,6 +459,7 @@ module input_variables
 	real :: ez,w,lc,r0
 	real :: tpv_kappa,tpv_qtf,tpv_hwp,tpv_thickness,tpv_alpha
 	logical :: tpv_cellavg
+	integer :: bse_qfold = 1
 	real :: st,phavg,temp
 	
 	real :: ctemp,tmax,eg,egd
@@ -655,6 +656,8 @@ subroutine input_read
 	tpv_alpha = 1.5
 	! W averaged over every k-grid cell near q = 0 (not only the q = 0 cell): off = the old point values
 	tpv_cellavg = .false.
+	! direct BSE kernel of an M x M supercell run: sum over the M^2 classes of the transfer q + Gamma_SC/Gamma_UC (M = BSE_QFOLD); 1 = the shortest image only
+	bse_qfold = 1
 
 	st = 0.0 
 	phavg = 0.0 
@@ -958,6 +961,14 @@ subroutine input_read
 	case ("TPV_CELLAVG=")
 
 		read(b,*) tpv_cellavg
+
+	case ("BSE_QFOLD=")
+
+		read(b,*) bse_qfold
+		if (bse_qfold .lt. 1) then
+			write(*,*) "BSE_QFOLD= must be a positive integer (1 = the shortest image of q only)"
+			stop
+		end if
 
 	case ("TMCOEF=")
 	
@@ -1310,7 +1321,7 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 #ifdef MPI
         use mpi
 #endif
-	use input_variables, only: tpv_kappa,tpv_qtf,tpv_hwp,tpv_thickness,tpv_alpha,tpv_cellavg
+	use input_variables, only: tpv_kappa,tpv_qtf,tpv_hwp,tpv_thickness,tpv_alpha,tpv_cellavg,bse_qfold
 	use hamiltonian_input_variables, only: paramsformat
 	implicit none
 	integer :: unitout
@@ -1502,6 +1513,7 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	write(unitout,"(A15,F8.4)") "TPV_THICKNESS= ",tpv_thickness
 	write(unitout,"(A11,F8.4)") "TPV_ALPHA= ",tpv_alpha
 	write(unitout,"(A14,L2)") "TPV_CELLAVG= ",tpv_cellavg
+	write(unitout,"(A12,I0)") "BSE_QFOLD= ",bse_qfold
 	write(unitout,*)
 	write(unitout,*) "PARAMETERS FOR BSE with Temperature Effects"
 	write(unitout,*)

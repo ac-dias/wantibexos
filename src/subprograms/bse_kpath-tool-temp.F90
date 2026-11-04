@@ -10,7 +10,7 @@ subroutine bsebndstemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 #endif
 	use omp_lib
 	use hamiltonian_input_variables
-	use input_variables, only: bsecenterfile, bsecentgrad, bseff
+	use input_variables, only: bsecenterfile, bsecentgrad, bseff, bse_qfold
 	use bse_q_optics, only: rmn_data, rmn_destroy, rmn_center_setup
 
 	implicit none
@@ -214,6 +214,7 @@ subroutine bsebndstemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 			call flush(300)
 		end if
 	end if
+	if (bse_qfold .gt. 1) stop 'BSE_QFOLD > 1 is implemented for the Q=0 direct kernel only, not for the q path'
 	if (Node .eq. 0 .and. bseff) then
 		write(300,*) 'BSE_FF is not applied on the q path (Q=0 BSE only)'
 		call flush(300)

@@ -27,6 +27,10 @@ module bse_fastkernel
 	! alone, with the images that bse_q_images returns for each (1 on most pairs, 2 or 3 on the zone boundary), so
 	! the table of a run on P ranks is about 1/P of the table of all pairs, and it is freed by fk_free once the
 	! Hamiltonian is built.
+	!
+	! BSE_QFOLD = M > 1 (an M x M supercell run): the images of a pair are those of bse_q_images_fold (the shortest image of each
+	! of the M^2 classes q + g + Gamma_UC, up to 27 M^2 per pair, the numbering of matrizelbse); fk_setup takes M as mfold.
+	! The table of that kernel is about M^2 times larger per pair than for M = 1, so the pairs a rank does not use matter most there.
 
 	implicit none
 
@@ -38,9 +42,21 @@ module bse_fastkernel
 	! fk_first(slot of k2, slot of k1): number of images stored before this pair, -1 for a pair that is not stored
 	integer,allocatable,dimension(:,:) :: fk_first
 
+	! BSE_QFOLD > 1: images, weights and potential W(q) of the last (k1, k2) pair a thread handled. They do not depend on the
+	! band indices, so the transitions of one k pair (nc nv of them, consecutive in the loops of the solver) share them.
+	! The key is (k1, k2, EDIEL, tolerance, potential); the rest of the arguments of W is constant during a run.
+	logical,save :: fk_qc_valid = .false.
+	integer,save :: fk_qc_nimg = 0
+	real,save,dimension(3) :: fk_qc_k1 = 0.0, fk_qc_k2 = 0.0, fk_qc_ediel = 0.0
+	real,save :: fk_qc_tolr = 0.0
+	character(len=10),save :: fk_qc_coul = ''
+	real,allocatable,save,dimension(:,:) :: fk_qc_shift
+	real,allocatable,save,dimension(:) :: fk_qc_wimg, fk_qc_w
+	!$omp threadprivate(fk_qc_valid,fk_qc_nimg,fk_qc_k1,fk_qc_k2,fk_qc_ediel,fk_qc_tolr,fk_qc_coul,fk_qc_shift,fk_qc_wimg,fk_qc_w)
+
 contains
 
-	subroutine fk_setup(n,nvec,nb,nk,rvec,ovp,kb,rlat,vector,tau,needr,needc,upper,nimgtot,t_states,t_table)
+	subroutine fk_setup(n,nvec,nb,nk,rvec,ovp,kb,rlat,vector,tau,mfold,needr,needc,upper,nimgtot,t_states,t_table)
 
 		use omp_lib
 
@@ -53,6 +69,8 @@ contains
 		real,dimension(3,3),intent(in) :: rlat
 		complex,dimension(n,nb,nk),intent(in) :: vector
 		real,dimension(n,3),intent(in) :: tau
+		! BSE_QFOLD: 1 for the images of bse_q_images, M > 1 for those of bse_q_images_fold
+		integer,intent(in) :: mfold
 		! k points of the rows (k1) and of the columns (k2) of the elements this rank evaluates
 		logical,dimension(nk),intent(in) :: needr,needc
 		! only the pairs k1 <= k2 are needed (upper triangle of a Hamiltonian ordered by k)
@@ -64,8 +82,9 @@ contains
 		complex,allocatable,dimension(:,:) :: stb,tmp,tr,tb
 		complex,allocatable,dimension(:) :: e1,g
 		integer,allocatable,dimension(:) :: krow,kcol
-		real,dimension(3,27) :: gsh
-		integer :: ik,ik1,ik2,s1,s2,n1,n2,img,nimg,j,b
+		real,allocatable,dimension(:,:) :: gsh
+		real,allocatable,dimension(:) :: wsh
+		integer :: ik,ik1,ik2,s1,s2,n1,n2,img,nimg,j,b,nmax
 		integer(kind=8) :: total
 		double precision :: t0
 		complex,parameter :: c0=(0.0,0.0),c1=(1.0,0.0),ch=(0.5,0.0)
@@ -96,6 +115,8 @@ contains
 		end do
 
 		! images of the stored pairs: where the images of each pair start in fk_vertex
+		nmax = 27*max(1,mfold)**2
+		allocate(gsh(3,nmax),wsh(nmax))
 		allocate(fk_first(max(1,n2),max(1,n1)))
 		fk_first = -1
 		total = 0
@@ -104,13 +125,14 @@ contains
 				ik1 = krow(s1)
 				ik2 = kcol(s2)
 				if (upper .and. ik1 > ik2) cycle
-				call bse_q_images(kb(:,ik1),kb(:,ik2),rlat,nimg,gsh)
+				call fk_images(kb(:,ik1),kb(:,ik2),rlat,mfold,nmax,nimg,gsh,wsh)
 				fk_first(s2,s1) = int(total)
 				total = total + nimg
 				if (total >= huge(1)) stop 'fk_setup: more images than fit in a default integer; use more MPI ranks'
 			end do
 		end do
 		nimgtot = int(total)
+		deallocate(gsh,wsh)
 
 		! per-state vectors of the k points of this rank, one k at a time (one S(k) in memory)
 		allocate(av(n,nb,max(1,n1)),lv(n,nb,max(1,n1)),rv(n,nb,max(1,n2)),bv(n,nb,max(1,n2)))
@@ -152,15 +174,15 @@ contains
 		t0 = omp_get_wtime()
 		allocate(fk_vertex(nb,nb,max(1,nimgtot)))
 		fk_vertex = c0
-		!$omp parallel default(shared) private(s1,s2,ik1,ik2,img,nimg,gsh,g,tr,tb,j,b)
-		allocate(g(n),tr(n,nb),tb(n,nb))
+		!$omp parallel default(shared) private(s1,s2,ik1,ik2,img,nimg,gsh,wsh,g,tr,tb,j,b)
+		allocate(g(n),tr(n,nb),tb(n,nb),gsh(3,nmax),wsh(nmax))
 		!$omp do collapse(2) schedule(dynamic)
 		do s1=1,n1
 			do s2=1,n2
 				if (fk_first(s2,s1) >= 0) then
 					ik1 = krow(s1)
 					ik2 = kcol(s2)
-					call bse_q_images(kb(:,ik1),kb(:,ik2),rlat,nimg,gsh)
+					call fk_images(kb(:,ik1),kb(:,ik2),rlat,mfold,nmax,nimg,gsh,wsh)
 					do img=1,nimg
 						do j=1,n
 							g(j) = exp(cmplx(0.0,-dot_product(gsh(:,img),tau(j,:))))
@@ -178,12 +200,33 @@ contains
 			end do
 		end do
 		!$omp end do
-		deallocate(g,tr,tb)
+		deallocate(g,tr,tb,gsh,wsh)
 		!$omp end parallel
 		deallocate(av,lv,rv,bv,krow,kcol)
 		t_table = omp_get_wtime() - t0
 
 	end subroutine fk_setup
+
+	! images of the pair (k1, k2): bse_q_images for mfold = 1, bse_q_images_fold for mfold > 1; shift and wimg hold nmax = 27 mfold^2
+	subroutine fk_images(k1,k2,rlat,mfold,nmax,nimg,shift,wimg)
+
+		implicit none
+
+		real,dimension(3),intent(in) :: k1,k2
+		real,dimension(3,3),intent(in) :: rlat
+		integer,intent(in) :: mfold,nmax
+		integer,intent(out) :: nimg
+		real,dimension(3,nmax),intent(out) :: shift
+		real,dimension(nmax),intent(out) :: wimg
+
+		if (mfold > 1) then
+			call bse_q_images_fold(k1,k2,rlat,mfold,nmax,nimg,shift,wimg)
+		else
+			! nmax = 27 here
+			call bse_q_images(k1,k2,rlat,nimg,shift)
+		end if
+
+	end subroutine fk_images
 
 	! third index of fk_vertex for the pair of k points (ik1 rows, ik2 columns) and the image img
 	integer function fk_slot(ik1,ik2,img)
