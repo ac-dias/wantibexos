@@ -283,6 +283,18 @@ and 0.15 s with the table, the unit cell (12x12, 2+2 bands) 3.95 s and 0.14 s; t
 matrices of a 9x9 mesh (6.2 GB) are no longer all stored. What is left is the diagonalization of
 H(k) for every k and the single-particle optics.
 
+Each MPI rank stores only the part of the table it uses. A rank builds the elements (i, j), i <= j,
+of its blocks of the distributed Hamiltonian, i = (k1, c1, v1), j = (k2, c2, v2), so it needs the pairs
+(k1, k2) of its row k points times its column k points with k1 <= k2, and for each pair the images
+of `bse_q_images` (1 away from the zone boundary, 2 to 4 on it). The table is `nb^2` x (pairs, images) x
+8 bytes, nb = NBANDSC + NBANDSV, about 1/P of that of all pairs on P ranks (the former table held all
+nk^2 pairs on every rank, each with the largest image count), and it is freed once the Hamiltonian is
+built, before the diagonalization. With `BSE_HAM_READ= T` it is not built. `log_bse_optics.dat` gives
+its size on rank 0 and on the largest rank. The Hamiltonian is not changed: saved with `BSE_HAM_SAVE= T`
+it is byte-identical to that of the former table, 1 to 6 ranks, 24x24 and 36x36 meshes of the
+two-orbital model of `tests/test_nonorth_optics_app.py` (1+1 bands). On its 48x48 mesh on 2 ranks the
+table goes from 648 to 43 MiB per rank and the peak resident size reported for the run from 787 to 193 MiB.
+
 `WTB_KERNEL` (environment variable) selects it: `fast` (default), `old` (the per-element sandwich),
 or `check` (both, on a regular sample of about 60 x 60 / 2 elements, the largest difference is
 written to `log_bse_optics.dat`). The table is used for `DFT= "S"` without `BSE_FF`; `BSE_FF`, finite

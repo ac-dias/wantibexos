@@ -24,7 +24,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		center_phase_build, rmn_apply_q0_optical_correction, rmn_dfts_dipoles
 	use bse_formfactor, only: ff_data, ff_read, ff_destroy, ff_setup_check, ff_mesh_check, &
 		ff_overlap_check, ff_exchange_setup
-	use bse_fastkernel, only: fk_active, fk_vertex, fk_setup
+	use bse_fastkernel, only: fk_active, fk_vertex, fk_setup, fk_free
 
 	implicit none
 
@@ -98,7 +98,12 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	! the per-element sandwich of sandwich_phase, or both on a sample of elements (then fast)
 	character(len=16) :: kmode
 	logical :: fastk,kcheck
-	integer :: nsk,fk_maxnimg,ipass,ichk,jchk,nchk,stepchk
+	integer :: nsk,fk_nimgtot,ipass,ichk,jchk,nchk,stepchk
+	! k points of the rows and columns of the Hamiltonian elements this rank evaluates (the vertex table holds those pairs only)
+	logical,allocatable,dimension(:) :: fk_needr,fk_needc
+	logical :: fk_upper
+	integer :: fk_ilo,fk_jhi
+	double precision :: fk_mib,fk_mibmax
 	! sk(:,:,isk) and sk(:,:,jsk) of the two states: the index min(k,nsk) is set before
 	! the call, since gfortran 15 bounds-checks (-fcheck=bounds) an array section passed
 	! as an argument with a MIN subscript against a temporary that is never set
@@ -857,12 +862,73 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		end if
 		call flush(300)
 	end if
-	if (fastk) then
-		call fk_setup(w90basis,nvec,nc+nv,ngkpt,rvec,ovp,kpt_bse,rlat,vector,tau,fk_maxnimg,fk_t1,fk_t2)
+#ifdef MPI
+	! BLACS grid of the distributed Hamiltonian, made here because the vertex table needs to know which rows and
+	! columns of the matrix this rank holds
+	if (Nodes > 1) then
+		! hbse_dist is assembled and diagonalized locally on the BLACS grid.
+		! Its N**2 size is never passed as one MPI count; transfers use blocks.
+		mb = 64
+		nb = 64
+		nprow = int(sqrt(real(Nodes)))
+		do while (mod(Nodes,nprow) /= 0)
+			nprow = nprow - 1
+		end do
+		npcol = Nodes/nprow
+
+		call BLACS_GET(-1, 0, blacs_ctxt)
+		call BLACS_GRIDINIT(blacs_ctxt, 'R', nprow, npcol)
+		call BLACS_GRIDINFO(blacs_ctxt, nprow, npcol, myrow, mycol)
+
+		locr = numroc(dimbse, mb, myrow, 0, nprow)
+		locc = numroc(dimbse, nb, mycol, 0, npcol)
+		lld = max(1,locr)
+	end if
+#endif
+
+	! a Hamiltonian read from the file needs no kernel, except for the check
+	if (fastk .and. (kcheck .or. .not. bsehamread)) then
+		allocate(fk_needr(ngkpt),fk_needc(ngkpt))
+		fk_needr = .true.
+		fk_needc = .true.
+		! only the upper triangle i <= j is built (not the full matrix of ELPA); with the states ordered by k
+		! that is k1 <= k2
+		fk_upper = all(stt_bse(4,2:dimbse) >= stt_bse(4,1:dimbse-1))
+#ifdef ELPA
+		if (Nodes > 1 .and. trim(bsealgo) == "elpa") fk_upper = .false.
+#endif
+#ifdef MPI
+		! the check samples elements of all k on rank 0, which then builds its own block as the others do
+		if (Nodes > 1 .and. .not. kcheck) then
+			fk_needr = .false.
+			fk_needc = .false.
+			if (locr > 0 .and. locc > 0) then
+				fk_ilo = indxl2g(1, mb, myrow, 0, nprow)
+				fk_jhi = indxl2g(locc, nb, mycol, 0, npcol)
+				do li=1,locr
+					ig = indxl2g(li, mb, myrow, 0, nprow)
+					if (ig <= fk_jhi .or. .not. fk_upper) fk_needr(stt_bse(4,ig)) = .true.
+				end do
+				do lj=1,locc
+					jg = indxl2g(lj, nb, mycol, 0, npcol)
+					if (jg >= fk_ilo .or. .not. fk_upper) fk_needc(stt_bse(4,jg)) = .true.
+				end do
+			end if
+		end if
+#endif
+		call fk_setup(w90basis,nvec,nc+nv,ngkpt,rvec,ovp,kpt_bse,rlat,vector,tau,fk_needr,fk_needc,fk_upper, &
+			fk_nimgtot,fk_t1,fk_t2)
 		fk_active = .true.
+		deallocate(fk_needr,fk_needc)
+		fk_mib = dble(size(fk_vertex,kind=8))*8.d0/1048576.d0
+		fk_mibmax = fk_mib
+#ifdef MPI
+		call MPI_REDUCE(fk_mib,fk_mibmax,1,MPI_DOUBLE_PRECISION,MPI_MAX,0,MPI_COMM_WORLD,MPIError)
+#endif
 		if (Node == 0) then
-			write(300,"(A,F10.3,A,F10.3,A,I0,A)") ' fast kernel: per-state vectors ',fk_t1,' s, vertex table ',fk_t2, &
-				' s, up to ',fk_maxnimg,' images per k pair'
+			write(300,"(A,F10.3,A,F10.3,A)") ' fast kernel: per-state vectors ',fk_t1,' s, vertex table ',fk_t2,' s'
+			write(300,"(A,I0,A,F12.1,A,F12.1,A)") ' fast kernel: ',fk_nimgtot,' (k1,k2,image) on rank 0, ',fk_mib, &
+				' MiB on rank 0, ',fk_mibmax,' MiB on the largest rank'
 			call flush(300)
 		end if
 	end if
@@ -992,23 +1058,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		end if
     else
 #ifdef MPI
-		! hbse_dist is assembled and diagonalized locally on the BLACS grid.
-		! Its N**2 size is never passed as one MPI count; transfers use blocks.
-		mb = 64
-		nb = 64
-		nprow = int(sqrt(real(Nodes)))
-		do while (mod(Nodes,nprow) /= 0)
-			nprow = nprow - 1
-		end do
-		npcol = Nodes/nprow
-
-		call BLACS_GET(-1, 0, blacs_ctxt)
-		call BLACS_GRIDINIT(blacs_ctxt, 'R', nprow, npcol)
-		call BLACS_GRIDINFO(blacs_ctxt, nprow, npcol, myrow, mycol)
-
-		locr = numroc(dimbse, mb, myrow, 0, nprow)
-		locc = numroc(dimbse, nb, mycol, 0, npcol)
-		lld = max(1,locr)
+		! the BLACS grid and the local sizes (mb, nb, locr, locc, lld) are set before the vertex table
 		if (Node == 0) then
 			call bse_hamiltonian_memory_report(300,'BSE Hamiltonian on MPI rank 0',lld,max(1,locc))
 		end if
@@ -1073,6 +1123,8 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 #endif
     end if
 	if (use_ff) call ff_destroy(ffdat)
+	! the vertex table is not needed by the diagonalization, which takes the memory
+	call fk_free()
 
 #ifdef MPI
 	task_elapsed = MPI_WTIME() - task_start

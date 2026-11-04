@@ -17,18 +17,30 @@ module bse_fastkernel
 	!
 	! the vertex is   V = 1/2 sum_j conjg(eG_j) [ A_l,j R_r,j + L_l,j B_r,j ] ,
 	! a product of small matrices (bands x N)(N x bands) for each (k1, k2, image). The table fk_vertex holds it for all
-	! band pairs of all k pairs, so a kernel element is two lookups. The overlap matrices are needed one k at a time.
+	! band pairs of the k pairs this rank needs, so a kernel element is two lookups. The overlap matrices are needed one
+	! k at a time.
 	! The arithmetic is the one of sandwich_phase in a different order (single precision rounding only).
+	!
+	! A rank evaluates the elements (i, j) of its own rows and columns of the Hamiltonian only, i = (k1, c1, v1),
+	! j = (k2, c2, v2), so it needs the pairs (k1, k2) of its row k-points times its column k-points (and, when only
+	! the upper triangle i <= j is built and the states are ordered by k, k1 <= k2). fk_setup stores those pairs
+	! alone, with the images that bse_q_images returns for each (1 on most pairs, 2 or 3 on the zone boundary), so
+	! the table of a run on P ranks is about 1/P of the table of all pairs, and it is freed by fk_free once the
+	! Hamiltonian is built.
 
 	implicit none
 
 	logical :: fk_active = .false.
-	! fk_vertex(b1, b2, image, ik2, ik1): band columns of vector(:, b, ik), image numbered as bse_q_images(k1, k2)
-	complex,allocatable,dimension(:,:,:,:,:) :: fk_vertex
+	! fk_vertex(b1, b2, fk_slot(k1, k2, image)): band columns of vector(:, b, ik), image numbered as bse_q_images(k1, k2)
+	complex,allocatable,dimension(:,:,:) :: fk_vertex
+	! k point -> slot of the row (k1) and column (k2) k points of this rank, 0 when the rank does not need it
+	integer,allocatable,dimension(:) :: fk_rmap,fk_cmap
+	! fk_first(slot of k2, slot of k1): number of images stored before this pair, -1 for a pair that is not stored
+	integer,allocatable,dimension(:,:) :: fk_first
 
 contains
 
-	subroutine fk_setup(n,nvec,nb,nk,rvec,ovp,kb,rlat,vector,tau,maxnimg,t_states,t_table)
+	subroutine fk_setup(n,nvec,nb,nk,rvec,ovp,kb,rlat,vector,tau,needr,needc,upper,nimgtot,t_states,t_table)
 
 		use omp_lib
 
@@ -41,85 +53,164 @@ contains
 		real,dimension(3,3),intent(in) :: rlat
 		complex,dimension(n,nb,nk),intent(in) :: vector
 		real,dimension(n,3),intent(in) :: tau
-		integer,intent(out) :: maxnimg
+		! k points of the rows (k1) and of the columns (k2) of the elements this rank evaluates
+		logical,dimension(nk),intent(in) :: needr,needc
+		! only the pairs k1 <= k2 are needed (upper triangle of a Hamiltonian ordered by k)
+		logical,intent(in) :: upper
+		integer,intent(out) :: nimgtot
 		double precision,intent(out) :: t_states,t_table
 
 		complex,allocatable,dimension(:,:,:) :: av,lv,rv,bv
 		complex,allocatable,dimension(:,:) :: stb,tmp,tr,tb
 		complex,allocatable,dimension(:) :: e1,g
+		integer,allocatable,dimension(:) :: krow,kcol
 		real,dimension(3,27) :: gsh
-		integer :: ik,ik1,ik2,img,nimg,j,b
+		integer :: ik,ik1,ik2,s1,s2,n1,n2,img,nimg,j,b
+		integer(kind=8) :: total
 		double precision :: t0
 		complex,parameter :: c0=(0.0,0.0),c1=(1.0,0.0),ch=(0.5,0.0)
 
 		t0 = omp_get_wtime()
 
-		! largest number of equally short images over all k pairs
-		maxnimg = 1
-		do ik1=1,nk
-			do ik2=1,nk
-				call bse_q_images(kb(:,ik1),kb(:,ik2),rlat,nimg,gsh)
-				maxnimg = max(maxnimg,nimg)
-			end do
+		call fk_free()
+
+		! slots of the k points of this rank
+		n1 = count(needr)
+		n2 = count(needc)
+		allocate(fk_rmap(nk),fk_cmap(nk),krow(max(1,n1)),kcol(max(1,n2)))
+		fk_rmap = 0
+		fk_cmap = 0
+		s1 = 0
+		s2 = 0
+		do ik=1,nk
+			if (needr(ik)) then
+				s1 = s1 + 1
+				fk_rmap(ik) = s1
+				krow(s1) = ik
+			end if
+			if (needc(ik)) then
+				s2 = s2 + 1
+				fk_cmap(ik) = s2
+				kcol(s2) = ik
+			end if
 		end do
 
-		! per-state vectors, one k at a time (one S(k) in memory)
-		allocate(av(n,nb,nk),lv(n,nb,nk),rv(n,nb,nk),bv(n,nb,nk))
+		! images of the stored pairs: where the images of each pair start in fk_vertex
+		allocate(fk_first(max(1,n2),max(1,n1)))
+		fk_first = -1
+		total = 0
+		do s1=1,n1
+			do s2=1,n2
+				ik1 = krow(s1)
+				ik2 = kcol(s2)
+				if (upper .and. ik1 > ik2) cycle
+				call bse_q_images(kb(:,ik1),kb(:,ik2),rlat,nimg,gsh)
+				fk_first(s2,s1) = int(total)
+				total = total + nimg
+				if (total >= huge(1)) stop 'fk_setup: more images than fit in a default integer; use more MPI ranks'
+			end do
+		end do
+		nimgtot = int(total)
+
+		! per-state vectors of the k points of this rank, one k at a time (one S(k) in memory)
+		allocate(av(n,nb,max(1,n1)),lv(n,nb,max(1,n1)),rv(n,nb,max(1,n2)),bv(n,nb,max(1,n2)))
 		allocate(stb(n,n),tmp(n,nb),e1(n))
 		do ik=1,nk
+			if (.not. (needr(ik) .or. needc(ik))) cycle
 			call overlap(n,nvec,rvec,ovp,kb(1,ik),kb(2,ik),kb(3,ik),stb)
 			do j=1,n
 				e1(j) = exp(cmplx(0.0,dot_product(kb(:,ik),tau(j,:))))
 			end do
-			! A: S^T conjg(l), then e(k)
-			tmp = conjg(vector(:,:,ik))
-			call cgemm('T','N',n,nb,n,c1,stb,n,tmp,n,c0,av(1,1,ik),n)
-			! B: S r, then conjg(e(k))
-			call cgemm('N','N',n,nb,n,c1,stb,n,vector(1,1,ik),n,c0,bv(1,1,ik),n)
-			do b=1,nb
-				do j=1,n
-					av(j,b,ik) = av(j,b,ik)*e1(j)
-					lv(j,b,ik) = conjg(vector(j,b,ik))*e1(j)
-					rv(j,b,ik) = conjg(e1(j))*vector(j,b,ik)
-					bv(j,b,ik) = bv(j,b,ik)*conjg(e1(j))
+			if (needr(ik)) then
+				s1 = fk_rmap(ik)
+				! A: S^T conjg(l), then e(k)
+				tmp = conjg(vector(:,:,ik))
+				call cgemm('T','N',n,nb,n,c1,stb,n,tmp,n,c0,av(1,1,s1),n)
+				do b=1,nb
+					do j=1,n
+						av(j,b,s1) = av(j,b,s1)*e1(j)
+						lv(j,b,s1) = conjg(vector(j,b,ik))*e1(j)
+					end do
 				end do
-			end do
+			end if
+			if (needc(ik)) then
+				s2 = fk_cmap(ik)
+				! B: S r, then conjg(e(k))
+				call cgemm('N','N',n,nb,n,c1,stb,n,vector(1,1,ik),n,c0,bv(1,1,s2),n)
+				do b=1,nb
+					do j=1,n
+						rv(j,b,s2) = conjg(e1(j))*vector(j,b,ik)
+						bv(j,b,s2) = bv(j,b,s2)*conjg(e1(j))
+					end do
+				end do
+			end if
 		end do
 		deallocate(stb,tmp,e1)
 		t_states = omp_get_wtime() - t0
 
-		! vertices of all band pairs for every (k1, k2, image)
+		! vertices of all band pairs for every stored (k1, k2, image)
 		t0 = omp_get_wtime()
-		if (allocated(fk_vertex)) deallocate(fk_vertex)
-		allocate(fk_vertex(nb,nb,maxnimg,nk,nk))
+		allocate(fk_vertex(nb,nb,max(1,nimgtot)))
 		fk_vertex = c0
-		!$omp parallel default(shared) private(ik1,ik2,img,nimg,gsh,g,tr,tb,j,b)
+		!$omp parallel default(shared) private(s1,s2,ik1,ik2,img,nimg,gsh,g,tr,tb,j,b)
 		allocate(g(n),tr(n,nb),tb(n,nb))
 		!$omp do collapse(2) schedule(dynamic)
-		do ik1=1,nk
-			do ik2=1,nk
-				call bse_q_images(kb(:,ik1),kb(:,ik2),rlat,nimg,gsh)
-				do img=1,nimg
-					do j=1,n
-						g(j) = exp(cmplx(0.0,-dot_product(gsh(:,img),tau(j,:))))
-					end do
-					do b=1,nb
+		do s1=1,n1
+			do s2=1,n2
+				if (fk_first(s2,s1) >= 0) then
+					ik1 = krow(s1)
+					ik2 = kcol(s2)
+					call bse_q_images(kb(:,ik1),kb(:,ik2),rlat,nimg,gsh)
+					do img=1,nimg
 						do j=1,n
-							tr(j,b) = g(j)*rv(j,b,ik2)
-							tb(j,b) = g(j)*bv(j,b,ik2)
+							g(j) = exp(cmplx(0.0,-dot_product(gsh(:,img),tau(j,:))))
 						end do
+						do b=1,nb
+							do j=1,n
+								tr(j,b) = g(j)*rv(j,b,s2)
+								tb(j,b) = g(j)*bv(j,b,s2)
+							end do
+						end do
+						call cgemm('T','N',nb,nb,n,ch,av(1,1,s1),n,tr,n,c0,fk_vertex(1,1,fk_first(s2,s1)+img),nb)
+						call cgemm('T','N',nb,nb,n,ch,lv(1,1,s1),n,tb,n,c1,fk_vertex(1,1,fk_first(s2,s1)+img),nb)
 					end do
-					call cgemm('T','N',nb,nb,n,ch,av(1,1,ik1),n,tr,n,c0,fk_vertex(1,1,img,ik2,ik1),nb)
-					call cgemm('T','N',nb,nb,n,ch,lv(1,1,ik1),n,tb,n,c1,fk_vertex(1,1,img,ik2,ik1),nb)
-				end do
+				end if
 			end do
 		end do
 		!$omp end do
 		deallocate(g,tr,tb)
 		!$omp end parallel
-		deallocate(av,lv,rv,bv)
+		deallocate(av,lv,rv,bv,krow,kcol)
 		t_table = omp_get_wtime() - t0
 
 	end subroutine fk_setup
+
+	! third index of fk_vertex for the pair of k points (ik1 rows, ik2 columns) and the image img
+	integer function fk_slot(ik1,ik2,img)
+
+		implicit none
+
+		integer,intent(in) :: ik1,ik2,img
+		integer :: s1,s2
+
+		s1 = fk_rmap(ik1)
+		s2 = fk_cmap(ik2)
+		if (s1 == 0 .or. s2 == 0) error stop 'fast kernel: k pair outside the vertex table of this MPI rank'
+		if (fk_first(s2,s1) < 0) error stop 'fast kernel: k pair not stored in the vertex table'
+		fk_slot = fk_first(s2,s1) + img
+
+	end function fk_slot
+
+	subroutine fk_free()
+
+		implicit none
+
+		if (allocated(fk_vertex)) deallocate(fk_vertex)
+		if (allocated(fk_rmap)) deallocate(fk_rmap)
+		if (allocated(fk_cmap)) deallocate(fk_cmap)
+		if (allocated(fk_first)) deallocate(fk_first)
+		fk_active = .false.
+
+	end subroutine fk_free
 
 end module bse_fastkernel
