@@ -6,10 +6,11 @@ subroutine bsedielrawpol(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebs
 
 	use omp_lib
 	use hamiltonian_input_variables
+	use input_variables, only: bse_nstates
 	implicit none
 
 	integer :: i,j,erro
-	integer :: dimbse     
+	integer :: dimbse
 
 	real,allocatable,dimension(:) :: esp
 	real,allocatable,dimension(:) :: exxf,eyyf,ezzf 
@@ -91,6 +92,8 @@ subroutine bsedielrawpol(nthreads,dft,outputfolder,renorm,params,ngrid,nc,nv,ebs
 
 
 	dimbse=ngrid(1)*ngrid(2)*ngrid(3)*nc*nv
+	! with BSE_NSTATES= bse_oscf-pol.dat holds only the lowest excitons: dimbse is the number of states of the file here
+	if (bse_nstates > 0 .and. bse_nstates < dimbse) dimbse = bse_nstates
 
 	!arquivo de entrada
 

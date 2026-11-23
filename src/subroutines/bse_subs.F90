@@ -732,6 +732,96 @@ subroutine bse_eigenvector_column_dist(dimse,excitonvec,lld,locr,locc,mb,nb,myro
 end subroutine bse_eigenvector_column_dist
 
 
+subroutine bse_elpa_bounds(dimse,excitonvec,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,emin,emax,etrace,MPIError)
+! Gershgorin bounds [emin, emax] and trace of the distributed Hermitian BSE matrix (both triangles stored),
+! taken before ELPA overwrites it: bse_elpa_verify uses them to catch a solver that returns wrong eigenvalues
+
+#ifdef MPI
+	use mpi
+#endif
+	implicit none
+
+	integer :: dimse,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,MPIError
+	integer :: li,lj,ig,jg
+	integer, external :: indxl2g
+	complex,dimension(lld,*) :: excitonvec
+	real(kind=8) :: emin,emax,etrace
+	real(kind=8),allocatable,dimension(:,:) :: acc
+
+	emin = 0.0d0
+	emax = 0.0d0
+	etrace = 0.0d0
+#ifdef MPI
+	! acc(:,1): sum of |H_ij|, j /= i, over the row i; acc(:,2): H_ii
+	allocate(acc(dimse,2))
+	acc = 0.0d0
+
+	do lj=1,locc
+		jg = indxl2g(lj,nb,mycol,0,npcol)
+		do li=1,locr
+			ig = indxl2g(li,mb,myrow,0,nprow)
+			if (ig <= dimse .and. jg <= dimse) then
+				if (ig == jg) then
+					acc(ig,2) = real(excitonvec(li,lj),kind=8)
+				else
+					acc(ig,1) = acc(ig,1) + real(abs(excitonvec(li,lj)),kind=8)
+				end if
+			end if
+		end do
+	end do
+
+	call MPI_ALLREDUCE(MPI_IN_PLACE,acc,2*dimse,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,MPIError)
+	if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('BSE Hamiltonian bounds',MPIError)
+
+	emin = minval(acc(:,2)-acc(:,1))
+	emax = maxval(acc(:,2)+acc(:,1))
+	etrace = sum(acc(:,2))
+	deallocate(acc)
+#else
+	stop "Distributed BSE postprocessing requires MPI"
+#endif
+
+end subroutine bse_elpa_bounds
+
+
+subroutine bse_elpa_verify(dimse,nstates,w,emin,emax,etrace,iam,ok)
+! The ELPA result must lie inside the Gershgorin bounds of the Hamiltonian and, with every state computed,
+! add up to its trace.  Only a gross failure is caught (a library whose 2-stage solver was miscompiled returns
+! eigenvalues of the order of 1e4 times the spectrum, with a zero status), a small error is not.
+
+	implicit none
+
+	integer :: dimse,nstates,iam
+	real,dimension(dimse) :: w
+	real(kind=8) :: emin,emax,etrace
+	logical :: ok
+	real(kind=8) :: tol,esum,eabs
+
+	ok = .true.
+	tol = 1.0d-3*(emax-emin) + 1.0d-3
+	if (.not. all(real(w(1:nstates),kind=8) >= emin-tol .and. real(w(1:nstates),kind=8) <= emax+tol)) then
+		ok = .false.
+		if (iam == 0) then
+			write(*,*) 'ELPA returned eigenvalues outside the bounds of the BSE Hamiltonian (Gershgorin): [',emin,',',emax,'] eV'
+			write(*,*) 'lowest and highest returned:',minval(w(1:nstates)),maxval(w(1:nstates))
+		end if
+	end if
+	if (ok .and. nstates == dimse) then
+		esum = sum(real(w(1:dimse),kind=8))
+		eabs = sum(abs(real(w(1:dimse),kind=8)))
+		if (.not. abs(esum-etrace) <= 1.0d-4*max(eabs,abs(etrace)) + 1.0d-3) then
+			ok = .false.
+			if (iam == 0) write(*,*) 'ELPA eigenvalues add up to',esum,'eV, the trace of the BSE Hamiltonian is',etrace,'eV'
+		end if
+	end if
+	if (.not. ok .and. iam == 0) then
+		write(*,*) 'The ELPA solver gave wrong eigenvalues.  The 2-stage solver (BSE_ALGO= elpa2) did so with an ELPA 2025.06'
+		write(*,*) 'built by gfortran 15 at -O2 (its vectorizer): rebuild ELPA with -fno-tree-vectorize, or use BSE_ALGO= elpa1.'
+	end if
+
+end subroutine bse_elpa_verify
+
+
 subroutine exclft(sysdim,ngrid,rlat,fosc,enexc,lft) !tempo de vida exciton
 
 	implicit none

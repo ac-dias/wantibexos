@@ -19,7 +19,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 #endif
 	use omp_lib
 	use hamiltonian_input_variables
-	use input_variables, only: bsecenterfile, bsecentgrad, bseff, bsefffile, bseffexch, bseffecut, sysdim, bse_qfold
+	use input_variables, only: bsecenterfile, bsecentgrad, bseff, bsefffile, bseffexch, bseffecut, sysdim, bse_qfold, bse_nstates
 	use bse_q_optics, only: rmn_data, rmn_read, rmn_destroy, rmn_centers, &
 		center_phase_build, rmn_apply_q0_optical_correction, rmn_dfts_dipoles
 	use bse_formfactor, only: ff_data, ff_read, ff_destroy, ff_setup_check, ff_mesh_check, &
@@ -133,6 +133,8 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	class(elpa_t), pointer :: elpa_instance
 	complex,allocatable,dimension(:,:) :: elpa_eigenvectors
 	integer :: elpa_status
+	real(kind=8) :: elpa_emin,elpa_emax,elpa_trace
+	logical :: elpa_good
 #endif
 
         !zheevr definitions
@@ -176,6 +178,9 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	integer :: mb, nb, locr, locc, lld, ig, jg, li, lj
 	integer :: desca(9), descz(9)
 	integer :: numroc, indxl2g
+	! ELPA solver (BSE_ALGO= elpa, elpa1, elpa2) and the number of lowest eigenpairs it computes (BSE_NSTATES=)
+	logical :: use_elpa
+	integer :: elpa_stage, nstates
 	integer,dimension(3) :: bseham_metadata
 	character(len=160) :: bseham_path
 #ifdef MPI
@@ -357,6 +362,37 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	ngkpt = ngrid(1)*ngrid(2)*ngrid(3)
 	dimbse = ngkpt*nc*nv
 
+	! BSE_ALGO= elpa1 (elpa is the same), elpa2: ELPA 1-stage or 2-stage solver of the distributed Hamiltonian.
+	! BSE_NSTATES= n makes the ELPA solver compute only the n lowest eigenpairs (0 = all of them).
+	use_elpa = .false.
+	elpa_stage = 0
+	select case (trim(bsealgo))
+	case ("elpa","elpa1")
+		use_elpa = .true.
+		elpa_stage = 1
+	case ("elpa2")
+		use_elpa = .true.
+		elpa_stage = 2
+	end select
+	nstates = dimbse
+	if (bse_nstates > 0) then
+		if (.not. use_elpa) then
+			if (Node == 0) write(*,*) 'BSE_NSTATES= needs BSE_ALGO= elpa1 or elpa2; BSE_ALGO= ',trim(bsealgo),' computes all the states'
+#ifdef MPI
+			call MPI_ABORT(MPI_COMM_WORLD, 1, MPIError)
+#endif
+			stop
+		end if
+		nstates = min(bse_nstates,dimbse)
+	end if
+	if (bsewf .and. nstates < dimbse .and. excwff > nstates) then
+		if (Node == 0) write(*,*) 'EXC_WF_F= ',excwff,' is larger than the ',nstates,' states of BSE_NSTATES='
+#ifdef MPI
+		call MPI_ABORT(MPI_COMM_WORLD, 1, MPIError)
+#endif
+		stop
+	end if
+
 	!call alat(systype,rlat,a)
 
 	!if (systype .eq. "2D") then
@@ -388,6 +424,14 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	write(300,*) 'Coulomb Potential:',coultype
 	write(300,*)
 	write(300,*) 'BSE_ALGO:',bsealgo
+	if (use_elpa) then
+		write(300,*) 'ELPA solver: ',elpa_stage,'-stage'
+		if (nstates < dimbse) then
+			write(300,*) 'BSE_NSTATES: the',nstates,'lowest of the',dimbse,'exciton states are computed'
+		else
+			write(300,*) 'BSE_NSTATES: all',dimbse,'exciton states are computed'
+		end if
+	end if
 
 	!write(300,*)
 	!write(300,*) 'intensidade termo exchange:',exc
@@ -495,10 +539,10 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		allocate (IWORK(3 + 5*dimbse))
 		allocate (RWORK(1 + 5*dimbse + 2*dimbse**2))
 
-		case ("elpa")
+		case ("elpa","elpa1","elpa2")
 
-		write(*,*) "BSE_ALGO=elpa requires an MPI run with at least two ranks"
-		stop
+		write(*,*) "BSE_ALGO=",trim(bsealgo)," requires an MPI run with at least two ranks"
+		stop 1
 		
 		case default
 		
@@ -900,7 +944,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		! that is k1 <= k2
 		fk_upper = all(stt_bse(4,2:dimbse) >= stt_bse(4,1:dimbse-1))
 #ifdef ELPA
-		if (Nodes > 1 .and. trim(bsealgo) == "elpa") fk_upper = .false.
+		if (Nodes > 1 .and. use_elpa) fk_upper = .false.
 #endif
 #ifdef MPI
 		! the check samples elements of all k on rank 0, which then builds its own block as the others do
@@ -1071,7 +1115,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		call DESCINIT(desca, dimbse, dimbse, mb, nb, 0, 0, blacs_ctxt, lld, INFO)
 		call DESCINIT(descz, dimbse, dimbse, mb, nb, 0, 0, blacs_ctxt, lld, INFO)
 		bseham_metadata = (/ dimbse,1,1 /)
-		if (trim(bsealgo) == 'elpa') bseham_metadata(3) = 2
+		if (use_elpa) bseham_metadata(3) = 2
 		if (use_center_phase) bseham_metadata(3) = bseham_metadata(3)+2
 		if (use_center_grad) bseham_metadata(3) = bseham_metadata(3)+4   ! +2: before the pair-midpoint term
 		if (use_ff) bseham_metadata(3) = bseham_metadata(3)+16   ! BSE_FF
@@ -1099,7 +1143,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 					! ELPA requires the complete Hermitian matrix.  PCHEEV only
 					! reads its upper triangle, so preserve the cheaper construction
 					! for every non-ELPA distributed run.
-					if (ig <= jg .or. trim(bsealgo) == "elpa") then
+					if (ig <= jg .or. use_elpa) then
 #else
 					if (ig <= jg) then
 #endif
@@ -1247,10 +1291,10 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
                 STOP
          	END IF  		
 
-		case ("elpa")
+		case ("elpa","elpa1","elpa2")
 
-		write(*,*) "BSE_ALGO=elpa requires an MPI run with at least two ranks"
-		stop
+		write(*,*) "BSE_ALGO=",trim(bsealgo)," requires an MPI run with at least two ranks"
+		stop 1
 		
 		case default
 		
@@ -1262,12 +1306,17 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 #ifdef MPI
 
 #ifdef ELPA
-		if (trim(bsealgo) == "elpa") then
+		if (use_elpa) then
 			allocate(elpa_eigenvectors(lld,max(1,locc)),stat=erro)
 			if (erro /= 0) then
 				write(*,*) 'Could not allocate ELPA eigenvector storage'
 				call MPI_ABORT(MPI_COMM_WORLD, 1, MPIError)
 			end if
+			! with BSE_NSTATES= below the dimension ELPA fills only the first nstates columns and eigenvalues
+			elpa_eigenvectors = cmplx(0.0,0.0)
+			W = 0.0
+			! spectrum bounds and trace of the Hamiltonian, to check what ELPA returns
+			call bse_elpa_bounds(dimbse,hbse_dist,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,elpa_emin,elpa_emax,elpa_trace,MPIError)
 
 			elpa_status = elpa_init(ELPA_API_VERSION)
 			call elpa_check(elpa_status, 'elpa_init', MPI_COMM_WORLD)
@@ -1276,7 +1325,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 			call elpa_instance%set('na', dimbse, elpa_status)
 			call elpa_check(elpa_status, 'set na', MPI_COMM_WORLD)
-			call elpa_instance%set('nev', dimbse, elpa_status)
+			call elpa_instance%set('nev', nstates, elpa_status)
 			call elpa_check(elpa_status, 'set nev', MPI_COMM_WORLD)
 			call elpa_instance%set('local_nrows', locr, elpa_status)
 			call elpa_check(elpa_status, 'set local_nrows', MPI_COMM_WORLD)
@@ -1294,23 +1343,38 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 			call elpa_check(elpa_status, 'set omp_threads', MPI_COMM_WORLD)
 			elpa_status = elpa_instance%setup()
 			call elpa_check(elpa_status, 'elpa setup', MPI_COMM_WORLD)
-			! The local ELPA 2025.06 two-stage complex solver returns incorrect
-			! eigenpairs for the BSE matrix while reporting success.
-			call elpa_instance%set('solver', ELPA_SOLVER_1STAGE, elpa_status)
-			call elpa_check(elpa_status, 'set ELPA 1-stage solver', MPI_COMM_WORLD)
+			if (elpa_stage == 2) then
+				call elpa_instance%set('solver', ELPA_SOLVER_2STAGE, elpa_status)
+				call elpa_check(elpa_status, 'set ELPA 2-stage solver', MPI_COMM_WORLD)
+			else
+				call elpa_instance%set('solver', ELPA_SOLVER_1STAGE, elpa_status)
+				call elpa_check(elpa_status, 'set ELPA 1-stage solver', MPI_COMM_WORLD)
+			end if
 			call elpa_instance%eigenvectors(hbse_dist, W, elpa_eigenvectors, elpa_status)
 			call elpa_check(elpa_status, 'ELPA eigenvectors', MPI_COMM_WORLD)
 			call elpa_deallocate(elpa_instance, elpa_status)
 			call elpa_check(elpa_status, 'elpa_deallocate', MPI_COMM_WORLD)
 			call elpa_uninit(elpa_status)
 			call elpa_check(elpa_status, 'elpa_uninit', MPI_COMM_WORLD)
+			call bse_elpa_verify(dimbse,nstates,W,elpa_emin,elpa_emax,elpa_trace,Node,elpa_good)
+			if (.not. elpa_good) call MPI_ABORT(MPI_COMM_WORLD, 1, MPIError)
+
+			! only the nstates lowest eigenpairs are defined: clear the other columns so that the
+			! optical amplitudes below get nothing from them
+			if (nstates < dimbse) then
+				W(nstates+1:dimbse) = 0.0
+				do lj=1,locc
+					jg = indxl2g(lj, nb, mycol, 0, npcol)
+					if (jg > nstates) elpa_eigenvectors(:,lj) = cmplx(0.0,0.0)
+				end do
+			end if
 
 			deallocate(hbse_dist)
 			call move_alloc(elpa_eigenvectors, hbse_dist)
 		else
 #else
-		if (trim(bsealgo) == "elpa") then
-			write(*,*) 'BSE_ALGO=elpa was requested, but this executable was built without ELPA support'
+		if (use_elpa) then
+			write(*,*) 'BSE_ALGO=',trim(bsealgo),' was requested, but this executable was built without ELPA support'
 			call MPI_ABORT(MPI_COMM_WORLD, 1, MPIError)
 		end if
 #endif
@@ -1473,6 +1537,12 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 			write(300,*) 'exciton Hamiltonian diagonalized'
 			call flush(300)
 			write(300,*) "exciton ground state",W(1)
+			if (nstates < dimbse) then
+				write(300,*) 'BSE_NSTATES: bse_oscf.dat has the',nstates,'lowest excitons, up to',W(nstates),'eV;'
+				write(300,*) 'the spectrum is complete only below that energy'
+				write(300,*) 'the spectra add 10 x the mean level spacing of these states, ', &
+					10.0*(W(nstates)-W(1))/real(nstates),' eV, to CSHIFT (avgsme in optics.F90)'
+			end if
 			write(300,*) 'xx tensor component'
 			write(300,*) 'yy tensor component'
 			write(300,*) 'zz tensor component'
@@ -1495,7 +1565,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 			write(300,*) 'optics finished'
 			call flush(300)
 
-			do i=1,dimbse
+			do i=1,nstates
 				write(301,"(7F15.6)") W(i),actxx(i),actyy(i),actzz(i),actxy(i),actxz(i),actyz(i)
 				call flush(301)
 				if (cpol) then

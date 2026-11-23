@@ -340,14 +340,60 @@ against the same MPI implementation.  Set `ELPA_ROOT`, or override
 ELPA itself must have been built with OpenMP enabled; the code passes its
 existing `nthreads` setting to ELPA as `omp_threads`.
 
-Set `BSE_ALGO=elpa` in the input and launch with at least two MPI ranks.  ELPA
-uses the existing 64-by-64 BLACS block-cyclic distribution and the ELPA 2-stage
-complex-Hermitian solver.  ELPA builds both triangles of the Hermitian matrix
+Choose the ELPA solver in the input and launch with at least two MPI ranks:
+
+```
+BSE_ALGO= "elpa1"        # ELPA 1-stage solver ("elpa" is the same, as before)
+BSE_ALGO= "elpa2"        # ELPA 2-stage solver
+BSE_NSTATES= 200         # compute only the 200 lowest excitons (default 0 = all of them)
+```
+
+ELPA uses the existing 64-by-64 BLACS block-cyclic distribution.  ELPA builds
+both triangles of the Hermitian matrix
 and needs an additional distributed local matrix for the eigenvectors while
 diagonalizing, so its matrix construction work and peak memory are respectively
 about twice and one extra local BSE matrix per MPI rank.  Executables built
-without `-DELPA` reject `BSE_ALGO=elpa` explicitly; all other distributed
-choices continue to use ScaLAPACK `PCHEEV`.
+without `-DELPA` reject `BSE_ALGO=elpa1`, `elpa2` and `elpa` explicitly; all
+other distributed choices continue to use ScaLAPACK `PCHEEV`.  A Hamiltonian
+saved with `BSE_HAM_SAVE= T` by one ELPA solver can be read by the other.
+
+`BSE_NSTATES= n` makes ELPA compute only the `n` lowest eigenpairs, the optical
+strengths of those states, and nothing for the others.  `bse_oscf.dat` and
+`bse_oscf-pol.dat` then have `n` rows, and the spectra (`SPEC= T`), the exciton
+lifetimes and the photoluminescence sum over those states: they are complete
+only below the energy of the last one, which `log_bse_optics.dat` gives.  A value
+above the dimension of the Hamiltonian means all the states.  `BSE_NSTATES` is
+refused with the other solvers, and `EXC_WF_F` must not exceed it.  The
+spectra add to `CSHIFT` ten times the mean level spacing of the states in
+`bse_oscf.dat` (`avgsme`, `optics.F90`), which with fewer states differs from its
+value with all of them (`log_bse_optics.dat` gives it): to compare with a run
+over all the states, change `CSHIFT` by the difference of the two.  With that
+difference, the spectrum of 100 and 300 of the 576 states of a two-orbital test
+model agrees with that of all the states to 6e-7 below the last of them.  The
+eigenvector storage does not shrink with `n`, only the time does.
+
+The 2-stage solver is faster than the 1-stage solver only for a part of the
+eigenvectors.  Two-orbital model, `DFT= "S"`, 1+1 bands on a 72 x 72 mesh (5184
+states), 4 MPI ranks of 3 threads on an Apple M-series laptop, ELPA 2025.06 with
+the generic kernels built with `-O2 -fno-tree-vectorize`, wall time of the
+diagonalization: ScaLAPACK `PCHEEV` 39.5 s,
+`elpa1` 12.0 s (8.3 s for `BSE_NSTATES= 100`), `elpa2` 36.5 s (3.9 s for
+`BSE_NSTATES= 100`, 8.8 s for 1000); energies agree with `PCHEEV` to 5e-5 eV
+(the solvers run in single precision).  Measure on your machine and ELPA build.
+
+The ELPA 2-stage solver can return wrong eigenvalues with status zero.  ELPA
+2025.06 built with gfortran 15.2 at `-O2` did (its auto-vectorizer: standalone
+tests of ELPA, double and single precision, any number of ranks, any kernel; the
+same library built with `-O1`, `-O0` or `-O2 -fno-tree-vectorize` is right, and so
+was a real-valued symmetric matrix), while its 1-stage solver was right; this is
+why `elpa` stayed 1-stage.  After every ELPA diagonalization the solver therefore
+checks that the eigenvalues lie within the Gershgorin bounds of the Hamiltonian
+and, with all the states, that they add up to its trace, and stops with a
+message otherwise (a gross failure only: an error of 1e-3 eV is not caught).
+Build ELPA with `FCFLAGS="-O2 -fno-tree-vectorize"` if it happens, or use `elpa1`.
+`python3 tests/test_elpa_solver_app.py /path/to/wtb.x --mpiexec /path/to/mpiexec`
+compares `elpa`, `elpa1`, `elpa2` and `BSE_NSTATES=` with `cheev` on a generated
+model, at `TEMP= 0` and `80`; run it on every new ELPA build.
 
 BSE q-path MPI parallelism
 --------------------------

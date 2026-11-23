@@ -1,5 +1,6 @@
 subroutine emissionopt(nthreads,mode,outputfolder,noptics,ngrid,nc,nv,exctemp,eta,emin)
 
+	use input_variables, only: bse_nstates
 	implicit none
 	integer :: erro,i,j,nthreads
 	character(len=3) :: mode
@@ -88,7 +89,14 @@ subroutine emissionopt(nthreads,mode,outputfolder,noptics,ngrid,nc,nv,exctemp,et
 		end do	    		
 	
 	case("BSE")
-		!inputs	
+		! with BSE_NSTATES= bse_oscf.dat holds only the lowest excitons
+		if (bse_nstates > 0 .and. bse_nstates < dimbse) then
+			dimbse = bse_nstates
+			deallocate(dipole)
+			allocate(dipole(dimbse,4))
+			dipole = 0.0
+		end if
+		!inputs
 		OPEN(UNIT=100, FILE=trim(outputfolder)//"bse_oscf.dat",STATUS='unknown', IOSTAT=erro)
     		if (erro/=0) stop "Error opening bse_oscf.dat input file"    		
     		OPEN(UNIT=200, FILE=trim(outputfolder)//"bse_refractive_index.dat",STATUS='unknown', IOSTAT=erro)
@@ -115,7 +123,14 @@ subroutine emissionopt(nthreads,mode,outputfolder,noptics,ngrid,nc,nv,exctemp,et
 		end do   		
 	
 	case("BSP")
-		!inputs	
+		! with BSE_NSTATES= bse_oscf-pol.dat holds only the lowest excitons
+		if (bse_nstates > 0 .and. bse_nstates < dimbse) then
+			dimbse = bse_nstates
+			deallocate(dipole)
+			allocate(dipole(dimbse,4))
+			dipole = 0.0
+		end if
+		!inputs
 		OPEN(UNIT=100, FILE=trim(outputfolder)//"bse_oscf-pol.dat",STATUS='unknown', IOSTAT=erro)
     		if (erro/=0) stop "Error opening bse_oscf-pol.dat input file"
 		OPEN(UNIT=200, FILE=trim(outputfolder)//"bse_refractive_index-pol.dat",STATUS='unknown', IOSTAT=erro)

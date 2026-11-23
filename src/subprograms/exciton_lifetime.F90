@@ -1,6 +1,7 @@
 
 subroutine lifetime(sysdim,numbse,ngrid,rlat,nc,nv,outputfolder)
 
+	use input_variables, only: bse_nstates
 	implicit none
 	
 	integer :: nc,nv
@@ -33,6 +34,8 @@ subroutine lifetime(sysdim,numbse,ngrid,rlat,nc,nv,outputfolder)
 	
 	
 	dimbse=ngrid(1)*ngrid(2)*ngrid(3)*nc*nv	
+	! with BSE_NSTATES= the bse_oscf files hold only the lowest excitons: dimbse is the number of states of the file here
+	if (bse_nstates > 0 .and. bse_nstates < dimbse) dimbse = bse_nstates
 	
 	allocate(fosc(dimbse,7),refr(int(numbse),7))
 	
@@ -93,6 +96,7 @@ end subroutine lifetime
 
 subroutine lifetimepol(sysdim,numbse,ngrid,rlat,nc,nv,outputfolder)
 
+	use input_variables, only: bse_nstates
 	implicit none
 	
 	integer :: nc,nv
@@ -126,6 +130,8 @@ subroutine lifetimepol(sysdim,numbse,ngrid,rlat,nc,nv,outputfolder)
 	
 	
 	dimbse=ngrid(1)*ngrid(2)*ngrid(3)*nc*nv	
+	! with BSE_NSTATES= the bse_oscf files hold only the lowest excitons: dimbse is the number of states of the file here
+	if (bse_nstates > 0 .and. bse_nstates < dimbse) dimbse = bse_nstates
 	
 	allocate(fosc(dimbse,6),refr(int(numbse),6))
 	

@@ -460,6 +460,7 @@ module input_variables
 	real :: tpv_kappa,tpv_qtf,tpv_hwp,tpv_thickness,tpv_alpha
 	logical :: tpv_cellavg
 	integer :: bse_qfold = 1
+	integer :: bse_nstates = 0
 	real :: st,phavg,temp
 	
 	real :: ctemp,tmax,eg,egd
@@ -658,8 +659,10 @@ subroutine input_read
 	tpv_cellavg = .false.
 	! direct BSE kernel of an M x M supercell run: sum over the M^2 classes of the transfer q + Gamma_SC/Gamma_UC (M = BSE_QFOLD); 1 = the shortest image only
 	bse_qfold = 1
+	! number of lowest BSE eigenpairs the ELPA solvers (BSE_ALGO= elpa1, elpa2) compute; 0 = all of them
+	bse_nstates = 0
 
-	st = 0.0 
+	st = 0.0
 	phavg = 0.0 
 	temp = 0.0
 	
@@ -970,8 +973,16 @@ subroutine input_read
 			stop
 		end if
 
+	case ("BSE_NSTATES=")
+
+		read(b,*) bse_nstates
+		if (bse_nstates .lt. 0) then
+			write(*,*) "BSE_NSTATES= must not be negative (0 = all the states of the BSE Hamiltonian)"
+			stop
+		end if
+
 	case ("TMCOEF=")
-	
+
 		read(b,*) tmcoef
 	
 	case ("EXC_WF_F=")
@@ -1321,7 +1332,7 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 #ifdef MPI
         use mpi
 #endif
-	use input_variables, only: tpv_kappa,tpv_qtf,tpv_hwp,tpv_thickness,tpv_alpha,tpv_cellavg,bse_qfold
+	use input_variables, only: tpv_kappa,tpv_qtf,tpv_hwp,tpv_thickness,tpv_alpha,tpv_cellavg,bse_qfold,bse_nstates
 	use hamiltonian_input_variables, only: paramsformat
 	implicit none
 	integer :: unitout
@@ -1481,6 +1492,7 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	write(unitout,*) "BSE/OPTICAL PROPERTIES"
 	write(unitout,*)
 	write(unitout,"(A10,A12)") "BSE_ALGO= ", bsealgo
+	write(unitout,"(A14,I0)") "BSE_NSTATES= ", bse_nstates
 	write(unitout,"(A15,A12)") "BSE_KPATH_MPI= ", bsekpathmpi
 	write(unitout,"(A22,L1)") "BSE_KPATH_CHECKPOINT= ", bsekpathcheckpoint
 	write(unitout,"(A27,A70)") "BSE_KPATH_CHECKPOINT_FILE= ", bsekpathcheckpointfile
