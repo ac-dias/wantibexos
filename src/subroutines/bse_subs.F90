@@ -903,7 +903,7 @@ subroutine excwf(outputfolder,ngkpt,kpt,nc,nv,nocp,stt,excenergy,excnum,ewf) !ex
 	
 	
 	WRITE (file1,"(a7,I0,a4)") 'exc_wf_',excnum,'.dat'
-	Format = "(I,3F15.4,2I,2E15.4)"
+	Format = "(I6,3F15.4,2I6,2E15.4)"   ! the integer widths are required by gfortran
 	
 	WRITE (file2,"(a8,I0,a4)") 'exc_den_',excnum,'.dat'
 	Format2 = "(3F15.4,1E15.4)"	
@@ -984,7 +984,7 @@ subroutine excwfi(outputfolder,ngkpt,kpt,qpt,nc,nv,nocp,stt,excenergy,excnum,qpt
 	
 	
 	WRITE (file1,"(a7,I0,a1,I0,a4)") 'exc_wf_',excnum,"_",qptnum,'.dat'
-	Format = "(I,3F15.4,2I,2E15.4)"
+	Format = "(I6,3F15.4,2I6,2E15.4)"   ! the integer widths are required by gfortran
 	
 	WRITE (file2,"(a8,I0,a1,I0,a4)") 'exc_den_',excnum,"_",qptnum,'.dat'
 	Format2 = "(3F15.4,1E15.4)"
