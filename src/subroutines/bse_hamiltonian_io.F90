@@ -202,7 +202,108 @@ subroutine bse_kpath_checkpoint_replace(source,destination,ok)
 end subroutine bse_kpath_checkpoint_replace
 
 
+subroutine ipa_kblock(nranks,rank,nk,kfirst,klast)
+
+	implicit none
+
+	integer,intent(in) :: nranks,rank,nk
+	integer,intent(out) :: kfirst,klast
+	integer :: base,extra
+
+	! Block of consecutive k points (kfirst..klast, 1-based; empty when klast < kfirst) that rank (0-based) of nranks
+	! takes in the independent-particle stage: nk/nranks points each, the first mod(nk,nranks) ranks one more.
+	! Consecutive blocks keep the eigenvectors vector(:,:,k) and the transitions of those k points contiguous, which is
+	! what ipa_share_kblocks_* below send.
+	base = nk/nranks
+	extra = mod(nk,nranks)
+	kfirst = rank*base+min(rank,extra)+1
+	klast = kfirst+base-1
+	if (rank < extra) klast = klast+1
+
+end subroutine ipa_kblock
+
+
 #ifdef MPI
+subroutine ipa_share_kblocks_complex(values,per_k,nk,comm,mpierror,block_elements)
+
+	use mpi
+	implicit none
+
+	complex :: values(*)
+	integer,intent(in) :: per_k,nk,comm,block_elements
+	integer,intent(out) :: mpierror
+	integer :: nranks,r,k1,k2
+	integer(kind=8) :: first,nelem
+
+	! values holds per_k complex numbers for each of nk k points (k slowest). Every rank has filled its own block of k
+	! points, as ipa_kblock gives it; on return all ranks hold all of them. One broadcast per block, sent in pieces of
+	! block_elements (no MPI count above the default integer), the rank that owns the block being the root.
+	mpierror=MPI_SUCCESS
+	call MPI_COMM_SIZE(comm,nranks,mpierror)
+	if (mpierror /= MPI_SUCCESS) return
+	do r=0,nranks-1
+		call ipa_kblock(nranks,r,nk,k1,k2)
+		if (k2 < k1) cycle
+		first=int(k1-1,kind=8)*int(per_k,kind=8)+1_8
+		nelem=int(k2-k1+1,kind=8)*int(per_k,kind=8)
+		call bse_mpi_bcast_complex_blocks(values(first),nelem,r,comm,mpierror,block_elements)
+		if (mpierror /= MPI_SUCCESS) return
+	end do
+
+end subroutine ipa_share_kblocks_complex
+
+
+subroutine ipa_share_kblocks_real(values,per_k,nk,comm,mpierror,block_elements)
+
+	use mpi
+	implicit none
+
+	real :: values(*)
+	integer,intent(in) :: per_k,nk,comm,block_elements
+	integer,intent(out) :: mpierror
+	integer :: nranks,r,k1,k2
+	integer(kind=8) :: first,nelem
+
+	! ipa_share_kblocks_complex for real numbers: values(per_k,nk)
+	mpierror=MPI_SUCCESS
+	call MPI_COMM_SIZE(comm,nranks,mpierror)
+	if (mpierror /= MPI_SUCCESS) return
+	do r=0,nranks-1
+		call ipa_kblock(nranks,r,nk,k1,k2)
+		if (k2 < k1) cycle
+		first=int(k1-1,kind=8)*int(per_k,kind=8)+1_8
+		nelem=int(k2-k1+1,kind=8)*int(per_k,kind=8)
+		call bse_mpi_bcast_real_blocks(values(first),nelem,r,comm,mpierror,block_elements)
+		if (mpierror /= MPI_SUCCESS) return
+	end do
+
+end subroutine ipa_share_kblocks_real
+
+
+subroutine ipa_share_kblocks_integer(values,nk,comm,mpierror)
+
+	use mpi
+	implicit none
+
+	integer :: values(*)
+	integer,intent(in) :: nk,comm
+	integer,intent(out) :: mpierror
+	integer :: nranks,r,k1,k2
+
+	! ipa_share_kblocks_complex for one default integer per k point (nk of them, far below the MPI count limit)
+	mpierror=MPI_SUCCESS
+	call MPI_COMM_SIZE(comm,nranks,mpierror)
+	if (mpierror /= MPI_SUCCESS) return
+	do r=0,nranks-1
+		call ipa_kblock(nranks,r,nk,k1,k2)
+		if (k2 < k1) cycle
+		call MPI_BCAST(values(k1),k2-k1+1,MPI_INTEGER,r,comm,mpierror)
+		if (mpierror /= MPI_SUCCESS) return
+	end do
+
+end subroutine ipa_share_kblocks_integer
+
+
 subroutine bse_hamiltonian_write_parallel(filename,metadata,dimbse,hbse,locr,locc,lld, &
 									  mb,nb,nprow,npcol,myrow,mycol,comm,ok)
 

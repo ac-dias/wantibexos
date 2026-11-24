@@ -329,6 +329,43 @@ or `check` (both, on a regular sample of about 60 x 60 / 2 elements, the largest
 written to `log_bse_optics.dat`). The table is used for `DFT= "S"` without `BSE_FF`; `BSE_FF`, finite
 temperature, `DFT= "W"` and the q-path BSE keep their kernels.
 
+Independent-particle stage under MPI
+-------------------------------------
+
+The single-particle part of a BSE run (H(k) c = E S(k) c for every k, the optical vertices of all
+transitions, the sorted `ipa_oscf*.dat` tables; at zero and at finite temperature) and the `IPA= T` tool share
+their k points between the MPI ranks. Rank r takes a block of consecutive k points (`ipa_kblock`: nk/P points each, the first
+mod(nk, P) ranks one more), diagonalizes them with OpenMP over the block, builds the vertices of their
+transitions, and then every rank receives the eigenvectors and vertices of the others, one broadcast per
+block (`ipa_share_kblocks_*`, in pieces of 16777216 elements); rank 0 sorts and writes the tables.
+Before, rank 0 alone diagonalized while the other ranks waited, and then every rank computed the vertices
+of all transitions, so that more ranks did not shorten the stage; `IPA= T` ran on rank 0 only.
+
+With `DFT= "S"` and `BSE_CENTER_FILE`, the residual position term i delta/(delta + i SIGMA) <c|D(k)|v> of the
+vertex rebuilt D(k), a sum over the lattice vectors of three N x N matrices (N the number of basis
+functions), for every transition. D(k) is now built once per k point and contracted with all (c, v) pairs by
+matrix products (`optdip_s_kall`, as `optsp_s_kall` does for dH/dk and dS/dk), in the BSE solvers and in
+`IPA= T`, the finite-temperature solver and `IPA= T` also taking `optsp_s_kall`. 4 x 4 supercell of graphene (SIESTA, N = 544), 4 x 4 mesh,
+32+32 bands, with the position file, `-O3`: the vertices take 23.1 s on 1 rank of 4 threads before and 0.06 s
+now; on 4 ranks of 1 thread the stage took 4.7 s (eigensystems) + 120.7 s (vertices) and takes 1.2 s + 0.09 s.
+With `TEMP` > 0 the vertices took 80.1 s (1 rank of 4 threads) and 321.9 s (4 ranks of 1 thread) and take
+0.06 s and 0.09 s.
+
+What is left is the diagonalization of H(k): the time of the stage is about ceil(nk / (P x threads)) times
+that of one k point (0.3 s at N = 544, 3.0 s at N = 1224, one thread), and cores beyond the number of k points
+do not shorten it. Going below that needs each H(k) split over a group of ranks (ScaLAPACK, ELPA); it is not
+done, because while there are at least as many k points as cores the k points need no communication.
+`log_bse_optics.dat` (`log_ipa-diel.dat` for `IPA= T`) gives the wall time of the eigensystems, of the
+vertices and of sending the results, on the slowest rank. The outputs are those of the former code for 1 to 7
+ranks, also with more ranks than k points (compare runs of the same number of threads: the threads of
+`eigsys` change the eigenvectors of degenerate states): the BSE solver writes identical `ipa_oscf*.dat`
+without the position file and for `DFT= "W"`, and with it they agree to the last printed digit (1e-6; the
+sum is made by matrix products instead of a loop); `IPA= T` and the finite-temperature solver with `DFT= "S"`
+agree to single-precision rounding (2e-6 of the value), since they did not have `optsp_s_kall` before, and are
+identical for `DFT= "W"`. `tests/test_ipa_kblocks.F90` (`make -j1 test-ipa-kblocks`, and
+`mpiexec -n 3 build/tests/test_ipa_kblocks.x`) checks the block partition, `optdip_s_kall` against `optdip_s`
+and the transfers.
+
 ELPA BSE diagonalization
 -------------------------
 

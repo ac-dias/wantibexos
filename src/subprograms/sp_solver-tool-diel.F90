@@ -3,6 +3,9 @@
 subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 		     sme,params,exc,mshift,tmcoef,nocpf,fermishift,mag)
 
+#ifdef MPI
+	use mpi
+#endif
 	use omp_lib
 	use hamiltonian_input_variables
 	use input_variables, only: bsecenterfile
@@ -16,13 +19,15 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 	integer :: dimsp !=ngrid*ngrid*nc*nv ! dimensão da matriz bse
 
 
-	real,allocatable,dimension(:,:) :: eigv
+	real,allocatable,dimension(:,:) :: eigt !band energies, eigt(band,k)
 	real,allocatable,dimension(:,:) :: tau !DFT=S orbital centres
 	real,allocatable,dimension(:,:,:,:) :: dmat !DFT=S orbital dipoles (BSE_CENTER_FILE)
 	type(rmn_data) :: rmn
 	logical :: use_dmat,use_rmn,rmn_ok
 	character(len=256) :: rmn_message
-	complex,allocatable,dimension(:,:,:) :: vector
+	complex,allocatable,dimension(:,:,:) :: vector !eigenvectors, vector(orbital,band,k)
+	complex,allocatable,dimension(:) :: hrx,hry,hrz !optical vertices of the transitions
+	complex,allocatable,dimension(:,:,:) :: opt_hx,opt_hy,opt_hz !DFT=S vertices <c|dH/dk-ebar dS/dk|v>/(Ec-Ev), (nc,nv,k)
 
 	real,allocatable,dimension(:,:) :: kpt !pontos k do grid
 
@@ -33,7 +38,15 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 
 	!real,allocatable,dimension(:) :: esp
 
-	integer:: counter,c,v,i,j,f,l,h,k,kl,erro
+	integer:: counter,c,v,i,j,f,l,h,k,kl,erro,iko
+
+	! The k points are shared between the MPI ranks (all of them in a serial run): block kfirst..klast of this rank, its
+	! transitions ifirst..ilast, and the wall times of the stage on this rank and on the slowest one (1, 2 eigensystems:
+	! computing, sharing; 3, 4 vertices: computing, sharing)
+	integer :: Node,Nodes,MPIError
+	integer :: kfirst,klast,nt_k,ifirst,ilast
+	integer,parameter :: ipa_mpi_block_elements=16777216
+	double precision :: ipa_t(4),ipa_tmax(4),ipa_tw
 
 	integer :: ncaux,nvaux
 
@@ -94,7 +107,15 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
     	!if (erro/=0) stop "Erro na abertura do arquivo de entrada ambiente dieletrico"
 
 
-	!OUTPUT
+	Node = 0
+	Nodes = 1
+#ifdef MPI
+	call MPI_COMM_RANK(MPI_COMM_WORLD, Node, MPIError)
+	call MPI_COMM_SIZE(MPI_COMM_WORLD, Nodes, MPIError)
+#endif
+
+	!OUTPUT, written by rank 0 alone
+	if (Node == 0) then
 	OPEN(UNIT=301, FILE=trim(outputfolder)//"ipa_oscf.dat",STATUS='unknown', IOSTAT=erro)
     	if (erro/=0) stop "Error opening ipa_oscf output file"
     	
@@ -113,6 +134,9 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
     	
 	OPEN(UNIT=400, FILE=trim(outputfolder)//"log_ipa-diel.dat",STATUS='unknown', IOSTAT=erro)
     	if (erro/=0) stop "Error opening log_ipa-diel output file"  	
+
+
+	end if
 
 
 	call cpu_time(t0)
@@ -151,6 +175,7 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 	ngkpt = ngrid(1)*ngrid(2)*ngrid(3)
 	dimsp = ngkpt*nc*nv
 	
+	if (Node == 0) then
 	write(400,*)
 	write(400,*)
 	write(400,*)
@@ -168,6 +193,7 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 	write(400,*) 
 
 	call flush(400)	
+	end if
 
 
 	allocate(kpt(ngkpt,3))
@@ -175,23 +201,33 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 
 	call monhkhorst_pack(ngrid(1),ngrid(2),ngrid(3),mshift,rlat(1,:),rlat(2,:),rlat(3,:),kpt)
 
+	! Every rank takes a block of consecutive k points (ipa_kblock) and diagonalizes H(k) c = E S(k) c for them with OpenMP,
+	! then receives the other blocks; a serial run is one rank with every k point.
+	call ipa_kblock(Nodes,Node,ngkpt,kfirst,klast)
+	nt_k = nc*nv
+	ifirst = (kfirst-1)*nt_k+1
+	ilast = klast*nt_k
+	ipa_t = 0.0d0
 	allocate(eaux(w90basis),vaux(w90basis,w90basis))
-	allocate(eigv(ngkpt,nc+nv),vector(ngkpt,nc+nv,w90basis))
-	
-		
-
+	allocate(eigt(nc+nv,ngkpt),vector(w90basis,nc+nv,ngkpt))
+	eigt = 0.0
+	if (Node == 0) then
+		write(400,"(A,I0,A,I0,A,I0,A)") ' IPA: ',ngkpt,' k points, shared between ',Nodes,' MPI ranks of ',nthreads,' threads'
+		call flush(400)
+	end if
+	ipa_tw = omp_get_wtime()
 
 	!$omp parallel do default(shared) private(i,j,l,h,eaux,vaux)
-	do i=1,ngkpt
+	do i=kfirst,klast
 
 #ifdef MKL
 		call MKL_SET_NUM_THREADS(1)
-#endif		
+#endif
 
 
 #ifdef AOCL		
 		call bli_thread_set_num_threads(1)
-#endif	
+#endif
 
 #ifdef OPENBLAS
 		call OPENBLAS_SET_NUM_THREADS(1)
@@ -216,21 +252,17 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 
 			do j=1,nc+nv
 	
-				eigv(i,j)= eaux(nocpk(i)-nv+j)
+				eigt(j,i)= eaux(nocpk(i)-nv+j)
 
 			end do
 			
-
-
 			do l=1,nc+nv
-
 
 				do h=1,w90basis
 
-					vector(i,l,h)=vaux(nocpk(i)-nv+l,h)
+					vector(h,l,i)=vaux(nocpk(i)-nv+l,h)
 
 				end do
-			
 
 			end do
 
@@ -238,8 +270,29 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 	end do
 	!$omp end parallel do
 	deallocate(eaux,vaux)
-	write(400,*) 'eigenvalues and eigenvectors calculated'
-	call flush(400)
+	ipa_t(1) = omp_get_wtime()-ipa_tw
+
+	! every rank receives the band indices, energies and eigenvectors of the k points of the other ranks
+#ifdef MPI
+	if (Nodes > 1) then
+		ipa_tw = omp_get_wtime()
+		call ipa_share_kblocks_integer(nocpk,ngkpt,MPI_COMM_WORLD,MPIError)
+		if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('single-particle band indices',MPIError)
+		call ipa_share_kblocks_real(eigt,nc+nv,ngkpt,MPI_COMM_WORLD,MPIError,ipa_mpi_block_elements)
+		if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('single-particle eigenvalues',MPIError)
+		call ipa_share_kblocks_complex(vector,(nc+nv)*w90basis,ngkpt,MPI_COMM_WORLD,MPIError,ipa_mpi_block_elements)
+		if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('single-particle eigenvectors',MPIError)
+		ipa_t(2) = omp_get_wtime()-ipa_tw
+	end if
+	call MPI_REDUCE(ipa_t(1:2),ipa_tmax(1:2),2,MPI_DOUBLE_PRECISION,MPI_MAX,0,MPI_COMM_WORLD,MPIError)
+#else
+	ipa_tmax(1:2) = ipa_t(1:2)
+#endif
+	if (Node == 0) then
+		write(400,*) 'eigenvalues and eigenvectors calculated'
+		write(400,"(A,F12.3,A,F12.3,A)") ' IPA eigensystems wall time (slowest rank): ',ipa_tmax(1),' s, sharing: ',ipa_tmax(2),' s'
+		call flush(400)
+	end if
 
 
 	!definindo os numeros quanticos dos estados
@@ -256,6 +309,8 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 	!allocate(auxx(dimsp),auxy(dimsp),auxz(dimsp))
 	!allocate(auyy(dimsp),auyz(dimsp),auzz(dimsp))
 	
+	allocate(hrx(dimsp),hry(dimsp),hrz(dimsp))
+	if (Node == 0) then
 	allocate(vecres(dimsp,17))
 
 	write(301,*) "#","  ", "energy","  ","xx","  ","yy","  ","zz","  ","xy","  ","xz","  ","yz"
@@ -277,6 +332,7 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 	else
 	
 	 continue
+	end if
 	end if
 	
 	! DFT=S: orbital centres for the atomic-gauge optical vertex
@@ -310,48 +366,119 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 	! r_cv. With the shifted energies <c|dH/dk|v>/(Ec-Ev) would shrink by
 	! (Ec-Ev)/(Ec-Ev+scs), and for DFT=S the -(Ec+Ev)/2 dS/dk term would change.
 
-	!$omp parallel do default(shared) private(i,ec,ev,hrsp,hrsm,hxsp,hysp,hzsp,rmn_ok,rmn_message)
+	! DFT=S, hoisted: dH/dk, dS/dk and D(k) depend on k only. optsp_s_kall and optdip_s_kall build those N x N matrices once per
+	! k point and contract them with all (c,v) pairs of that k by matrix products (one k per thread, serial BLAS inside), instead
+	! of once per transition. Each rank does the k points of its block (those of the eigensystems) and the transitions of
+	! those k points (consecutive: the states are ordered by k); the vertices are shared afterwards.
+	ipa_tw = omp_get_wtime()
+	if (dft .eq. "S") then
+		allocate(opt_hx(nc,nv,kfirst:klast),opt_hy(nc,nv,kfirst:klast),opt_hz(nc,nv,kfirst:klast))
+		!$omp parallel do default(shared) private(iko) schedule(dynamic,1)
+		do iko=kfirst,klast
+#ifdef MKL
+			call MKL_SET_NUM_THREADS(1)
+#endif
+#ifdef AOCL
+			call bli_thread_set_num_threads(1)
+#endif
+#ifdef OPENBLAS
+			call OPENBLAS_SET_NUM_THREADS(1)
+#endif
+			call optsp_s_kall(nv,nc,eigt(1:nv,iko),eigt(nv+1:nv+nc,iko),scs,efermi,fermishift,&
+			     vector(:,1:nv,iko),vector(:,nv+1:nv+nc,iko),&
+			     kpt(iko,1),kpt(iko,2),kpt(iko,3),sme,&
+			     w90basis,nvec,rvec,hopmatrices,ihopmatrices,ovp,tau,&
+			     opt_hx(:,:,iko),opt_hy(:,:,iko),opt_hz(:,:,iko))
+			if (use_dmat) call optdip_s_kall(nv,nc,eigt(1:nv,iko),eigt(nv+1:nv+nc,iko),scs,sme,&
+			     vector(:,1:nv,iko),vector(:,nv+1:nv+nc,iko),&
+			     kpt(iko,1),kpt(iko,2),kpt(iko,3),w90basis,nvec,rvec,dmat,&
+			     opt_hx(:,:,iko),opt_hy(:,:,iko),opt_hz(:,:,iko))
+		end do
+		!$omp end parallel do
+#ifdef MKL
+		call MKL_SET_NUM_THREADS(nthreads)
+#endif
+#ifdef AOCL
+		call bli_thread_set_num_threads(nthreads)
+#endif
+#ifdef OPENBLAS
+		call OPENBLAS_SET_NUM_THREADS(nthreads)
+#endif
+	end if
 
-	do i=1,dimsp
+	! the transitions of the k points of this rank
+	if (ilast >= ifirst) then
+		if (stt(ifirst,4) /= kfirst .or. stt(ilast,4) /= klast) then
+			write(*,*) 'IPA: the transitions of the k points ',kfirst,' to ',klast,' are not the rows ',ifirst,' to ',ilast,' of stt'
+			stop 'Unexpected order of the exciton basis states'
+		end if
+	end if
 
-		ec = eigv(stt(i,4),stt(i,3))
-		ev = eigv(stt(i,4),stt(i,2))
-		     
+	!$omp parallel do default(shared) private(i,rmn_ok,rmn_message)
+
+	do i=ifirst,ilast
+
 		if (dft .eq. "S") then
-		call optsp_s(eigv(stt(i,4),stt(i,2))+efermi+fermishift,vector(stt(i,4),stt(i,2),:),&
-		     eigv(stt(i,4),stt(i,3))-scs+efermi+fermishift,vector(stt(i,4),stt(i,3),:),&
-		     kpt(stt(i,4),1),kpt(stt(i,4),2),kpt(stt(i,4),3),sme,&
-		     w90basis,nvec,rvec,hopmatrices,ihopmatrices,ovp,tau,&
-		     hxsp,hysp,hzsp)
-		if (use_dmat) call optdip_s(eigv(stt(i,4),stt(i,3))-scs-eigv(stt(i,4),stt(i,2)),sme,&
-		     vector(stt(i,4),stt(i,2),:),vector(stt(i,4),stt(i,3),:),&
-		     kpt(stt(i,4),1),kpt(stt(i,4),2),kpt(stt(i,4),3),w90basis,nvec,rvec,dmat,&
-		     hxsp,hysp,hzsp)
+		hrx(i) = opt_hx(stt(i,3)-nv,stt(i,2),stt(i,4))
+		hry(i) = opt_hy(stt(i,3)-nv,stt(i,2),stt(i,4))
+		hrz(i) = opt_hz(stt(i,3)-nv,stt(i,2),stt(i,4))
 		else
-	       call optsp(eigv(stt(i,4),stt(i,2)),vector(stt(i,4),stt(i,2),:),&
-		     eigv(stt(i,4),stt(i,3))-scs,vector(stt(i,4),stt(i,3),:),&
+	       call optsp(eigt(stt(i,2),stt(i,4)),vector(:,stt(i,2),stt(i,4)),&
+		     eigt(stt(i,3),stt(i,4))-scs,vector(:,stt(i,3),stt(i,4)),&
 		     kpt(stt(i,4),1),kpt(stt(i,4),2),kpt(stt(i,4),3),ffactor,sme,&
 		     w90basis,nvec,rlat,rvec,hopmatrices,&
-		     ihopmatrices,hxsp,hysp,hzsp)  
+		     ihopmatrices,hrx(i),hry(i),hrz(i))
 		end if
 		if (use_rmn .and. .not. use_dmat) then
 			call rmn_apply_q0_optical_correction(rmn,kpt(stt(i,4),:),rlat,&
-				eigv(stt(i,4),stt(i,2)),vector(stt(i,4),stt(i,2),:),&
-				eigv(stt(i,4),stt(i,3))-scs,vector(stt(i,4),stt(i,3),:),sme,&
-				hxsp,hysp,hzsp,rmn_ok,rmn_message)
+				eigt(stt(i,2),stt(i,4)),vector(:,stt(i,2),stt(i,4)),&
+				eigt(stt(i,3),stt(i,4))-scs,vector(:,stt(i,3),stt(i,4)),sme,&
+				hrx(i),hry(i),hrz(i),rmn_ok,rmn_message)
 			if (.not. rmn_ok) stop 'Unable to evaluate the Q=0 Wannier position matrix'
 		end if
-		
+
+	end do
+
+	!$omp end parallel do
+
+	if (dft .eq. "S") deallocate(opt_hx,opt_hy,opt_hz)
+	ipa_t(3) = omp_get_wtime()-ipa_tw
+
+	! every rank receives the vertices of the other ranks (the transitions of a k point are consecutive); only rank 0 writes
+#ifdef MPI
+	if (Nodes > 1) then
+		ipa_tw = omp_get_wtime()
+		call ipa_share_kblocks_complex(hrx,nt_k,ngkpt,MPI_COMM_WORLD,MPIError,ipa_mpi_block_elements)
+		if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('optical vertices (x)',MPIError)
+		call ipa_share_kblocks_complex(hry,nt_k,ngkpt,MPI_COMM_WORLD,MPIError,ipa_mpi_block_elements)
+		if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('optical vertices (y)',MPIError)
+		call ipa_share_kblocks_complex(hrz,nt_k,ngkpt,MPI_COMM_WORLD,MPIError,ipa_mpi_block_elements)
+		if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('optical vertices (z)',MPIError)
+		ipa_t(4) = omp_get_wtime()-ipa_tw
+	end if
+	call MPI_REDUCE(ipa_t(3:4),ipa_tmax(3:4),2,MPI_DOUBLE_PRECISION,MPI_MAX,0,MPI_COMM_WORLD,MPIError)
+#else
+	ipa_tmax(3:4) = ipa_t(3:4)
+#endif
+
+	if (Node == 0) then
+
+	!$omp parallel do default(shared) private(i,hxsp,hysp,hzsp,hrsp,hrsm)
+	do i=1,dimsp
+
+		hxsp = hrx(i)
+		hysp = hry(i)
+		hzsp = hrz(i)
 		hrsp = (hxsp+cmplx(0.,1.)*hysp)*(1.0/sqrt(2.))
 		hrsm = (hxsp-cmplx(0.,1.)*hysp)*(1.0/sqrt(2.))
-		
+
 		vecres(i,1) = real(kpt(stt(i,4),1))
 		vecres(i,2) = real(kpt(stt(i,4),2))
 		vecres(i,3) = real(kpt(stt(i,4),3))
 		vecres(i,4) = real(nocpk(stt(i,4)))
 		vecres(i,5) = real(nocpk(stt(i,4))-nv+stt(i,3))
 		vecres(i,6) = real(nocpk(stt(i,4))-nv+stt(i,2))		
-		vecres(i,7) = real(eigv(stt(i,4),stt(i,3))-eigv(stt(i,4),stt(i,2)))		
+		vecres(i,7) = real(eigt(stt(i,3),stt(i,4))-eigt(stt(i,2),stt(i,4)))		
 		vecres(i,8) = real(hxsp*conjg(hxsp))		
 		vecres(i,9) = real(hysp*conjg(hysp))		
 		vecres(i,10) = real(hzsp*conjg(hzsp))
@@ -360,12 +487,10 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 		vecres(i,13) = real(hysp*conjg(hzsp))		 
 		vecres(i,14) = real(hrsp*conjg(hrsp))
 		vecres(i,15) = real(hrsm*conjg(hrsm))
-		vecres(i,16) = real(eigv(stt(i,4),stt(i,3)))
-		vecres(i,17) =	real(eigv(stt(i,4),stt(i,2)))			
-
+		vecres(i,16) = real(eigt(stt(i,3),stt(i,4)))
+		vecres(i,17) =	real(eigt(stt(i,2),stt(i,4)))			
 
 	end do
-
 	!$omp end parallel do
 
 	call Sortrows(7,17,vecres, dimsp)
@@ -390,10 +515,15 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 	
 	end do
 
+	write(400,"(A,F12.3,A,F12.3,A)") ' IPA vertices wall time (slowest rank): ',ipa_tmax(3),' s, sharing: ',ipa_tmax(4),' s'
+	end if
+
+	if (Node == 0) then
 	write(400,*) 'IPA single particle optics finished'
 	call flush(400)	
+	end if
 
-	deallocate(eigv,vector)
+	deallocate(eigt,vector,hrx,hry,hrz)
 	deallocate(rvec,hopmatrices,ihopmatrices,ffactor)
 	deallocate(tau)
 	if (use_dmat) deallocate(dmat)
@@ -406,18 +536,21 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 	deallocate(stt)
 	!deallocate(esp)
 	deallocate(kpt)
-	deallocate(vecres)
+	if (allocated(vecres)) deallocate(vecres)
 
 
 	call cpu_time(tf)
 	call date_and_time(VALUES=values2)
+
+	close(200)
+
+	if (Node == 0) then
 
 	write(400,*)
 	write(400,*) 'end','   ','month',values2(2),'day',values2(3),'',values2(5),'hours',values2(6),'min',values2(7),'seg'
 	write(400,*)
 
 	close(400)
-	close(200)
 
 
 
@@ -430,6 +563,8 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 	close(304)
 	else
 	 continue
+	end if
+
 	end if
 	
 

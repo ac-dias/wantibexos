@@ -344,6 +344,69 @@ subroutine optdip_s(delta,sme,vv,vc,kx,ky,kz,w90basis,nvec,rvec,dmat,hrx,hry,hrz
 end subroutine optdip_s
 
 
+subroutine optdip_s_kall(nv,nc,evraw,ecraw,scs,sme,vv,vc,kx,ky,kz,w90basis,nvec,rvec,dmat,hrx,hry,hrz)
+
+	implicit none
+
+	integer :: nv,nc,w90basis,nvec
+	integer :: i,a,b,c,v
+	real :: kx,ky,kz,scs,sme,delta
+	real,dimension(nv) :: evraw
+	real,dimension(nc) :: ecraw
+	real,dimension(nvec,3) :: rvec
+	real,dimension(nvec,w90basis,w90basis,3) :: dmat
+	complex,dimension(w90basis,nv) :: vv
+	complex,dimension(w90basis,nc) :: vc
+	complex,dimension(nc,nv) :: hrx,hry,hrz
+	complex,dimension(nc,nv) :: drx,dry,drz
+	complex,dimension(nvec) :: ph
+	complex :: factor,sx,sy,sz
+	complex,dimension(:,:),allocatable :: dx,dy,dz
+
+	! optdip_s for all conduction/valence pairs of ONE k point: hr_cv = hr_cv + i delta/(delta + i sme) <c|D(k)|v>, with
+	! delta = ecraw(c) - scs - evraw(v), the DFT gap that the caller of optdip_s passes (evraw, ecraw: the eigsys energies,
+	! scissor included in the conduction ones). optdip_s builds D(k) = sum_R exp(i k.R) D(R), three N x N matrices of nvec
+	! terms each, for every transition; D(k) depends on k only, so it is built once here (the same sum, in the same order,
+	! as optdip_s) and <c|D|v> of every pair is vc^H (D vv), two CGEMM calls per direction, as in optsp_s_kall.
+	! dmat has the image index first: the sum over images runs with unit stride.
+
+	allocate(dx(w90basis,w90basis),dy(w90basis,w90basis),dz(w90basis,w90basis))
+	do i=1,nvec
+		ph(i) = exp(cmplx(0.0,kx*rvec(i,1)+ky*rvec(i,2)+kz*rvec(i,3)))
+	end do
+	do b=1,w90basis
+		do a=1,w90basis
+			sx = 0.0
+			sy = 0.0
+			sz = 0.0
+			do i=1,nvec
+				sx = sx+ph(i)*dmat(i,a,b,1)
+				sy = sy+ph(i)*dmat(i,a,b,2)
+				sz = sz+ph(i)*dmat(i,a,b,3)
+			end do
+			dx(a,b) = sx
+			dy(a,b) = sy
+			dz(a,b) = sz
+		end do
+	end do
+	call sandwich_block(w90basis,nv,nc,vc,dx,vv,drx)
+	call sandwich_block(w90basis,nv,nc,vc,dy,vv,dry)
+	call sandwich_block(w90basis,nv,nc,vc,dz,vv,drz)
+	deallocate(dx,dy,dz)
+
+	do v=1,nv
+		do c=1,nc
+			delta = ecraw(c)-scs-evraw(v)
+			factor = cmplx(0.0,1.0)*delta/cmplx(delta,sme)
+			hrx(c,v) = hrx(c,v)+factor*drx(c,v)
+			hry(c,v) = hry(c,v)+factor*dry(c,v)
+			hrz(c,v) = hrz(c,v)+factor*drz(c,v)
+		end do
+	end do
+
+end subroutine optdip_s_kall
+
+
 
 subroutine optdiel(rtype,vc,dimse,ngrid,elux,exciton,fosc,sme,rpart,ipart)
 

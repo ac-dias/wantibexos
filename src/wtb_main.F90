@@ -375,13 +375,16 @@ program main
 	end if
 	
 	
-	if (spdiel .and. Node == 0) then
+	! every rank takes part: the k points are shared between them, rank 0 writes the files
+	if (spdiel) then
 
 	call spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 		     sme,params,exc,mshift,tmcoef,nocpf,fermishift,mag)
 
-	 write(2077,*) "Single particle dielectric calculation finished"
-         call flush(2077)
+	 if (Node == 0) then
+	  write(2077,*) "Single particle dielectric calculation finished"
+          call flush(2077)
+	 end if
 
 	end if
 

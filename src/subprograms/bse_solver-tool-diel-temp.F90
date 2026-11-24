@@ -71,6 +71,15 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 	real:: t0,tf
 	double precision :: task_start,task_elapsed,task_elapsed_max
+	! independent-particle stage shared between the MPI ranks: the block kfirst..klast of k points of this rank, the
+	! transitions ifirst..ilast of those k points, band energies eigt(band,k) (contiguous per k) and the wall times of the
+	! stage on this rank and on the slowest one: 1, 2 eigensystems (computing, sharing them with the other ranks), 3, 4 vertices
+	! (computing, sharing)
+	integer :: kfirst,klast,nt_k,ifirst,ilast,iko
+	real,allocatable,dimension(:,:) :: eigt
+	real :: egap_loc
+	double precision :: ipa_t(4),ipa_tmax(4),ipa_tw
+	complex,allocatable,dimension(:,:,:) :: opt_hx,opt_hy,opt_hz !DFT=S optical vertices <c|dH/dk-ebar dS/dk|v>/(Ec-Ev), (nc,nv,k)
 	integer,dimension(8) :: values,values2
 
 	integer,allocatable,dimension(:) :: nocpk
@@ -562,9 +571,22 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	
 	end select
 
+	! Independent-particle stage, shared between the MPI ranks (a serial run is one rank with every k point): H(k) c = E S(k) c
+	! of different k points is independent, so each rank takes a block of consecutive k points (ipa_kblock), diagonalizes
+	! them with OpenMP over the block, and then receives the other blocks. The vertices below are done the same way.
+	call ipa_kblock(Nodes,Node,ngkpt,kfirst,klast)
+	nt_k = nc*nv
+	ifirst = (kfirst-1)*nt_k+1
+	ilast = klast*nt_k
+	ipa_t = 0.0d0
+	allocate(eigt(nc+nv,ngkpt))
+	eigt = 0.0
+	allocate(eaux(w90basis),vaux(w90basis,w90basis))
 	if (Node == 0) then
-		allocate(eaux(w90basis),vaux(w90basis,w90basis))
-		write(300,*) "We are going to perform independent particle calculations in serial for now"
+		write(300,"(A,I0,A,I0,A,I0,A)") ' IPA: ',ngkpt,' k points, shared between ',Nodes,' MPI ranks of ',nthreads,' threads'
+		call flush(300)
+	end if
+	ipa_tw = omp_get_wtime()
 
 #ifdef MKL
 	        call MKL_SET_NUM_THREADS(1)
@@ -581,7 +603,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 #endif
 
 	!$omp parallel do default(shared) private(i,j,l,h,eaux,vaux) reduction(min:egap)
-	do i=1,ngkpt
+	do i=kfirst,klast
 
 		call eigsys(nthreads,dft,systype,scs+tcor,exc,nocpk(i),ffactor,kpt(i,1),kpt(i,2),kpt(i,3),w90basis,nvec,&
 			    rlat,rvec,hopmatrices,&
@@ -589,37 +611,19 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 			do j=1,nc+nv
 	
-				eigv(i,j)= eaux(nocpk(i)-nv+j)
+				eigt(j,i)= eaux(nocpk(i)-nv+j)
 
 			end do
 			
-			!if (ntype .eq. 2) then
+			if ((eigt(nv+1,i)-eigt(nv,i)) .le. egap) then
 
-			!do kl = 1,w90basis
-
-			!	call layercont(w90basis,vaux(kl,:),orbweight,lcount(i,kl))
-
-
-			!end do
-
-			!else 
-
-			!	continue
-
-			!end if
-
-			if ((eigv(i,nv+1)-eigv(i,nv)) .le. egap) then
-
-				egap = eigv(i,nv+1)-eigv(i,nv)
+				egap = eigt(nv+1,i)-eigt(nv,i)
 
 			else
 
 				continue
 
 			end if
-
-			
-
 
 			do l=1,nc+nv
 
@@ -652,23 +656,41 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 #endif
 
 	deallocate(eaux,vaux)
-	write(300,*) 'direct gap:', egap
-	write(300,*) 'eigenvalues and eigenvectors calculated'
-	call flush(300)
+	ipa_t(1) = omp_get_wtime()-ipa_tw
+
+	! every rank receives the band indices, energies and eigenvectors of the k points of the other ranks, and the smallest direct gap
+#ifdef MPI
+	if (Nodes > 1) then
+		ipa_tw = omp_get_wtime()
+		call ipa_share_kblocks_integer(nocpk,ngkpt,MPI_COMM_WORLD,MPIError)
+		if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('single-particle band indices',MPIError)
+		call ipa_share_kblocks_real(eigt,nc+nv,ngkpt,MPI_COMM_WORLD,MPIError,bse_mpi_block_elements)
+		if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('single-particle eigenvalues',MPIError)
+		call ipa_share_kblocks_complex(vector,(nc+nv)*w90basis,ngkpt,MPI_COMM_WORLD,MPIError,bse_mpi_block_elements)
+		if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('single-particle eigenvectors',MPIError)
+		egap_loc = egap
+		call MPI_ALLREDUCE(egap_loc, egap, 1, MPI_REAL, MPI_MIN, MPI_COMM_WORLD, MPIError)
+		if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('direct gap',MPIError)
+		ipa_t(2) = omp_get_wtime()-ipa_tw
 	end if
+#endif
+	do i=1,ngkpt
+		do j=1,nc+nv
+			eigv(i,j) = eigt(j,i)
+		end do
+	end do
 
 #ifdef MPI
-	call MPI_BCAST(nocpk, ngkpt, MPI_INTEGER, 0, MPI_COMM_WORLD, MPIError)
-	if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('single-particle band indices',MPIError)
-	mpi_transfer_elements=int(ngkpt,kind=8)*int(nc+nv,kind=8)
-	call bse_mpi_bcast_real_blocks(eigv,mpi_transfer_elements,0,MPI_COMM_WORLD,MPIError,bse_mpi_block_elements)
-	if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('single-particle eigenvalues',MPIError)
-	mpi_transfer_elements=mpi_transfer_elements*int(w90basis,kind=8)
-	call bse_mpi_bcast_complex_blocks(vector,mpi_transfer_elements,0,MPI_COMM_WORLD,MPIError,bse_mpi_block_elements)
-	if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('single-particle eigenvectors',MPIError)
-	call MPI_BCAST(egap, 1, MPI_REAL, 0, MPI_COMM_WORLD, MPIError)
-	if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('direct gap',MPIError)
+	call MPI_REDUCE(ipa_t(1:2),ipa_tmax(1:2),2,MPI_DOUBLE_PRECISION,MPI_MAX,0,MPI_COMM_WORLD,MPIError)
+#else
+	ipa_tmax(1:2) = ipa_t(1:2)
 #endif
+	if (Node == 0) then
+		write(300,*) 'direct gap:', egap
+		write(300,*) 'eigenvalues and eigenvectors calculated'
+		write(300,"(A,F12.3,A,F12.3,A)") ' IPA eigensystems wall time (slowest rank): ',ipa_tmax(1),' s, sharing: ',ipa_tmax(2),' s'
+		call flush(300)
+	end if
 
 
 	allocate(sk(w90basis,w90basis,ngkpt))
@@ -712,7 +734,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 
 	
-	allocate(vecres(dimbse,17))	
+	if (Node == 0) allocate(vecres(dimbse,17))
 	
 	if (Node == 0) then
 	write(401,*) "#","  ", "energy","  ","xx","  ","yy","  ","zz","  ","xy","  ","xz","  ","yz"
@@ -772,24 +794,63 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	! r_cv. With the shifted energies <c|dH/dk|v>/(Ec-Ev) would shrink by
 	! (Ec-Ev)/(Ec-Ev+(scs+tcor)), and for DFT=S the -(Ec+Ev)/2 dS/dk term would change.
 
-	 !$omp parallel do default(shared) private(i,ec,ev,rmn_ok,rmn_message)
+	! DFT=S, hoisted: dH/dk, dS/dk and D(k) depend on k only. optsp_s_kall and optdip_s_kall build those N x N matrices once per
+	! k point and contract them with all (c,v) pairs of that k by matrix products (one k per thread, serial BLAS inside), instead
+	! of once per transition. Each rank does the k points of its block (the same k points as the eigensystems above) and the
+	! transitions of those k points (they are consecutive: the states are ordered by k); the vertices are shared afterwards.
+	ipa_tw = omp_get_wtime()
+	if (dft .eq. "S") then
+		allocate(opt_hx(nc,nv,kfirst:klast),opt_hy(nc,nv,kfirst:klast),opt_hz(nc,nv,kfirst:klast))
+#ifdef MKL
+		call MKL_SET_NUM_THREADS(1)
+#endif
+#ifdef AOCL
+		call bli_thread_set_num_threads(1)
+#endif
+#ifdef OPENBLAS
+		call OPENBLAS_SET_NUM_THREADS(1)
+#endif
+		!$omp parallel do default(shared) private(iko) schedule(dynamic,1)
+		do iko=kfirst,klast
+			call optsp_s_kall(nv,nc,eigt(1:nv,iko),eigt(nv+1:nv+nc,iko),scs+tcor,efermi,fermishift,&
+			     vector(:,1:nv,iko),vector(:,nv+1:nv+nc,iko),&
+			     kpt(iko,1),kpt(iko,2),kpt(iko,3),sme,&
+			     w90basis,nvec,rvec,hopmatrices,ihopmatrices,ovp,tau,&
+			     opt_hx(:,:,iko),opt_hy(:,:,iko),opt_hz(:,:,iko))
+			! the residual position term of BSE_CENTER_FILE, added to the vertices of this k point
+			if (use_dmat) call optdip_s_kall(nv,nc,eigt(1:nv,iko),eigt(nv+1:nv+nc,iko),scs+tcor,sme,&
+			     vector(:,1:nv,iko),vector(:,nv+1:nv+nc,iko),&
+			     kpt(iko,1),kpt(iko,2),kpt(iko,3),w90basis,nvec,rvec,dmat,&
+			     opt_hx(:,:,iko),opt_hy(:,:,iko),opt_hz(:,:,iko))
+		end do
+		!$omp end parallel do
+#ifdef MKL
+		call MKL_SET_NUM_THREADS(nthreads)
+#endif
+#ifdef AOCL
+		call bli_thread_set_num_threads(nthreads)
+#endif
+#ifdef OPENBLAS
+		call OPENBLAS_SET_NUM_THREADS(nthreads)
+#endif
+	end if
 
-	do i=1,dimbse
+	! the transitions of the k points of this rank
+	if (ilast >= ifirst) then
+		if (stt(ifirst,4) /= kfirst .or. stt(ilast,4) /= klast) then
+			write(*,*) 'IPA: the transitions of the k points ',kfirst,' to ',klast,' are not the rows ',ifirst,' to ',ilast,' of stt'
+			stop 'Unexpected order of the exciton basis states'
+		end if
+	end if
 
-		ec = eigv(stt(i,4),stt(i,3))
-		ev = eigv(stt(i,4),stt(i,2))
-		fdeh(i) = fermidisteh(ec,ev,temp)
+	 !$omp parallel do default(shared) private(i,rmn_ok,rmn_message)
+
+	do i=ifirst,ilast
 
 		if (dft .eq. "S") then
-		call optsp_s(eigv(stt(i,4),stt(i,2))+efermi+fermishift,vector(:,stt(i,2),stt(i,4)),&
-		     eigv(stt(i,4),stt(i,3))-(scs+tcor)+efermi+fermishift,vector(:,stt(i,3),stt(i,4)),&
-		     kpt(stt(i,4),1),kpt(stt(i,4),2),kpt(stt(i,4),3),sme,&
-		     w90basis,nvec,rvec,hopmatrices,ihopmatrices,ovp,tau,&
-		     hrx(i),hry(i),hrz(i))
-		if (use_dmat) call optdip_s(eigv(stt(i,4),stt(i,3))-(scs+tcor)-eigv(stt(i,4),stt(i,2)),sme,&
-		     vector(:,stt(i,2),stt(i,4)),vector(:,stt(i,3),stt(i,4)),&
-		     kpt(stt(i,4),1),kpt(stt(i,4),2),kpt(stt(i,4),3),w90basis,nvec,rvec,dmat,&
-		     hrx(i),hry(i),hrz(i))
+		hrx(i) = opt_hx(stt(i,3)-nv,stt(i,2),stt(i,4))
+		hry(i) = opt_hy(stt(i,3)-nv,stt(i,2),stt(i,4))
+		hrz(i) = opt_hz(stt(i,3)-nv,stt(i,2),stt(i,4))
 		else
 		call optsp(eigv(stt(i,4),stt(i,2)),vector(:,stt(i,2),stt(i,4)),&
 		     eigv(stt(i,4),stt(i,3))-(scs+tcor),vector(:,stt(i,3),stt(i,4)),&
@@ -804,10 +865,44 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 				hrx(i),hry(i),hrz(i),rmn_ok,rmn_message)
 			if (.not. rmn_ok) stop 'Unable to evaluate the Q=0 Wannier position matrix'
 		end if
-		     
-		     hrsp(i) = (hrx(i)+cmplx(0.,1.)*hry(i))*(1.0/sqrt(2.))
-		     hrsm(i) = (hrx(i)-cmplx(0.,1.)*hry(i))*(1.0/sqrt(2.))
-		     
+
+	end do
+
+	 !$omp end parallel do
+
+	if (dft .eq. "S") deallocate(opt_hx,opt_hy,opt_hz)
+	deallocate(eigt)
+	ipa_t(3) = omp_get_wtime()-ipa_tw
+
+	! every rank receives the vertices of the transitions of the other ranks (the rows of a k point are consecutive in hrx)
+#ifdef MPI
+	if (Nodes > 1) then
+		ipa_tw = omp_get_wtime()
+		call ipa_share_kblocks_complex(hrx,nt_k,ngkpt,MPI_COMM_WORLD,MPIError,bse_mpi_block_elements)
+		if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('optical vertices (x)',MPIError)
+		call ipa_share_kblocks_complex(hry,nt_k,ngkpt,MPI_COMM_WORLD,MPIError,bse_mpi_block_elements)
+		if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('optical vertices (y)',MPIError)
+		call ipa_share_kblocks_complex(hrz,nt_k,ngkpt,MPI_COMM_WORLD,MPIError,bse_mpi_block_elements)
+		if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('optical vertices (z)',MPIError)
+		ipa_t(4) = omp_get_wtime()-ipa_tw
+	end if
+#endif
+
+	! Fermi factor of every transition and circular components, for the BSE spectra of every rank
+	 !$omp parallel do default(shared) private(i,ec,ev)
+	do i=1,dimbse
+		ec = eigv(stt(i,4),stt(i,3))
+		ev = eigv(stt(i,4),stt(i,2))
+		fdeh(i) = fermidisteh(ec,ev,temp)
+		hrsp(i) = (hrx(i)+cmplx(0.,1.)*hry(i))*(1.0/sqrt(2.))
+		hrsm(i) = (hrx(i)-cmplx(0.,1.)*hry(i))*(1.0/sqrt(2.))
+	end do
+	 !$omp end parallel do
+
+	! the sorted IPA files are written by rank 0 alone: it makes the table of the transitions
+	if (Node == 0) then
+	 !$omp parallel do default(shared) private(i)
+	 do i=1,dimbse
 		vecres(i,1) = real(kpt(stt(i,4),1))
 		vecres(i,2) = real(kpt(stt(i,4),2))
 		vecres(i,3) = real(kpt(stt(i,4),3))
@@ -825,24 +920,19 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		vecres(i,15) = real(hrsm(i)*conjg(hrsm(i)))*fdeh(i)			     
 		vecres(i,16) = real(eigv(stt(i,4),stt(i,3)))
 		vecres(i,17) =	real(eigv(stt(i,4),stt(i,2)))
-
-
-	end do
-	
-
+	 end do
 	 !$omp end parallel do
-
-
-	
-	
-	call Sortrows(7,17,vecres, dimbse)
+	 call Sortrows(7,17,vecres, dimbse)
+	end if
 
 #ifdef MPI
 	task_elapsed = MPI_WTIME() - task_start
 	call MPI_REDUCE(task_elapsed,task_elapsed_max,1,MPI_DOUBLE_PRECISION,MPI_MAX,0,MPI_COMM_WORLD,MPIError)
+	call MPI_REDUCE(ipa_t(3:4),ipa_tmax(3:4),2,MPI_DOUBLE_PRECISION,MPI_MAX,0,MPI_COMM_WORLD,MPIError)
 #else
 	task_elapsed = omp_get_wtime()
 	task_elapsed_max = task_elapsed - task_start
+	ipa_tmax(3:4) = ipa_t(3:4)
 #endif
 	
 	if (Node == 0) then
@@ -867,12 +957,13 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	end do	
 
 	write(300,*) 'IPA transitions: finished'
+	write(300,"(A,F12.3,A,F12.3,A)") ' IPA vertices wall time (slowest rank): ',ipa_tmax(3),' s, sharing: ',ipa_tmax(4),' s'
 	write(300,"(A,F12.3,A)") 'IPA transitions wall time: ',task_elapsed_max,' s'
 	write(300,*) 'IPA single particle optics finished'
 	call flush(300)
 	end if
 
-	deallocate(vecres)
+	if (allocated(vecres)) deallocate(vecres)
 	allocate(stt_bse(4,dimbse),kpt_bse(3,ngkpt))
 	do i=1,dimbse
 		do j=1,4
