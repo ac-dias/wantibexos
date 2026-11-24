@@ -234,6 +234,77 @@ subroutine optsp_s(ev,vv,ec,vc,kx,ky,kz,sme,w90basis,nvec,rvec,&
 end subroutine optsp_s
 
 
+subroutine optsp_s_kall(nv,nc,evraw,ecraw,scs,efermi,fshift,vv,vc,kx,ky,kz,sme,w90basis,nvec,rvec,&
+			hopmatrices,ihopmatrices,ovp,tau,hrx,hry,hrz)
+
+	implicit none
+
+	integer :: nv,nc,w90basis,nvec
+	integer :: c,v
+	real :: kx,ky,kz,sme,scs,efermi,fshift
+	real :: ev,ec,ebar
+	real,dimension(nv) :: evraw
+	real,dimension(nc) :: ecraw
+	real,dimension(nvec,3) :: rvec
+	real,dimension(nvec,w90basis,w90basis) :: hopmatrices,ihopmatrices,ovp
+	real,dimension(w90basis,3) :: tau
+	complex,dimension(w90basis,nv) :: vv
+	complex,dimension(w90basis,nc) :: vc
+	complex,dimension(nc,nv) :: hrx,hry,hrz
+	complex,dimension(nc,nv) :: sxm,sym,szm
+	complex,dimension(:,:),allocatable :: hx,hy,hz,sx,sy,sz
+
+	! optsp_s for all conduction/valence pairs of ONE k point:
+	!   hr_cv = <c| dH/dk - (ec+ev)/2 dS/dk |v> / (ec - ev + i sme)
+	! with ev = evraw+efermi+fshift and ec = ecraw-scs+efermi+fshift, as the caller of optsp_s passes them. dH/dk and
+	! dS/dk (hlm_s) are built once here; <c|X|v> for every pair is vc^H (X vv), two CGEMM calls per matrix.
+
+	allocate(hx(w90basis,w90basis),hy(w90basis,w90basis),hz(w90basis,w90basis))
+	allocate(sx(w90basis,w90basis),sy(w90basis,w90basis),sz(w90basis,w90basis))
+	call hlm_s(kx,ky,kz,w90basis,nvec,rvec,hopmatrices,ihopmatrices,ovp,tau,hx,hy,hz,sx,sy,sz)
+	call sandwich_block(w90basis,nv,nc,vc,hx,vv,hrx)
+	call sandwich_block(w90basis,nv,nc,vc,hy,vv,hry)
+	call sandwich_block(w90basis,nv,nc,vc,hz,vv,hrz)
+	call sandwich_block(w90basis,nv,nc,vc,sx,vv,sxm)
+	call sandwich_block(w90basis,nv,nc,vc,sy,vv,sym)
+	call sandwich_block(w90basis,nv,nc,vc,sz,vv,szm)
+	deallocate(hx,hy,hz,sx,sy,sz)
+
+	do v=1,nv
+		ev = evraw(v)+efermi+fshift
+		do c=1,nc
+			ec = ecraw(c)-scs+efermi+fshift
+			ebar = 0.5*(ec+ev)
+			hrx(c,v) = (hrx(c,v)-ebar*sxm(c,v))/cmplx(ec-ev,sme)
+			hry(c,v) = (hry(c,v)-ebar*sym(c,v))/cmplx(ec-ev,sme)
+			hrz(c,v) = (hrz(c,v)-ebar*szm(c,v))/cmplx(ec-ev,sme)
+		end do
+	end do
+
+end subroutine optsp_s_kall
+
+
+subroutine sandwich_block(n,nv,nc,vc,hm,vv,res)
+
+	implicit none
+
+	integer :: n,nv,nc
+	complex,dimension(n,nc) :: vc
+	complex,dimension(n,n) :: hm
+	complex,dimension(n,nv) :: vv
+	complex,dimension(nc,nv) :: res
+	complex,dimension(:,:),allocatable :: aux
+	complex,parameter :: cone=(1.0,0.0),czero=(0.0,0.0)
+
+	! res(c,v) = sum_ab conjg(vc(a,c)) hm(a,b) vv(b,v), the sandwich of every pair at once
+	allocate(aux(n,nv))
+	call cgemm('N','N',n,nv,n,cone,hm,n,vv,n,czero,aux,n)
+	call cgemm('C','N',nc,nv,n,cone,vc,n,aux,n,czero,res,nc)
+	deallocate(aux)
+
+end subroutine sandwich_block
+
+
 subroutine optdip_s(delta,sme,vv,vc,kx,ky,kz,w90basis,nvec,rvec,dmat,hrx,hry,hrz)
 
 	implicit none

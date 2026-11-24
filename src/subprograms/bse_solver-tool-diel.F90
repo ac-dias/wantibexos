@@ -58,6 +58,8 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 
 	complex,allocatable,dimension(:) :: hrx,hry,hrz,hrsp,hrsm 
+	complex,allocatable,dimension(:,:,:) :: opt_hx,opt_hy,opt_hz !DFT=S optical vertices <c|dH/dk-ebar dS/dk|v>/(Ec-Ev), (nc,nv,k)
+	integer :: iko
 
 	real,allocatable,dimension(:) :: actxx,actyy,actzz,actxy,actxz,actyz,actsp,actsm
 
@@ -788,6 +790,39 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	! r_cv. With the shifted energies <c|dH/dk|v>/(Ec-Ev) would shrink by
 	! (Ec-Ev)/(Ec-Ev+scs), and for DFT=S the -(Ec+Ev)/2 dS/dk term would change.
 
+	! DFT=S, hoisted: dH/dk and dS/dk depend on k only. optsp_s_kall builds the six N x N matrices once per k point and contracts
+	! them with all (c,v) pairs of that k by matrix products (one k per thread, serial BLAS inside), instead of once per transition.
+	if (dft .eq. "S") then
+		allocate(opt_hx(nc,nv,ngkpt),opt_hy(nc,nv,ngkpt),opt_hz(nc,nv,ngkpt))
+		!$omp parallel do default(shared) private(iko) schedule(dynamic,1)
+		do iko=1,ngkpt
+#ifdef MKL
+			call MKL_SET_NUM_THREADS(1)
+#endif
+#ifdef AOCL
+			call bli_thread_set_num_threads(1)
+#endif
+#ifdef OPENBLAS
+			call OPENBLAS_SET_NUM_THREADS(1)
+#endif
+			call optsp_s_kall(nv,nc,eigv(iko,1:nv),eigv(iko,nv+1:nv+nc),scs,efermi,fermishift,&
+			     vector(:,1:nv,iko),vector(:,nv+1:nv+nc,iko),&
+			     kpt(iko,1),kpt(iko,2),kpt(iko,3),sme,&
+			     w90basis,nvec,rvec,hopmatrices,ihopmatrices,ovp,tau,&
+			     opt_hx(:,:,iko),opt_hy(:,:,iko),opt_hz(:,:,iko))
+		end do
+		!$omp end parallel do
+#ifdef MKL
+		call MKL_SET_NUM_THREADS(nthreads)
+#endif
+#ifdef AOCL
+		call bli_thread_set_num_threads(nthreads)
+#endif
+#ifdef OPENBLAS
+		call OPENBLAS_SET_NUM_THREADS(nthreads)
+#endif
+	end if
+
 			 !$omp parallel do private(rmn_ok,rmn_message)
 	do i=1,dimbse
 
@@ -795,11 +830,9 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		!ev = eigv(stt(i,4),stt(i,2))
 
 		if (dft .eq. "S") then
-		call optsp_s(eigv(stt(i,4),stt(i,2))+efermi+fermishift,vector(:,stt(i,2),stt(i,4)),&
-		     eigv(stt(i,4),stt(i,3))-scs+efermi+fermishift,vector(:,stt(i,3),stt(i,4)),&
-		     kpt(stt(i,4),1),kpt(stt(i,4),2),kpt(stt(i,4),3),sme,&
-		     w90basis,nvec,rvec,hopmatrices,ihopmatrices,ovp,tau,&
-		     hrx(i),hry(i),hrz(i))
+		hrx(i) = opt_hx(stt(i,3)-nv,stt(i,2),stt(i,4))
+		hry(i) = opt_hy(stt(i,3)-nv,stt(i,2),stt(i,4))
+		hrz(i) = opt_hz(stt(i,3)-nv,stt(i,2),stt(i,4))
 		if (use_dmat) call optdip_s(eigv(stt(i,4),stt(i,3))-scs-eigv(stt(i,4),stt(i,2)),sme,&
 		     vector(:,stt(i,2),stt(i,4)),vector(:,stt(i,3),stt(i,4)),&
 		     kpt(stt(i,4),1),kpt(stt(i,4),2),kpt(stt(i,4),3),w90basis,nvec,rvec,dmat,&
@@ -846,6 +879,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 	 ! $omp end parallel
 	
+		if (dft .eq. "S") deallocate(opt_hx,opt_hy,opt_hz)
 		call Bubblem(7,17,vecres, dimbse)
 
 #ifdef MPI
