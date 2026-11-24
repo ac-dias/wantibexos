@@ -880,7 +880,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	 ! $omp end parallel
 	
 		if (dft .eq. "S") deallocate(opt_hx,opt_hy,opt_hz)
-		call Bubblem(7,17,vecres, dimbse)
+		call Sortrows(7,17,vecres, dimbse)
 
 #ifdef MPI
 		task_elapsed = MPI_WTIME() - task_start

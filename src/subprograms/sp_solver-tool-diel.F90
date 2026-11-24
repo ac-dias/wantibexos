@@ -368,7 +368,7 @@ subroutine spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 
 	!$omp end parallel do
 
-	call Bubblem(7,17,vecres, dimsp)
+	call Sortrows(7,17,vecres, dimsp)
 	
 	do i=1,dimsp
 	

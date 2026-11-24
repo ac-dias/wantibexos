@@ -835,7 +835,7 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 	
 	
-	call Bubblem(7,15,vecres, dimbse)
+	call Sortrows(7,17,vecres, dimbse)
 
 #ifdef MPI
 	task_elapsed = MPI_WTIME() - task_start

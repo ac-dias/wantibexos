@@ -541,48 +541,98 @@ function hv(e,e0)
 
 end function hv
 
-!algoritmo buble sort modificado 
-!a=coluna do array referencia para ordenação
-!b=numero de colunas do array 
-!n=numero de linhas do array
-
-!return p,q in ascending order
-Subroutine Orderm(a,b,p,q)
-
-	implicit none
-
-	integer :: a,b
-	real,dimension(b) :: p,q,temp
-
-  	if (p(a)>q(a)) then
-
-    		temp=p
-
-    		p=q
-
-    		q=temp
-  	end if
-  	return
-
-end subroutine Orderm
-
-!Buuble sorting of integer array A
-Subroutine Bubblem(a,b,vec, n)
+!Sorts the rows of VEC(n,b) in ascending order of column a.
+!The sort is stable (rows with equal keys keep their order), as the former
+!bubble sort was, so the output files do not change. It is O(n log n): a
+!bottom-up merge sort of (key, row index) pairs, then one permutation of the rows.
+!a=column used as the sorting key
+!b=number of columns of the array
+!n=number of rows of the array
+Subroutine Sortrows(a,b,vec,n)
 
 	implicit none
 
-	integer :: n,i,j,a,b
+	integer :: a,b,n
 	real,dimension(n,b) :: vec
 
+	integer :: i,j,w,lo,mid,hi,p,q,k
+	integer,allocatable :: idx(:),idx2(:)
+	real,allocatable :: key(:),key2(:),col(:)
 
-  	do i=1, n
-    		do j=n, i+1, -1
-      		call Orderm(a,b,vec(j-1,:), vec(j,:))
-    		end do
-  	end do
+	if (n < 2) return
 
-  	return
-end subroutine Bubblem
+	!nothing to do when the keys are already in order
+	do i=2,n
+		if (vec(i,a) < vec(i-1,a)) exit
+	end do
+	if (i > n) return
+
+	allocate(idx(n),idx2(n),key(n),key2(n),col(n))
+	key = vec(:,a)
+	idx = [(i,i=1,n)]
+
+	!runs of 8 by insertion sort (stable), then merge runs of width w
+	do lo=1,n,8
+		hi = min(lo+7,n)
+		do i=lo+1,hi
+			j = i
+			do while (j > lo)
+				if (.not. (key(j) < key(j-1))) exit
+				call swap(j,j-1)
+				j = j-1
+			end do
+		end do
+	end do
+
+	w = 8
+	do while (w < n)
+		do lo=1,n,2*w
+			mid = min(lo+w-1,n)
+			hi  = min(lo+2*w-1,n)
+			p = lo
+			q = mid+1
+			k = lo
+			do while (p <= mid .and. q <= hi)
+				!take from the right run only if strictly smaller (stability)
+				if (key(q) < key(p)) then
+					key2(k) = key(q); idx2(k) = idx(q); q = q+1
+				else
+					key2(k) = key(p); idx2(k) = idx(p); p = p+1
+				end if
+				k = k+1
+			end do
+			do while (p <= mid)
+				key2(k) = key(p); idx2(k) = idx(p); p = p+1; k = k+1
+			end do
+			do while (q <= hi)
+				key2(k) = key(q); idx2(k) = idx(q); q = q+1; k = k+1
+			end do
+		end do
+		key = key2
+		idx = idx2
+		w = 2*w
+	end do
+
+	do j=1,b
+		col = vec(:,j)
+		do i=1,n
+			vec(i,j) = col(idx(i))
+		end do
+	end do
+
+	deallocate(idx,idx2,key,key2,col)
+
+contains
+
+	subroutine swap(x,y)
+		integer,intent(in) :: x,y
+		integer :: it
+		real :: rt
+		rt = key(x); key(x) = key(y); key(y) = rt
+		it = idx(x); idx(x) = idx(y); idx(y) = it
+	end subroutine swap
+
+end subroutine Sortrows
 
 !subrotina pra interpolação
 subroutine interp1D(ndim,b,a,vec,x,res)
