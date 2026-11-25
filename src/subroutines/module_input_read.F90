@@ -433,7 +433,10 @@ module input_variables
 	logical :: bseff,bseffexch
 	character(len=70) :: bsefffile
 	real :: bseffecut
-		
+	character(len=160) :: bse_eph_file
+	real :: bse_eph_eta
+	real :: bse_eph_temp
+
 
 	logical :: bandscalc,doscalc
 	logical :: bse,bsepol,bsekpath
@@ -614,6 +617,9 @@ subroutine input_read
 	bsefffile = ""
 	bseffexch = .false.
 	bseffecut = 0.0
+	bse_eph_file = ""
+	bse_eph_eta = 0.01
+	bse_eph_temp = 300.0
 	bsekpathcheckpoint = .false.
 	bsekpathcheckpointfile = "bse_kpath_checkpoint"
 	
@@ -832,6 +838,18 @@ subroutine input_read
 	case ("BSE_FF_ECUT=")
 
 		read(b,*) bseffecut
+
+	case ("BSE_EPH_FILE=")
+
+		bse_eph_file = b
+
+	case ("BSE_EPH_ETA=")
+
+		read(b,*) bse_eph_eta
+
+	case ("BSE_EPH_TEMP=")
+
+		read(b,*) bse_eph_temp
 
 	case ("dK=")
 
