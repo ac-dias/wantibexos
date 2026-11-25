@@ -375,8 +375,19 @@ program main
 	end if
 	
 	
+	! BSE= T already writes ipa_oscf*.dat and tm_coef*.dat (the finite-temperature
+	! solver with the Fermi factors), so the single particle pass is skipped then:
+	! it would repeat the work and, at TEMP > 0, overwrite the weighted tables
+	! with the unweighted ones (spoptics has no temperature).
+	if (spdiel .and. bse) then
+	 if (Node == 0) then
+	  write(2077,*) "IPA= T with BSE= T: IPA tables taken from the BSE solver, single particle pass skipped"
+          call flush(2077)
+	 end if
+	end if
+
 	! every rank takes part: the k points are shared between them, rank 0 writes the files
-	if (spdiel) then
+	if (spdiel .and. (.not. bse)) then
 
 	call spoptics(nthreads,dft,outputfolder,ngrid,nc,nv, &
 		     sme,params,exc,mshift,tmcoef,nocpf,fermishift,mag)

@@ -366,6 +366,13 @@ identical for `DFT= "W"`. `tests/test_ipa_kblocks.F90` (`make -j1 test-ipa-kbloc
 `mpiexec -n 3 build/tests/test_ipa_kblocks.x`) checks the block partition, `optdip_s_kall` against `optdip_s`
 and the transfers.
 
+`IPA= T` together with `BSE= T`: the BSE solvers (`bsesolver` at `TEMP` = 0, `bsesolvertemp` otherwise) write the
+same `ipa_oscf*.dat` and `tm_coef*.dat` as `IPA= T`, so the `IPA= T` pass is skipped when `BSE= T` (the log
+says so). It would repeat the independent-particle stage, and at `TEMP` > 0 it would overwrite the tables
+with the Fermi factors by those of `IPA= T`, which has no temperature. `IPA= T` alone is unchanged: at `TEMP` > 0 it
+still gives the table without Fermi factors. Run a separate job with `TEMP` = 0 for the zero-temperature table
+next to a BSE at finite temperature.
+
 ELPA BSE diagonalization
 -------------------------
 
