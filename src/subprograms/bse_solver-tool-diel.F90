@@ -19,8 +19,10 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 #endif
 	use omp_lib
 	use hamiltonian_input_variables
-	use input_variables, only: bsecenterfile, bsecentgrad, bseff, bsefffile, bseffexch, bseffecut, sysdim, bse_qfold, bse_nstates, &
+	use input_variables, only: bsecenterfile, bsecentgrad, bseff, bsefffile, bseffexch, bseffecut, sysdim, bse_qfold, bse_nstates, bse_real, &
 		bse_eph_file, bse_eph_eta, bse_eph_temp
+	use bse_realbasis
+	use bse_symmetry
 	use bse_q_optics, only: rmn_data, rmn_read, rmn_destroy, rmn_centers, &
 		center_phase_build, rmn_apply_q0_optical_correction, rmn_dfts_dipoles
 	use bse_formfactor, only: ff_data, ff_read, ff_destroy, ff_setup_check, ff_mesh_check, &
@@ -214,6 +216,31 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	complex, allocatable :: mu_x_eph(:), mu_y_eph(:), mu_z_eph(:)
 	complex, allocatable :: hbse_work(:,:)
 	integer :: io_eph, iomega
+
+	! BSE_REAL= T: the Hamiltonian in the time-reversal real basis (bse_realbasis), a real symmetric matrix
+	logical :: use_real,rb_ok,rb_full
+	! symmetry of the system, written to the log
+	type(sym_group) :: sym_g
+	real(kind=8),allocatable,dimension(:,:) :: sym_tau
+	character(len=8),allocatable,dimension(:) :: sym_spec
+	integer,allocatable,dimension(:) :: sym_lq
+	logical :: sym_have_pos,sym_have_lab
+	character(len=256) :: symflag
+	real(kind=8) :: symtol,symclu
+	integer :: symerr
+	real,allocatable,dimension(:,:) :: hbse_r,hbse_dist_r,hbse_eigenvectors_r,Zr
+	real,allocatable,dimension(:) :: WORKr
+	real,allocatable,dimension(:,:) :: hv_re,hv_im
+	real,allocatable,dimension(:) :: rb_rvec,rb_w
+	complex,allocatable,dimension(:) :: rb_cvec
+	complex,allocatable,dimension(:,:) :: rb_vsc
+	integer,allocatable,dimension(:) :: rb_kb
+	integer :: rb_nself,rb_nmis,rbu,rbv,rbk,rbnr,rbnc
+	real :: rb_imh,rb_devmax,rb_tgdev,rb_eref
+	real :: blk(2,2),blkt(2,2)
+#ifdef ELPA
+	real,allocatable,dimension(:,:) :: elpa_eigenvectors_r
+#endif
 
 	!call input_read
 
@@ -418,6 +445,22 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		stop
 	end if
 
+	! BSE_REAL= T: real symmetric Hamiltonian of the time-reversal real basis (bse_realbasis).  It needs real H(R) and S(R)
+	! (time-reversal invariant, no spin exchange term), and it leaves out the options that need the complex eigenvectors
+	use_real = bse_real
+	rb_full = .false.
+	if (use_real) then
+		if (bsehamwrite .or. bsehamread) call rb_refuse('BSE_REAL= T does not support BSE_HAM_SAVE / BSE_HAM_READ yet')
+		if (len_trim(bse_eph_file) > 0) call rb_refuse('BSE_REAL= T does not support BSE_EPH_FILE')
+		if (abs(exc) > 0.0) call rb_refuse('BSE_REAL= T needs a time-reversal invariant Hamiltonian: SPIN_EXC= must be 0')
+		rb_imh = maxval(abs(ihopmatrices))
+		if (rb_imh > 1.0e-4) then
+			if (Node == 0) write(*,*) 'BSE_REAL= T: the imaginary part of H(R) is up to',rb_imh,'eV'
+			call rb_refuse('BSE_REAL= T needs a real H(R) (time-reversal invariant tight-binding model)')
+		end if
+		rb_full = use_elpa
+	end if
+
 	!call alat(systype,rlat,a)
 
 	!if (systype .eq. "2D") then
@@ -486,6 +529,19 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 	!shift = 0.0
 	call monhkhorst_pack(ngrid(1),ngrid(2),ngrid(3),mshift,rlat(1,:),rlat(2,:),rlat(3,:),kpt)
+	allocate(rb_kb(ngkpt))
+	rb_kb = 0
+	if (use_real) then
+		call rb_partners(ngkpt,kpt,rlat,1.0e-4,rb_kb,rb_nself,rb_ok)
+		if (.not. rb_ok) call rb_refuse('BSE_REAL= T needs a k mesh that is symmetric under k -> -k (an unshifted mesh or a shift of 1/2)')
+		call rb_setup(ngkpt,nc*nv,rb_kb)
+		if (Node == 0) then
+			write(300,"(A,I0,A,I0,A)") ' BSE_REAL: time-reversal real basis, ',(ngkpt-rb_nself)/2,' pairs of k points (k, -k) and ', &
+				rb_nself,' self-conjugate k points'
+			write(300,*) 'BSE_REAL: the Hamiltonian is a real symmetric matrix of dimension',dimbse
+			call flush(300)
+		end if
+	end if
 	allocate(center_phase(w90basis,ngkpt))
 	center_phase=cmplx(1.0,0.0)
 	if (use_center_phase) then
@@ -509,7 +565,19 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	allocate(actsp(dimbse),actsm(dimbse))	
 	
 	
-	if (Nodes == 1) then
+	if (Nodes == 1 .and. use_real) then
+		! real symmetric solvers: the workspace is allocated at the diagonalization
+		select case (bsealgo)
+		case ("cheev","cheevd","cheevr","cheevx")
+			allocate(W(dimbse))
+		case ("elpa","elpa1","elpa2")
+			write(*,*) "BSE_ALGO=",trim(bsealgo)," requires an MPI run with at least two ranks"
+			stop 1
+		case default
+			write(*,*) "please select a subroutine for diagonalization"
+			stop
+		end select
+	else if (Nodes == 1) then
 	 select case (bsealgo)
 		
 		case ("cheev")
@@ -696,6 +764,25 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	deallocate(eaux,vaux)
 	ipa_t(1) = omp_get_wtime()-ipa_tw
 
+	! BSE_REAL: the vectors of the self-conjugate k points (k = -k + G) must be real (bse_realbasis)
+	rb_devmax = 0.0
+	if (use_real) then
+		do i=kfirst,klast
+			if (rb_kb(i) /= i) cycle
+			allocate(rb_vsc(w90basis,nc+nv),rb_w(nc+nv))
+			call rb_selfconj_vectors(dft,w90basis,nvec,rvec,hopmatrices,ihopmatrices,ffactor,ovp,kpt(i,1),kpt(i,2),kpt(i,3), &
+				nc+nv,nocpk(i)-nv+1,rb_w,rb_vsc,erro)
+			if (erro /= 0) call rb_refuse('BSE_REAL: the real eigensolver failed at a self-conjugate k point')
+			do j=1,nc+nv
+				rb_eref = rb_w(j)-(efermi+fermishift)
+				if (nocpk(i)-nv+j > nocpk(i)) rb_eref = rb_eref+scs
+				rb_devmax = max(rb_devmax,abs(rb_eref-eigt(j,i)))
+				vector(:,j,i) = rb_vsc(:,j)
+			end do
+			deallocate(rb_vsc,rb_w)
+		end do
+	end if
+
 	! every rank receives the band indices, energies and eigenvectors of the k points of the other ranks, and the smallest direct gap
 #ifdef MPI
 	if (Nodes > 1) then
@@ -712,6 +799,21 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		ipa_t(2) = omp_get_wtime()-ipa_tw
 	end if
 #endif
+	if (use_real) then
+#ifdef MPI
+		call MPI_ALLREDUCE(MPI_IN_PLACE,rb_devmax,1,MPI_REAL,MPI_MAX,MPI_COMM_WORLD,MPIError)
+#endif
+		call rb_tr_gauge(ngkpt,nc+nv,w90basis,rb_kb,vector,eigt,nocpk,rb_tgdev,rb_nmis)
+		if (Node == 0) then
+			write(300,"(A,ES9.2,A,ES9.2,A)") ' BSE_REAL: max |E(k)-E(-k)| of the eigensolver ',rb_tgdev, &
+				' eV, real-solver check at the self-conjugate k points ',rb_devmax,' eV'
+			call flush(300)
+		end if
+		if (rb_tgdev > 1.0e-3 .or. rb_devmax > 1.0e-3 .or. rb_nmis > 0) then
+			if (Node == 0) write(*,*) 'BSE_REAL: bands of k and -k differ by',rb_tgdev,'eV (real solver:',rb_devmax,'eV, Fermi-level band mismatches:',rb_nmis,')'
+			call rb_refuse('BSE_REAL= T: the band structure is not time-reversal symmetric, E(k) /= E(-k)')
+		end if
+	end if
 	do i=1,ngkpt
 		do j=1,nc+nv
 			eigv(i,j) = eigt(j,i)
@@ -810,6 +912,41 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	allocate(tau(w90basis,3))
 	tau = 0.0
 	if (dft .eq. "S") call orbital_centres(w90basis,tau)
+	! the symmetry of the system, to the log: point group, operations, the part that keeps the k mesh and the Hamiltonian
+	! (WTB_SYMMETRY=off in the environment skips it, WTB_SYM_TOL= sets the tolerance on the positions, Angstrom)
+	if (Node == 0) then
+		symflag = ''
+		call get_environment_variable('WTB_SYMMETRY',symflag)
+		if (trim(symflag) /= 'off') then
+			symtol = 3.0d-3
+			symflag = ''
+			call get_environment_variable('WTB_SYM_TOL',symflag)
+			if (len_trim(symflag) > 0) read(symflag,*,iostat=symerr) symtol
+			symclu = symtol
+			symflag = ''
+			call get_environment_variable('WTB_SYM_CLUSTER',symflag)
+			if (len_trim(symflag) > 0) read(symflag,*,iostat=symerr) symclu
+			allocate(sym_tau(w90basis,3),sym_spec(w90basis),sym_lq(w90basis))
+			sym_tau = 0.0d0
+			sym_spec = ''
+			sym_lq = -1
+			sym_have_pos = .false.
+			sym_have_lab = .false.
+			if (dft .eq. "S") then
+				sym_tau = dble(tau)
+				sym_have_pos = any(abs(tau) > 0.0)
+				call orbital_labels(w90basis,sym_spec,sym_lq,sym_have_lab)
+			else if (use_center_phase) then
+				sym_tau = transpose(dble(wannier_centers))
+				sym_have_pos = .true.
+			end if
+			write(300,*)
+			call sym_analyze(300,dble(rlat),w90basis,sym_tau,sym_have_pos,sym_spec,sym_lq,sym_have_lab,nvec,rvec, &
+				hopmatrices,ihopmatrices,ovp,.true.,ngrid,dble(mshift),symtol,symclu,sym_g)
+			write(300,*)
+			deallocate(sym_tau,sym_spec,sym_lq)
+		end if
+	end if
 	! DFT=S with BSE_CENTER_FILE: the dipoles between basis orbitals, from
 	! the position matrix of siesta2wtb.py --rmatrix, for optdip_s
 	if (use_dmat) then
@@ -1088,6 +1225,38 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 			end if
 		end if
 #endif
+		if (use_real) then
+			! BSE_REAL: the rows of the real basis are the representative states a (k <= kbar) and the columns the states
+			! b and bbar, so the (k1, k2) pairs are not the upper triangle of the k indices
+			fk_upper = .false.
+			if (.not. kcheck) then
+				fk_needr = .false.
+				fk_needc = .false.
+				if (Nodes == 1) then
+					do rbk=1,ngkpt
+						fk_needr(rbk) = (rb_kb(rbk) >= rbk)
+					end do
+					fk_needc = .true.
+				else
+#ifdef MPI
+					do li=1,locr
+						ig = indxl2g(li, mb, myrow, 0, nprow)
+						rbk = stt_bse(4,rb_row(ig))
+						fk_needr(rbk) = .true.
+						fk_needc(rbk) = .true.
+						fk_needc(rb_kb(rbk)) = .true.
+					end do
+					do lj=1,locc
+						jg = indxl2g(lj, nb, mycol, 0, npcol)
+						rbk = stt_bse(4,rb_row(jg))
+						fk_needr(rbk) = .true.
+						fk_needc(rbk) = .true.
+						fk_needc(rb_kb(rbk)) = .true.
+					end do
+#endif
+				end if
+			end if
+		end if
 		call fk_setup(w90basis,nvec,nc+nv,ngkpt,rvec,ovp,kpt_bse,rlat,vector,tau,max(1,bse_qfold),fk_needr,fk_needc, &
 			fk_upper,fk_nimgtot,fk_t1,fk_t2)
 		fk_active = .true.
@@ -1160,7 +1329,11 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 #endif
 
 	if (Node == 0) then
-		call bse_hamiltonian_memory_report(300,'BSE Hamiltonian, global dense equivalent',dimbse,dimbse)
+		if (use_real) then
+			call bse_hamiltonian_memory_report_real(300,'BSE Hamiltonian, global dense equivalent (real symmetric)',dimbse,dimbse)
+		else
+			call bse_hamiltonian_memory_report(300,'BSE Hamiltonian, global dense equivalent',dimbse,dimbse)
+		end if
 	end if
 
 	! BSE_FF: every q of the mesh in the file, the overlaps of the BSE bands
@@ -1188,7 +1361,20 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		end if
 	end if
 
-    if (Nodes == 1) then
+    if (Nodes == 1 .and. use_real) then
+		! BSE_REAL: real symmetric matrix of the real basis, by units (an s,t couple or a single function), upper triangle
+		allocate(hbse_r(dimbse,dimbse))
+		hbse_r = 0.0
+		!$omp parallel do private(rbu,blk) schedule(dynamic)
+		do rbv=1,rb_nunit
+			do rbu=1,rbv
+				call rb_block(rb_ustart(rbu),rb_ustart(rbv),blk)
+				hbse_r(rb_ustart(rbu):rb_ustart(rbu)+rb_ulen(rbu)-1,rb_ustart(rbv):rb_ustart(rbv)+rb_ulen(rbv)-1) = &
+					blk(1:rb_ulen(rbu),1:rb_ulen(rbv))
+			end do
+		end do
+		!$omp end parallel do
+    else if (Nodes == 1) then
 		bseham_metadata = (/ dimbse,1,1 /)
 		if (use_center_phase) bseham_metadata(3) = 3
 		if (use_center_grad) bseham_metadata(3) = 7   ! 5: the kernel before the pair-midpoint term
@@ -1230,6 +1416,37 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		end if
     else
 #ifdef MPI
+		if (use_real) then
+		! BSE_REAL: the same blocks, on the BLACS grid; an s,t couple never splits across blocks (even block size)
+		if (Node == 0) then
+			call bse_hamiltonian_memory_report_real(300,'BSE Hamiltonian on MPI rank 0 (real symmetric)',lld,max(1,locc))
+		end if
+		allocate(hbse_dist_r(lld,max(1,locc)))
+		call DESCINIT(desca, dimbse, dimbse, mb, nb, 0, 0, blacs_ctxt, lld, INFO)
+		call DESCINIT(descz, dimbse, dimbse, mb, nb, 0, 0, blacs_ctxt, lld, INFO)
+		hbse_dist_r = 0.0
+		!$omp parallel do private(li,ig,lj,jg,rbnr,rbnc,blk,blkt) schedule(dynamic)
+		do lj=1,locc
+			jg = indxl2g(lj, nb, mycol, 0, npcol)
+			if (rb_kind(jg) == 2) cycle
+			rbnc = 1
+			if (rb_kind(jg) == 1) rbnc = 2
+			do li=1,locr
+				ig = indxl2g(li, mb, myrow, 0, nprow)
+				if (rb_kind(ig) == 2) cycle
+				rbnr = 1
+				if (rb_kind(ig) == 1) rbnr = 2
+				if (ig <= jg) then
+					call rb_block(ig,jg,blk)
+					hbse_dist_r(li:li+rbnr-1,lj:lj+rbnc-1) = blk(1:rbnr,1:rbnc)
+				else if (rb_full) then
+					call rb_block(jg,ig,blkt)
+					hbse_dist_r(li:li+rbnr-1,lj:lj+rbnc-1) = transpose(blkt(1:rbnc,1:rbnr))
+				end if
+			end do
+		end do
+		!$omp end parallel do
+		else
 		! the BLACS grid and the local sizes (mb, nb, locr, locc, lld) are set before the vertex table
 		if (Node == 0) then
 			call bse_hamiltonian_memory_report(300,'BSE Hamiltonian on MPI rank 0',lld,max(1,locc))
@@ -1290,6 +1507,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 				end if
 			end if
 		end if
+		end if
 #else
 		stop "MPI/ScaLAPACK path requested without MPI support"
 #endif
@@ -1331,7 +1549,180 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	task_start = omp_get_wtime()
 #endif
 
-    if (Nodes == 1 ) then
+    if (use_real) then
+		if (Nodes == 1) then
+			select case (bsealgo)
+			case ("cheev")
+				LWORK = -1
+				allocate(WORKr(1))
+				CALL SSYEV('Vectors','U',dimbse,hbse_r,dimbse,W,WORKr,LWORK,INFO)
+				LWORK = max(1,int(WORKr(1)))
+				deallocate(WORKr)
+				allocate(WORKr(LWORK))
+				CALL SSYEV('Vectors','U',dimbse,hbse_r,dimbse,W,WORKr,LWORK,INFO)
+				if (INFO .gt. 0) then
+					write(*,*) 'The algorithm failed to compute eigenvalues.'
+					stop
+				end if
+				deallocate(WORKr)
+			case ("cheevd")
+				LWORK = -1
+				LIWORK = -1
+				allocate(WORKr(1),IWORK(1))
+				CALL SSYEVD('Vectors','U',dimbse,hbse_r,dimbse,W,WORKr,LWORK,IWORK,LIWORK,INFO)
+				LWORK = max(1,int(WORKr(1)))
+				LIWORK = max(1,IWORK(1))
+				deallocate(WORKr,IWORK)
+				allocate(WORKr(LWORK),IWORK(LIWORK))
+				CALL SSYEVD('Vectors','U',dimbse,hbse_r,dimbse,W,WORKr,LWORK,IWORK,LIWORK,INFO)
+				if (INFO .gt. 0) then
+					write(*,*) 'The algorithm failed to compute eigenvalues.'
+					stop
+				end if
+				if (W(dimbse) .eq. 0) then
+					write(*,*) 'The algorithm failed to compute eigenvalues. Change BSE_ALGO to cheev'
+					stop
+				end if
+				deallocate(WORKr,IWORK)
+			case ("cheevr")
+				LWORK = -1
+				LIWORK = -1
+				allocate(WORKr(1),IWORK(1),ISUPPZ(2*dimbse),Zr(dimbse,dimbse))
+				CALL SSYEVR('Vectors','A','U',dimbse,hbse_r,dimbse,VL,VU,IL,IU,ABSTOL,M,W,Zr,dimbse,ISUPPZ,WORKr,LWORK,IWORK,LIWORK,INFO)
+				LWORK = max(1,int(WORKr(1)))
+				LIWORK = max(1,IWORK(1))
+				deallocate(WORKr,IWORK)
+				allocate(WORKr(LWORK),IWORK(LIWORK))
+				CALL SSYEVR('Vectors','A','U',dimbse,hbse_r,dimbse,VL,VU,IL,IU,ABSTOL,M,W,Zr,dimbse,ISUPPZ,WORKr,LWORK,IWORK,LIWORK,INFO)
+				if (INFO .gt. 0) then
+					write(*,*) 'The algorithm failed to compute eigenvalues.'
+					stop
+				end if
+				if (W(dimbse) .eq. 0) then
+					write(*,*) 'The algorithm failed to compute eigenvalues. Change BSE_ALGO to cheev'
+					stop
+				end if
+				hbse_r = Zr
+				deallocate(WORKr,IWORK,ISUPPZ,Zr)
+			case ("cheevx")
+				LWORK = -1
+				allocate(WORKr(1),IWORK(5*dimbse),ifailx(dimbse),Zr(dimbse,dimbse))
+				CALL SSYEVX('Vectors','A','U',dimbse,hbse_r,dimbse,VL,VU,IL,IU,ABSTOL,M,W,Zr,dimbse,WORKr,LWORK,IWORK,ifailx,INFO)
+				LWORK = max(1,int(WORKr(1)))
+				deallocate(WORKr)
+				allocate(WORKr(LWORK))
+				CALL SSYEVX('Vectors','A','U',dimbse,hbse_r,dimbse,VL,VU,IL,IU,ABSTOL,M,W,Zr,dimbse,WORKr,LWORK,IWORK,ifailx,INFO)
+				if (INFO .gt. 0) then
+					write(*,*) 'The algorithm failed to compute eigenvalues.'
+					stop
+				end if
+				if (W(dimbse) .eq. 0) then
+					write(*,*) 'The algorithm failed to compute eigenvalues. Change BSE_ALGO to cheev'
+					stop
+				end if
+				hbse_r = Zr
+				deallocate(WORKr,IWORK,ifailx,Zr)
+			end select
+		else
+#ifdef MPI
+#ifdef ELPA
+			if (use_elpa) then
+allocate(elpa_eigenvectors_r(lld,max(1,locc)),stat=erro)
+			if (erro /= 0) then
+				write(*,*) 'Could not allocate ELPA eigenvector storage'
+				call MPI_ABORT(MPI_COMM_WORLD, 1, MPIError)
+			end if
+			! with BSE_NSTATES= below the dimension ELPA fills only the first nstates columns and eigenvalues
+			elpa_eigenvectors_r = 0.0
+			W = 0.0
+			! spectrum bounds and trace of the Hamiltonian, to check what ELPA returns
+			call bse_elpa_bounds_real(dimbse,hbse_dist_r,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,elpa_emin,elpa_emax,elpa_trace,MPIError)
+
+			elpa_status = elpa_init(ELPA_API_VERSION)
+			call elpa_check(elpa_status, 'elpa_init', MPI_COMM_WORLD)
+			elpa_instance => elpa_allocate(elpa_status)
+			call elpa_check(elpa_status, 'elpa_allocate', MPI_COMM_WORLD)
+
+			call elpa_instance%set('na', dimbse, elpa_status)
+			call elpa_check(elpa_status, 'set na', MPI_COMM_WORLD)
+			call elpa_instance%set('nev', nstates, elpa_status)
+			call elpa_check(elpa_status, 'set nev', MPI_COMM_WORLD)
+			call elpa_instance%set('local_nrows', locr, elpa_status)
+			call elpa_check(elpa_status, 'set local_nrows', MPI_COMM_WORLD)
+			call elpa_instance%set('local_ncols', locc, elpa_status)
+			call elpa_check(elpa_status, 'set local_ncols', MPI_COMM_WORLD)
+			call elpa_instance%set('nblk', mb, elpa_status)
+			call elpa_check(elpa_status, 'set nblk', MPI_COMM_WORLD)
+			call elpa_instance%set('mpi_comm_parent', MPI_COMM_WORLD, elpa_status)
+			call elpa_check(elpa_status, 'set mpi_comm_parent', MPI_COMM_WORLD)
+			call elpa_instance%set('process_row', myrow, elpa_status)
+			call elpa_check(elpa_status, 'set process_row', MPI_COMM_WORLD)
+			call elpa_instance%set('process_col', mycol, elpa_status)
+			call elpa_check(elpa_status, 'set process_col', MPI_COMM_WORLD)
+			call elpa_instance%set('omp_threads', nthreads, elpa_status)
+			call elpa_check(elpa_status, 'set omp_threads', MPI_COMM_WORLD)
+			elpa_status = elpa_instance%setup()
+			call elpa_check(elpa_status, 'elpa setup', MPI_COMM_WORLD)
+			if (elpa_stage == 2) then
+				call elpa_instance%set('solver', ELPA_SOLVER_2STAGE, elpa_status)
+				call elpa_check(elpa_status, 'set ELPA 2-stage solver', MPI_COMM_WORLD)
+			else
+				call elpa_instance%set('solver', ELPA_SOLVER_1STAGE, elpa_status)
+				call elpa_check(elpa_status, 'set ELPA 1-stage solver', MPI_COMM_WORLD)
+			end if
+			call elpa_instance%eigenvectors(hbse_dist_r, W, elpa_eigenvectors_r, elpa_status)
+			call elpa_check(elpa_status, 'ELPA eigenvectors', MPI_COMM_WORLD)
+			call elpa_deallocate(elpa_instance, elpa_status)
+			call elpa_check(elpa_status, 'elpa_deallocate', MPI_COMM_WORLD)
+			call elpa_uninit(elpa_status)
+			call elpa_check(elpa_status, 'elpa_uninit', MPI_COMM_WORLD)
+			call bse_elpa_verify(dimbse,nstates,W,elpa_emin,elpa_emax,elpa_trace,Node,elpa_good)
+			if (.not. elpa_good) call MPI_ABORT(MPI_COMM_WORLD, 1, MPIError)
+
+			! only the nstates lowest eigenpairs are defined: clear the other columns so that the
+			! optical amplitudes below get nothing from them
+			if (nstates < dimbse) then
+				W(nstates+1:dimbse) = 0.0
+				do lj=1,locc
+					jg = indxl2g(lj, nb, mycol, 0, npcol)
+					if (jg > nstates) elpa_eigenvectors_r(:,lj) = 0.0
+				end do
+			end if
+
+			deallocate(hbse_dist_r)
+			call move_alloc(elpa_eigenvectors_r, hbse_dist_r)
+			else
+#else
+			if (use_elpa) then
+				write(*,*) 'BSE_ALGO=',trim(bsealgo),' was requested, but this executable was built without ELPA support'
+				call MPI_ABORT(MPI_COMM_WORLD, 1, MPIError)
+			end if
+#endif
+			! PSSYEV overwrites Z before the back transformation is complete: A and Z are distinct distributed arrays
+			allocate(hbse_eigenvectors_r(lld,max(1,locc)),stat=erro)
+			if (erro /= 0) then
+				write(*,*) 'Could not allocate distributed BSE eigenvector storage'
+				call MPI_ABORT(MPI_COMM_WORLD, 1, MPIError)
+			end if
+			LWORK = -1
+			allocate(WORKr(1))
+			call PSSYEV('V','U',dimbse,hbse_dist_r,1,1,desca,W,hbse_eigenvectors_r,1,1,descz,WORKr,LWORK,INFO)
+			LWORK = max(1,int(WORKr(1)))
+			deallocate(WORKr)
+			allocate(WORKr(LWORK))
+			call PSSYEV('V','U',dimbse,hbse_dist_r,1,1,desca,W,hbse_eigenvectors_r,1,1,descz,WORKr,LWORK,INFO)
+			if (INFO .ne. 0) then
+				write(*,*) 'ScaLAPACK PSSYEV failed with INFO = ', INFO
+				call MPI_ABORT(MPI_COMM_WORLD, INFO, MPIError)
+			end if
+			deallocate(WORKr,hbse_dist_r)
+			call move_alloc(hbse_eigenvectors_r,hbse_dist_r)
+#ifdef ELPA
+			end if
+#endif
+#endif
+		end if
+    else if (Nodes == 1 ) then
 		select case (bsealgo)
 		
 		case ("cheev")
@@ -1561,7 +1952,9 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 	!end if 
 	
-		if (Nodes == 1) then
+		if (use_real) then
+		continue
+		else if (Nodes == 1) then
 		select case (bsealgo)
 	
 		case ("cheev")
@@ -1591,7 +1984,85 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 			if (allocated(RWORK)) deallocate(RWORK)
 		end if
 
-		if (Nodes == 1) then
+		if (use_real) then
+			! optical amplitudes in the real basis: sum_r a_r h'_r with h' = U^+ h (bse_realbasis)
+			allocate(hv_re(dimbse,5),hv_im(dimbse,5))
+			call rb_vector(hrx,hv_re(:,1),hv_im(:,1))
+			call rb_vector(hry,hv_re(:,2),hv_im(:,2))
+			call rb_vector(hrz,hv_re(:,3),hv_im(:,3))
+			call rb_vector(hrsp,hv_re(:,4),hv_im(:,4))
+			call rb_vector(hrsm,hv_re(:,5),hv_im(:,5))
+			if (Nodes == 1) then
+				if (Node == 0) then
+					if (bsewf) then
+						allocate(rb_cvec(dimbse))
+						do i=excwf0,excwff
+							call rb_expand(hbse_r(:,i),rb_cvec)
+							call excwf(outputfolder,ngkpt,kpt,nc,nv,nocpk,stt,W(i),i,rb_cvec)
+						end do
+						deallocate(rb_cvec)
+					end if
+
+					call dielbsev_real(nthreads,dimbse,hbse_r,hv_re(:,1),hv_im(:,1),actxx)
+					call dielbsev_real(nthreads,dimbse,hbse_r,hv_re(:,2),hv_im(:,2),actyy)
+					call dielbsev_real(nthreads,dimbse,hbse_r,hv_re(:,3),hv_im(:,3),actzz)
+
+					if (dtfull) then
+						call dielbsep_real(nthreads,dimbse,hbse_r,hv_re(:,1),hv_im(:,1),hv_re(:,2),hv_im(:,2),actxy)
+						call dielbsep_real(nthreads,dimbse,hbse_r,hv_re(:,1),hv_im(:,1),hv_re(:,3),hv_im(:,3),actxz)
+						call dielbsep_real(nthreads,dimbse,hbse_r,hv_re(:,2),hv_im(:,2),hv_re(:,3),hv_im(:,3),actyz)
+					else
+						actxy = 0.0
+						actxz = 0.0
+						actyz = 0.0
+					end if
+
+					if (cpol) then
+						call dielbsev_real(nthreads,dimbse,hbse_r,hv_re(:,4),hv_im(:,4),actsp)
+						call dielbsev_real(nthreads,dimbse,hbse_r,hv_re(:,5),hv_im(:,5),actsm)
+					else
+						actsp = 0.0
+						actsm = 0.0
+					end if
+				end if
+			else
+#ifdef MPI
+				if (bsewf) then
+					allocate(rb_rvec(dimbse),rb_cvec(dimbse))
+					do i=excwf0,excwff
+						call bse_eigenvector_column_dist_real(dimbse,hbse_dist_r,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,i,rb_rvec,MPIError)
+						if (Node == 0) then
+							call rb_expand(rb_rvec,rb_cvec)
+							call excwf(outputfolder,ngkpt,kpt,nc,nv,nocpk,stt,W(i),i,rb_cvec)
+						end if
+					end do
+					deallocate(rb_rvec,rb_cvec)
+				end if
+
+				call dielbsev_dist_real(dimbse,hbse_dist_r,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,hv_re(:,1),hv_im(:,1),actxx,MPIError)
+				call dielbsev_dist_real(dimbse,hbse_dist_r,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,hv_re(:,2),hv_im(:,2),actyy,MPIError)
+				call dielbsev_dist_real(dimbse,hbse_dist_r,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,hv_re(:,3),hv_im(:,3),actzz,MPIError)
+
+				if (dtfull) then
+					call dielbsep_dist_real(dimbse,hbse_dist_r,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,hv_re(:,1),hv_im(:,1),hv_re(:,2),hv_im(:,2),actxy,MPIError)
+					call dielbsep_dist_real(dimbse,hbse_dist_r,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,hv_re(:,1),hv_im(:,1),hv_re(:,3),hv_im(:,3),actxz,MPIError)
+					call dielbsep_dist_real(dimbse,hbse_dist_r,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,hv_re(:,2),hv_im(:,2),hv_re(:,3),hv_im(:,3),actyz,MPIError)
+				else
+					actxy = 0.0
+					actxz = 0.0
+					actyz = 0.0
+				end if
+
+				if (cpol) then
+					call dielbsev_dist_real(dimbse,hbse_dist_r,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,hv_re(:,4),hv_im(:,4),actsp,MPIError)
+					call dielbsev_dist_real(dimbse,hbse_dist_r,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,hv_re(:,5),hv_im(:,5),actsm,MPIError)
+				else
+					actsp = 0.0
+					actsm = 0.0
+				end if
+#endif
+			end if
+		else if (Nodes == 1) then
 			if (Node == 0) then
 				if (bsewf) then
 					do i=excwf0,excwff
@@ -1796,7 +2267,18 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		deallocate(hrx,hry,hrz,hrsp,hrsm)
 	deallocate(actxx,actxy,actxz,actyy,actyz,actzz)
 	deallocate(actsp,actsm)
-		if (Nodes == 1) then
+		if (use_real) then
+			deallocate(hv_re,hv_im)
+			call rb_free()
+			if (Nodes == 1) then
+				deallocate(hbse_r)
+			else
+#ifdef MPI
+				call BLACS_GRIDEXIT(blacs_ctxt)
+				deallocate(hbse_dist_r)
+#endif
+			end if
+		else if (Nodes == 1) then
 			deallocate(hbse)
 		else
 #ifdef MPI
@@ -1804,7 +2286,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 			deallocate(hbse_dist)
 #endif
 		end if
-		deallocate(W,stt,stt_bse,nocpk)
+		deallocate(W,stt,stt_bse,nocpk,rb_kb)
 	deallocate(tau)
 	if (use_dmat) deallocate(dmat)
 	deallocate(ovp)
@@ -1850,6 +2332,62 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 
 	
 
+
+contains
+
+	subroutine rb_refuse(msg)
+		! BSE_REAL= T cannot be used with this input: every rank stops
+		character(len=*),intent(in) :: msg
+		if (Node == 0) write(*,*) trim(msg)
+#ifdef MPI
+		call MPI_ABORT(MPI_COMM_WORLD,1,MPIError)
+#endif
+		stop 1
+	end subroutine rb_refuse
+
+	function rb_melem(i,j) result(h)
+		! kernel element H(i,j) of the states i and j of the complex basis of the mesh
+		integer,intent(in) :: i,j
+		complex :: h
+		integer :: isk,jsk
+		isk = min(stt_bse(4,i),nsk)
+		jsk = min(stt_bse(4,j),nsk)
+		h = matrizelbse(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,rlat,stt_bse(:,i),&
+		    eigv(stt_bse(4,i),stt_bse(3,i)),eigv(stt_bse(4,i),stt_bse(2,i)),vector(:,stt_bse(3,i),stt_bse(4,i)),&
+		    vector(:,stt_bse(2,i),stt_bse(4,i)),kpt_bse(:,stt_bse(4,i)),stt_bse(:,j),eigv(stt_bse(4,j),stt_bse(3,j)),&
+		    eigv(stt_bse(4,j),stt_bse(2,j)),vector(:,stt_bse(3,j),stt_bse(4,j)),vector(:,stt_bse(2,j),stt_bse(4,j)),&
+		    kpt_bse(:,stt_bse(4,j)),dft,nvec,rvec,sk(:,:,isk),sk(:,:,jsk),use_center_phase, &
+		    center_phase(:,stt_bse(4,i)),center_phase(:,stt_bse(4,j)), &
+		    use_center_grad,rmn,wannier_centers,ffdat)
+	end function rb_melem
+
+	subroutine rb_block(ru,rc,b)
+		! the real matrix elements between the real basis functions of the unit that starts at ru (rows) and the one
+		! that starts at rc (columns): at most 2 x 2, from H(a,b) and, for two pairs, H(a,bbar) (bse_realbasis)
+		integer,intent(in) :: ru,rc
+		real,intent(out) :: b(2,2)
+		complex :: h1,h2
+		integer :: ku,kc,ii,jj,kki,kkj,nrow,ncol
+		ku = rb_kind(ru)
+		kc = rb_kind(rc)
+		nrow = 1
+		if (ku == 1) nrow = 2
+		ncol = 1
+		if (kc == 1) ncol = 2
+		h1 = rb_melem(rb_row(ru),rb_row(rc))
+		h2 = cmplx(0.0,0.0)
+		if (ku /= 0 .and. kc /= 0) h2 = rb_melem(rb_row(ru),rb_rowbar(rc))
+		b = 0.0
+		do jj=1,ncol
+			kkj = 0
+			if (kc == 1) kkj = jj
+			do ii=1,nrow
+				kki = 0
+				if (ku == 1) kki = ii
+				b(ii,jj) = rb_element(kki,kkj,h1,h2)
+			end do
+		end do
+	end subroutine rb_block
 
 end subroutine bsesolver
 

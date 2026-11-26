@@ -464,6 +464,7 @@ module input_variables
 	logical :: tpv_cellavg
 	integer :: bse_qfold = 1
 	integer :: bse_nstates = 0
+	logical :: bse_real = .false.
 	real :: st,phavg,temp
 	
 	real :: ctemp,tmax,eg,egd
@@ -518,6 +519,8 @@ subroutine input_read
 	implicit none
 
 	character(len=70) :: a,b
+	character(len=1024) :: rawline
+	logical :: hasline
 	character(len=70) :: add
 	integer :: erro
 	integer :: ic
@@ -667,6 +670,8 @@ subroutine input_read
 	bse_qfold = 1
 	! number of lowest BSE eigenpairs the ELPA solvers (BSE_ALGO= elpa1, elpa2) compute; 0 = all of them
 	bse_nstates = 0
+	! BSE Hamiltonian in the real time-reversal basis (real symmetric matrix, half of the memory)
+	bse_real = .false.
 
 	st = 0.0
 	phavg = 0.0 
@@ -734,8 +739,11 @@ subroutine input_read
 
 	do 
 
-	read(*,*,iostat=erro) a,b
+	! one input line, KEY= value, with any number of blanks (or none) around the key, the = and the value
+	read(*,'(A)',iostat=erro) rawline
 	if (erro/=0) exit
+	call input_split_line(rawline,a,b,hasline)
+	if (.not. hasline) cycle
 
 	select case (a)
 
@@ -998,6 +1006,10 @@ subroutine input_read
 			write(*,*) "BSE_NSTATES= must not be negative (0 = all the states of the BSE Hamiltonian)"
 			stop
 		end if
+
+	case ("BSE_REAL=")
+
+		read(b,*) bse_real
 
 	case ("TMCOEF=")
 
@@ -1336,6 +1348,84 @@ subroutine input_read
 
 end subroutine input_read
 
+
+subroutine input_split_line(line,key,val,found)
+
+	! One line of the input file, KEY= value.  Blanks and tabs around the key, the "=" and the value are free (the
+	! value can follow the "=" directly, and "KEY =value" is read as well); the key can be written in lower case; a
+	! comment starts at # or ! outside of quotes; blank and comment lines are skipped (found = .false.).
+	! key comes back in upper case with its "=" (the form of the cases of input_read), val as the value: the text
+	! between matching quotes, or the first blank-delimited word (so that an unquoted path with "/" is read as it is).
+
+	implicit none
+
+	character(len=*),intent(in) :: line
+	character(len=*),intent(out) :: key,val
+	logical,intent(out) :: found
+
+	character(len=len(line)) :: work,rest
+	integer :: i,n,ieq,iend
+	logical :: inq
+	character(len=1) :: quote,c
+
+	key = ''
+	val = ''
+	found = .false.
+	work = line
+
+	! tabs and carriage returns are blanks; cut the comment
+	inq = .false.
+	quote = ' '
+	n = len_trim(work)
+	do i=1,n
+		c = work(i:i)
+		if (c == char(9) .or. c == char(13)) then
+			work(i:i) = ' '
+		else if (inq) then
+			if (c == quote) inq = .false.
+		else if (c == '"' .or. c == "'") then
+			inq = .true.
+			quote = c
+		else if (c == '#' .or. c == '!') then
+			work(i:) = ' '
+			exit
+		end if
+	end do
+	work = adjustl(work)
+	if (len_trim(work) == 0) return
+	found = .true.
+
+	ieq = index(work,'=')
+	if (ieq > 0) then
+		key = trim(adjustl(work(1:ieq-1)))//'='
+		rest = adjustl(work(ieq+1:))
+	else
+		ieq = index(work,' ')
+		key = work(1:ieq-1)
+		rest = adjustl(work(ieq:))
+	end if
+	do i=1,len(key)
+		c = key(i:i)
+		if (c >= 'a' .and. c <= 'z') key(i:i) = achar(iachar(c)-32)
+	end do
+
+	if (len_trim(rest) == 0) return
+	c = rest(1:1)
+	if (c == '"' .or. c == "'") then
+		iend = index(rest(2:),c)
+		if (iend == 0) then
+			val = rest(2:)
+		else if (iend > 1) then
+			val = rest(2:iend)
+		end if
+	else
+		iend = index(rest,' ')
+		if (iend == 0) iend = len(rest)+1
+		val = rest(1:iend-1)
+	end if
+
+end subroutine input_split_line
+
 subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		     ebse0,ebsef,numbse,sme,ktol,params,kpaths,kpathsbse,orbw,ediel, &
 		     mshift,coultype,bandscalc,doscalc,bse,bsepol,bsekpath,spec,&
@@ -1350,7 +1440,7 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 #ifdef MPI
         use mpi
 #endif
-	use input_variables, only: tpv_kappa,tpv_qtf,tpv_hwp,tpv_thickness,tpv_alpha,tpv_cellavg,bse_qfold,bse_nstates
+	use input_variables, only: tpv_kappa,tpv_qtf,tpv_hwp,tpv_thickness,tpv_alpha,tpv_cellavg,bse_qfold,bse_nstates,bse_real
 	use hamiltonian_input_variables, only: paramsformat
 	implicit none
 	integer :: unitout
@@ -1511,6 +1601,7 @@ subroutine param_out(unitout,nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos,
 	write(unitout,*)
 	write(unitout,"(A10,A12)") "BSE_ALGO= ", bsealgo
 	write(unitout,"(A14,I0)") "BSE_NSTATES= ", bse_nstates
+	write(unitout,"(A11,L1)") "BSE_REAL= ", bse_real
 	write(unitout,"(A15,A12)") "BSE_KPATH_MPI= ", bsekpathmpi
 	write(unitout,"(A22,L1)") "BSE_KPATH_CHECKPOINT= ", bsekpathcheckpoint
 	write(unitout,"(A27,A70)") "BSE_KPATH_CHECKPOINT_FILE= ", bsekpathcheckpointfile

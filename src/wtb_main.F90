@@ -329,6 +329,14 @@ program main
 
 			else
 
+			if (bse_real) then
+				if (Node == 0) write(*,*) 'BSE_REAL= T is not implemented for TEMP > 0 (the finite-temperature BSE solver); set BSE_REAL= F'
+#ifdef MPI
+				call MPI_ABORT(MPI_COMM_WORLD,1,MPIError)
+#endif
+				stop 1
+			end if
+
 			call bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		     ebse0,ebsef,numbse,sme,ktol,params,kpaths,kpathsbse,orbw,ediel, &
 		     exc,mshift,coultype,ez,w,r0,lc,rk,meshtype,bsewf,excwf0,excwff,dtfull,&

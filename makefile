@@ -21,6 +21,8 @@ SUBROUTINE_NAMES := \
     berry_curvature_subs \
     boltzmann_subs \
     bse_hamiltonian_io \
+    bse_realbasis \
+    bse_symmetry \
     bse_formfactor \
     bse_fastkernel \
     bse_subs \
@@ -82,6 +84,7 @@ $(BUILD_DIR)/subprograms/bse_solver-tool-diel.o: $(BUILD_DIR)/subroutines/bse_q_
 $(BUILD_DIR)/subprograms/bse_solver-tool-diel-temp.o: $(BUILD_DIR)/subroutines/bse_eph_subs.o
 $(BUILD_DIR)/subroutines/bse_subs.o: $(BUILD_DIR)/subroutines/bse_q_optics.o
 $(BUILD_DIR)/subroutines/bse_subs.o $(BUILD_DIR)/subprograms/bse_solver-tool-diel.o: $(BUILD_DIR)/subroutines/bse_fastkernel.o
+$(BUILD_DIR)/subprograms/bse_solver-tool-diel.o: $(BUILD_DIR)/subroutines/bse_realbasis.o
 $(BUILD_DIR)/subroutines/bse_subs.o $(BUILD_DIR)/subroutines/bse_subs_temp.o \
     $(BUILD_DIR)/subprograms/bse_solver-tool-diel.o $(BUILD_DIR)/subprograms/bse_solver-tool-diel-temp.o: \
     $(BUILD_DIR)/subroutines/bse_formfactor.o
@@ -172,6 +175,7 @@ $(BUILD_DIR)/subprograms/%.o: $(SRC_DIR)/subprograms/%.F90 makefile.inc
 	$(FOR) -c $< -o $@ $(FC_FLAGS) $(MOD_OUT_FLAG)
 
 UTILS_EXECS := $(BIN_DIR)/nc_nv_finder.x \
+               $(BIN_DIR)/wtb_symmetry.x \
                $(BIN_DIR)/param_gen.x \
                $(BIN_DIR)/param_gen_vasp.x \
                $(BIN_DIR)/absorbance.x \
@@ -185,6 +189,9 @@ pp: $(UTILS_EXECS)
 
 $(BIN_DIR)/nc_nv_finder.x: $(UTILS_DIR)/nc_nv_finder.F90 makefile.inc
 	$(FOR) $< -o $@ $(L_FLAGS) $(MOD_OUT_FLAG)
+
+$(BIN_DIR)/wtb_symmetry.x: $(UTILS_DIR)/wtb_symmetry.F90 $(LIB_FILE) makefile.inc
+	$(FOR) $< -o $@ -L$(BUILD_DIR) -lwtb $(L_FLAGS)
 
 $(BIN_DIR)/param_gen.x: $(UTILS_DIR)/param_gen.F90 makefile.inc
 	$(FOR) $< -o $@ $(L_FLAGS) $(MOD_OUT_FLAG)

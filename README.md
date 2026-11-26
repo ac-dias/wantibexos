@@ -439,6 +439,112 @@ Build ELPA with `FCFLAGS="-O2 -fno-tree-vectorize"` if it happens, or use `elpa1
 compares `elpa`, `elpa1`, `elpa2` and `BSE_NSTATES=` with `cheev` on a generated
 model, at `TEMP= 0` and `80`; run it on every new ELPA build.
 
+BSE in the time-reversal real basis (`BSE_REAL`)
+------------------------------------------------
+
+`BSE_REAL= T` (default `F`) solves the optical Q=0 BSE of `bsesolver` as a **real symmetric** eigenproblem instead of a
+complex Hermitian one. The Hamiltonian keeps its dimension $N=N_kN_vN_c$ but is stored in real single precision:
+half of the memory, the real solvers (`SSYEV`, `SSYEVD`, `SSYEVR`, `SSYEVX`, ScaLAPACK `PSSYEV`, ELPA real) in place of
+the complex ones, and the kernel is evaluated for half of the matrix elements. The spectra are the same.
+
+**The transformation.** Let $|a\rangle=|v\,c\,\mathbf k\rangle$ be the exciton basis of the k mesh.
+
+1. *Time-reversal gauge.* For real $H(\mathbf R)$ and $S(\mathbf R)$ (time-reversal invariant model, no `SPIN_EXC`),
+   $\psi^*_{n\mathbf k}$ is an eigenvector of $H(-\mathbf k)$ with the same energy. The k points of the mesh are
+   paired, $\bar{\mathbf k}=-\mathbf k+\mathbf G$, and the eigenvectors, band energies and Fermi-level band index of
+   $\bar{\mathbf k}$ are *set* to those of $\mathbf k$, conjugated: $\psi_{n\bar{\mathbf k}}=\psi^*_{n\mathbf k}$. This is a
+   legitimate choice of eigenvectors, also inside a degenerate subspace. At a self-conjugate point
+   ($\bar{\mathbf k}=\mathbf k$, e.g. $\Gamma$ and the M points of an even mesh) $H(\mathbf k)$ and $S(\mathbf k)$ are real, and
+   the vectors of the bands of the BSE window are taken from the real solver (`SSYGV`) so that they are real.
+   The state $|\bar a\rangle$ of the same bands at $\bar{\mathbf k}$ is then the time-reversed partner of $|a\rangle$.
+2. *Symmetry of the matrix.* The diagonal energies, the direct kernel $W(\mathbf k-\mathbf k')\langle c\mathbf k|c'\mathbf k'\rangle\langle v'\mathbf k'|v\mathbf k\rangle$
+   (under $\mathbf q\to-\mathbf q$ the shortest image of $\mathbf q$ goes to its negative, and the orbital-centre or
+   form-factor phases to their complex conjugates, as the vectors do) and the exchange term obey
+   $$H_{\bar a\bar b}=H_{ab}^{*}.$$
+3. *Real combinations.* For each transition of each pair $\mathbf k<\bar{\mathbf k}$
+   $$|s\rangle=\frac{|a\rangle+|\bar a\rangle}{\sqrt2},\qquad |t\rangle=\frac{|a\rangle-|\bar a\rangle}{i\sqrt2},$$
+   and a state of a self-conjugate point stays as it is, $|e\rangle=|a\rangle$. The change of basis $U$ is unitary and block
+   diagonal ($2\times2$ blocks $\tfrac1{\sqrt2}\begin{pmatrix}1&-i\\1&i\end{pmatrix}$ on $(|a\rangle,|\bar a\rangle)$).
+4. *Matrix elements.* With $h_1=H_{ab}$ and $h_2=H_{a\bar b}$ every element of $U^\dagger HU$ is real:
+   $$\langle s_a|H|s_b\rangle=\mathrm{Re}\,h_1+\mathrm{Re}\,h_2,\quad \langle s_a|H|t_b\rangle=\mathrm{Im}\,h_1-\mathrm{Im}\,h_2,$$
+   $$\langle t_a|H|s_b\rangle=-(\mathrm{Im}\,h_1+\mathrm{Im}\,h_2),\quad \langle t_a|H|t_b\rangle=\mathrm{Re}\,h_1-\mathrm{Re}\,h_2,$$
+   $$\langle e_a|H|s_b\rangle=\langle s_a|H|e_b\rangle=\sqrt2\,\mathrm{Re}\,h_1,\quad \langle e_a|H|t_b\rangle=-\langle t_a|H|e_b\rangle=\sqrt2\,\mathrm{Im}\,h_1,\quad \langle e_a|H|e_b\rangle=\mathrm{Re}\,h_1.$$
+   Two complex kernel elements give four real ones (a $2\times2$ block), so the kernel is evaluated for half of the elements.
+   The $s,t$ couples are adjacent in the matrix (the pairs first, then the self-conjugate points), so with the even
+   block size of the distributed matrix a couple never splits between ranks.
+5. *Eigenvectors and optical amplitudes.* The eigenvectors $\mathbf x$ of the real matrix are real. The optical amplitude of an
+   exciton, $\sum_j A_j^*h_j$ with $A=U\mathbf x$, is $\sum_r x_r h'_r$ with $h'=U^\dagger h$ (the vertices $h$ are transformed once:
+   $h'_s=(h_a+h_{\bar a})/\sqrt2$, $h'_t=i(h_a-h_{\bar a})/\sqrt2$, $h'_e=h_a$). The complex amplitudes $A=U\mathbf x$ on the states of the mesh
+   are only rebuilt for the exciton wavefunction output (`BSE_WF`).
+
+The time-reversal gauge fixes only the arbitrary phases of the eigenvectors; the exciton energies and the spectra do not
+depend on it. Inside a degenerate level the single-state strengths in `bse_oscf.dat` are free (as for any eigensolver):
+compare sums over a degenerate level or the spectra.
+
+**Requirements** (the run stops with a message otherwise): real $H(\mathbf R)$ (largest imaginary part below $10^{-4}$ eV, and
+the eigensolver energies $E(\mathbf k)=E(-\mathbf k)$ to $10^{-3}$ eV), `SPIN_EXC= 0`, a k mesh symmetric under
+$\mathbf k\to-\mathbf k$ (an unshifted mesh, or a shift of half a mesh step: `SHIFT_1= 0.5/NGX` of the reciprocal vector;
+a shift such as 1/36 on a 12-point mesh is not symmetric; `wtb_symmetry.x` says whether the mesh is). A Wannier90 model in an arbitrary gauge has a complex $H(\mathbf R)$ (the `three-way-V2DTAVG` MoSi2N4 benchmark has imaginary
+parts up to 1.65 eV) and is refused: time reversal is then a symmetry represented by a unitary matrix on the orbitals, which is
+not used. SIESTA (`DFT=S`) and PAOFLOW models are real. Not (yet) supported:
+`BSE_HAM_SAVE`/`BSE_HAM_READ`, `BSE_EPH_FILE`, `TEMP > 0`, the q-path BSE.
+
+Measured with a `-O1 -fcheck=all` build, serial `cheevd`, 4 threads (the real build and diagonalization are `SSYEVD`; the
+spectra of both paths agree to $10^{-4}$ relative, the energies of all states to $1.5\times10^{-4}$ eV, single precision):
+
+| model (V2DLAVG/V2DTPV kernel, form factors, exchange) | N | build, complex → real | diagonalization, complex → real |
+|---|---|---|---|
+| graphene 12x12, 4+4 bands, half-step shifted mesh | 2304 | 34.6 s → 15.2 s | 5.4 s → 0.86 s |
+| h-BN 36x36, 2+2 bands | 5184 | 186 s → 88 s | 68 s → 10.4 s |
+
+The matrix itself takes half of the memory and the diagonalization workspace ($1+6N+2N^2$ single-precision numbers for
+`SSYEVD` against $2N+N^2$ complex and $1+5N+2N^2$ real for `CHEEVD`) about half of it as well, so the peak of a `cheevd` run is
+close to $12N^2$ bytes instead of $24N^2$ (`utils/bse_memory_estimate.py` reads `BSE_REAL` and estimates the real matrix and workspace).
+`python3 tests/test_bse_real_app.py /path/to/wtb.x --mpiexec /path/to/mpiexec [--elpa]` compares the real path (all serial
+solvers, ScaLAPACK, ELPA 1-stage) with the complex one on odd, even and non-square meshes and checks the refusals.
+The point-group symmetry of the structure is a further reduction that this does not use: see below.
+
+Symmetry of the system
+----------------------
+
+`bin/wtb_symmetry.x < input.dat` reads a BeXos input file as `wtb.x` does and prints the symmetry of the system; the
+same analysis is written to `log_bse_optics.dat` at the start of every optical BSE run (`WTB_SYMMETRY=off` in the
+environment skips it; `WTB_SYM_TOL=` sets the tolerance on the positions, 3e-3 Angstrom by default). It reports:
+
+* the point group (Schoenflies and Hermann-Mauguin names) and its order, with the number of operations of each class;
+* every operation: class, rotation axis (normal of a mirror plane), angle, Cartesian matrix and fractional translation (the
+  translation of a screw axis or glide plane, of the first space-group operation with that rotation);
+* the pure translations of the cell: more than one means that the cell is a supercell of a smaller one;
+* which operations map the k mesh (`NGX NGY NGZ`, `SHIFT_1..3`) onto itself, the group of the mesh, and whether the mesh is
+  symmetric under $\mathbf k\to-\mathbf k$ (the condition of `BSE_REAL`);
+* how well the Hamiltonian has the symmetry (below), and the group that can be used with this mesh and this Hamiltonian.
+
+*How.* The candidates are the rotations that map the lattice onto itself; each is tried with the translations that take a
+reference site onto a site of its own kind, and it is kept when every site goes onto a site of the same kind. A site is a
+group of orbitals with the same centre; two sites are of the same kind when the species (`basis_set-*`), the number of
+orbitals and shells and the on-site energy (summed over the orbitals of the site, which does not depend on how the
+orbitals of a shell are rotated into each other) agree. Orbital centres come from `basis_set-*` for `DFT=S` and from the
+Wannier centres of `BSE_CENTER_FILE` for `DFT=W`; without them only the symmetry of the lattice (the largest group the
+structure can have) is given. The analysis is exact for atomic orbitals (`DFT=S`: species, shells and positions are
+known). Wannier functions are not symmetry-adapted and their centres are symmetric only approximately, so for `DFT=W`
+the sites are told apart by their number of orbitals only, `WTB_SYM_CLUSTER=` (Angstrom) groups the Wannier functions
+of an atom into one site, a larger `WTB_SYM_TOL=` is needed, and the result is as reliable as the Hamiltonian check
+(the MoSi2N4 Wannier model of the benchmarks gives C3v at 0.6 Angstrom instead of D3h). The geometry only says that the structure has the symmetry: the Hamiltonian is then checked
+for every operation by comparing the norm of the block $\langle a,0|H|b,\mathbf R\rangle$ (and of $S$) between the orbitals of
+two sites with that of the image block, which needs no rotation matrices of the orbitals; a deviation above $5\times10^{-3}$
+(relative to the largest block) prints a warning, as for a strained model with the old positions.
+`python3 tests/test_symmetry_app.py /path/to/wtb_symmetry.x` checks graphene (D6h), h-BN (D3h), a supercell, a model whose
+Hamiltonian has less symmetry than its structure, and the meshes.
+
+Input file format
+-----------------
+
+Each line of the input file is `KEY= value`. Any number of blanks or tabs (or none) may surround the key, the `=` and the
+value (`NGX=24`, `NGX = 24` and `NGX=<tab>24` are the same), keys may be upper or lower case, a comment starts at `#` or `!`
+(outside quotes), and blank lines are skipped; Windows line endings are accepted. A value is the text between matching
+quotes, or the first word after the `=` (an unquoted path with `/` is read as it is). A line without `=` and an unknown
+key are ignored, as before.
+
 BSE q-path MPI parallelism
 --------------------------
 

@@ -732,6 +732,258 @@ subroutine bse_eigenvector_column_dist(dimse,excitonvec,lld,locr,locc,mb,nb,myro
 end subroutine bse_eigenvector_column_dist
 
 
+! ---- BSE_REAL= T: the same post-processing for the real eigenvectors of the real basis (bse_realbasis) ----
+! The optical amplitude is sum_r a_r h'_r, with h' = U^+ h (rb_vector) given by its real and imaginary parts.
+
+subroutine dielbsev_real(nthread,dimse,excitonvec,hre,him,activity)
+
+	use omp_lib
+	implicit none
+
+	integer :: dimse,nthread
+	real,dimension(dimse) :: activity
+	real,dimension(dimse) :: hre,him
+	real,dimension(dimse,dimse) :: excitonvec
+
+	integer :: i,j
+	double precision :: ar,ai
+
+	call OMP_SET_NUM_THREADS(nthread)
+
+	activity=0.0
+
+	!$OMP PARALLEL DO DEFAULT(NONE) &
+	!$OMP& SHARED(dimse, excitonvec, hre, him, activity) &
+	!$OMP& PRIVATE(i, j, ar, ai) SCHEDULE(STATIC)
+	do i=1,dimse
+		ar=0.0d0
+		ai=0.0d0
+		do j=1,dimse
+			ar=ar+dble(excitonvec(j,i))*dble(hre(j))
+			ai=ai+dble(excitonvec(j,i))*dble(him(j))
+		end do
+		activity(i)=real(ar*ar+ai*ai)
+	end do
+	!$OMP END PARALLEL DO
+
+end subroutine dielbsev_real
+
+
+subroutine dielbsep_real(nthread,dimse,excitonvec,h1re,h1im,h2re,h2im,activity)
+! Re( amplitude1 * conjg(amplitude2) )
+
+	use omp_lib
+	implicit none
+
+	integer :: dimse,nthread
+	real,dimension(dimse) :: activity
+	real,dimension(dimse) :: h1re,h1im,h2re,h2im
+	real,dimension(dimse,dimse) :: excitonvec
+
+	integer :: i,j
+	double precision :: a1r,a1i,a2r,a2i
+
+	call OMP_SET_NUM_THREADS(nthread)
+
+	activity=0.0
+
+	!$OMP PARALLEL DO DEFAULT(NONE) &
+	!$OMP& SHARED(dimse, excitonvec, h1re, h1im, h2re, h2im, activity) &
+	!$OMP& PRIVATE(i, j, a1r, a1i, a2r, a2i) SCHEDULE(STATIC)
+	do i=1,dimse
+		a1r=0.0d0
+		a1i=0.0d0
+		a2r=0.0d0
+		a2i=0.0d0
+		do j=1,dimse
+			a1r=a1r+dble(excitonvec(j,i))*dble(h1re(j))
+			a1i=a1i+dble(excitonvec(j,i))*dble(h1im(j))
+			a2r=a2r+dble(excitonvec(j,i))*dble(h2re(j))
+			a2i=a2i+dble(excitonvec(j,i))*dble(h2im(j))
+		end do
+		activity(i)=real(a1r*a2r+a1i*a2i)
+	end do
+	!$OMP END PARALLEL DO
+
+end subroutine dielbsep_real
+
+
+subroutine dielbsev_dist_real(dimse,excitonvec,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,hre,him,activity,MPIError)
+
+#ifdef MPI
+	use mpi
+#endif
+	implicit none
+
+	integer :: dimse,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,MPIError
+	integer :: li,lj,ig,jg
+	integer, external :: indxl2g
+	real,dimension(lld,*) :: excitonvec
+	real,dimension(dimse) :: hre,him
+	real,dimension(dimse) :: activity
+	double precision,allocatable,dimension(:,:) :: amplitude
+
+#ifdef MPI
+	allocate(amplitude(dimse,2))
+	amplitude = 0.0d0
+
+	do lj=1,locc
+		jg = indxl2g(lj,nb,mycol,0,npcol)
+		if (jg <= dimse) then
+			do li=1,locr
+				ig = indxl2g(li,mb,myrow,0,nprow)
+				if (ig <= dimse) then
+					amplitude(jg,1) = amplitude(jg,1) + dble(excitonvec(li,lj))*dble(hre(ig))
+					amplitude(jg,2) = amplitude(jg,2) + dble(excitonvec(li,lj))*dble(him(ig))
+				end if
+			end do
+		end if
+	end do
+
+	call MPI_ALLREDUCE(MPI_IN_PLACE,amplitude,2*dimse,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,MPIError)
+	if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('distributed BSE optical amplitude',MPIError)
+	activity = real(amplitude(:,1)*amplitude(:,1)+amplitude(:,2)*amplitude(:,2))
+	deallocate(amplitude)
+#else
+	activity = 0.0
+	stop "Distributed BSE postprocessing requires MPI"
+#endif
+
+end subroutine dielbsev_dist_real
+
+
+subroutine dielbsep_dist_real(dimse,excitonvec,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,h1re,h1im,h2re,h2im,activity,MPIError)
+
+#ifdef MPI
+	use mpi
+#endif
+	implicit none
+
+	integer :: dimse,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,MPIError
+	integer :: li,lj,ig,jg
+	integer, external :: indxl2g
+	real,dimension(lld,*) :: excitonvec
+	real,dimension(dimse) :: h1re,h1im,h2re,h2im
+	real,dimension(dimse) :: activity
+	double precision,allocatable,dimension(:,:) :: amplitude
+
+#ifdef MPI
+	allocate(amplitude(dimse,4))
+	amplitude = 0.0d0
+
+	do lj=1,locc
+		jg = indxl2g(lj,nb,mycol,0,npcol)
+		if (jg <= dimse) then
+			do li=1,locr
+				ig = indxl2g(li,mb,myrow,0,nprow)
+				if (ig <= dimse) then
+					amplitude(jg,1) = amplitude(jg,1) + dble(excitonvec(li,lj))*dble(h1re(ig))
+					amplitude(jg,2) = amplitude(jg,2) + dble(excitonvec(li,lj))*dble(h1im(ig))
+					amplitude(jg,3) = amplitude(jg,3) + dble(excitonvec(li,lj))*dble(h2re(ig))
+					amplitude(jg,4) = amplitude(jg,4) + dble(excitonvec(li,lj))*dble(h2im(ig))
+				end if
+			end do
+		end if
+	end do
+
+	call MPI_ALLREDUCE(MPI_IN_PLACE,amplitude,4*dimse,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,MPIError)
+	if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('distributed BSE optical amplitude',MPIError)
+	activity = real(amplitude(:,1)*amplitude(:,3)+amplitude(:,2)*amplitude(:,4))
+	deallocate(amplitude)
+#else
+	activity = 0.0
+	stop "Distributed BSE postprocessing requires MPI"
+#endif
+
+end subroutine dielbsep_dist_real
+
+
+subroutine bse_eigenvector_column_dist_real(dimse,excitonvec,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,icol,eigvec,MPIError)
+
+#ifdef MPI
+	use mpi
+#endif
+	implicit none
+
+	integer :: dimse,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,icol,MPIError
+	integer :: li,lj,ig,jg
+	integer, external :: indxl2g
+	real,dimension(lld,*) :: excitonvec
+	real,dimension(dimse) :: eigvec
+
+#ifdef MPI
+	eigvec = 0.0
+
+	do lj=1,locc
+		jg = indxl2g(lj,nb,mycol,0,npcol)
+		if (jg == icol) then
+			do li=1,locr
+				ig = indxl2g(li,mb,myrow,0,nprow)
+				if (ig <= dimse) eigvec(ig) = excitonvec(li,lj)
+			end do
+		end if
+	end do
+
+	call MPI_ALLREDUCE(MPI_IN_PLACE,eigvec,dimse,MPI_REAL,MPI_SUM,MPI_COMM_WORLD,MPIError)
+	if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('distributed BSE eigenvector',MPIError)
+#else
+	eigvec = 0.0
+	stop "Distributed BSE postprocessing requires MPI"
+#endif
+
+end subroutine bse_eigenvector_column_dist_real
+
+
+subroutine bse_elpa_bounds_real(dimse,excitonvec,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,emin,emax,etrace,MPIError)
+! bse_elpa_bounds for the real symmetric matrix of BSE_REAL= T
+
+#ifdef MPI
+	use mpi
+#endif
+	implicit none
+
+	integer :: dimse,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,MPIError
+	integer :: li,lj,ig,jg
+	integer, external :: indxl2g
+	real,dimension(lld,*) :: excitonvec
+	real(kind=8) :: emin,emax,etrace
+	real(kind=8),allocatable,dimension(:,:) :: acc
+
+	emin = 0.0d0
+	emax = 0.0d0
+	etrace = 0.0d0
+#ifdef MPI
+	allocate(acc(dimse,2))
+	acc = 0.0d0
+
+	do lj=1,locc
+		jg = indxl2g(lj,nb,mycol,0,npcol)
+		do li=1,locr
+			ig = indxl2g(li,mb,myrow,0,nprow)
+			if (ig <= dimse .and. jg <= dimse) then
+				if (ig == jg) then
+					acc(ig,2) = real(excitonvec(li,lj),kind=8)
+				else
+					acc(ig,1) = acc(ig,1) + abs(real(excitonvec(li,lj),kind=8))
+				end if
+			end if
+		end do
+	end do
+
+	call MPI_ALLREDUCE(MPI_IN_PLACE,acc,2*dimse,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,MPIError)
+	if (MPIError /= MPI_SUCCESS) call bse_mpi_collective_abort('BSE Hamiltonian bounds',MPIError)
+
+	emin = minval(acc(:,2)-acc(:,1))
+	emax = maxval(acc(:,2)+acc(:,1))
+	etrace = sum(acc(:,2))
+	deallocate(acc)
+#else
+	stop "Distributed BSE postprocessing requires MPI"
+#endif
+
+end subroutine bse_elpa_bounds_real
+
+
 subroutine bse_elpa_bounds(dimse,excitonvec,lld,locr,locc,mb,nb,myrow,mycol,nprow,npcol,emin,emax,etrace,MPIError)
 ! Gershgorin bounds [emin, emax] and trace of the distributed Hermitian BSE matrix (both triangles stored),
 ! taken before ELPA overwrites it: bse_elpa_verify uses them to catch a solver that returns wrong eigenvalues
@@ -1259,3 +1511,54 @@ subroutine orbital_centres(w90basis,tau)
 	tau = centres
 
 end subroutine orbital_centres
+
+
+subroutine orbital_labels(norb,spec,lq,ok)
+
+	! Species and shell l of each orbital of the DFT=S basis, from the same basis_set-* file as orbital_centres (columns
+	! index species x y z [l m spin]); l = -1 when the file has no l column.  ok = .false. without the file.
+
+	implicit none
+
+	integer,intent(in) :: norb
+	character(len=*),dimension(norb),intent(out) :: spec
+	integer,dimension(norb),intent(out) :: lq
+	logical,intent(out) :: ok
+	character(len=13),dimension(4),parameter :: files = (/ 'basis_set-NP ', &
+		'basis_set-sp ','basis_set-nc ','basis_set-soc' /)
+	character(len=256) :: line
+	character(len=16) :: species
+	integer :: i,f,idx,erro,l,m,e2
+	real :: x,y,z
+
+	spec = ''
+	lq = -1
+	ok = .false.
+	do f=1,size(files)
+		open(unit=978,file=trim(files(f)),status='old',action='read',iostat=erro)
+		if (erro /= 0) cycle
+		read(978,'(A)',iostat=erro) line
+		do i=1,norb
+			if (erro == 0) read(978,'(A)',iostat=erro) line
+			if (erro == 0) then
+				read(line,*,iostat=e2) idx,species,x,y,z,l,m
+				if (e2 /= 0) then
+					l = -1
+					read(line,*,iostat=erro) idx,species,x,y,z
+				end if
+			end if
+			if (erro == 0) then
+				spec(i) = species
+				lq(i) = l
+			end if
+		end do
+		close(978)
+		if (erro == 0) then
+			ok = .true.
+			exit
+		end if
+		spec = ''
+		lq = -1
+	end do
+
+end subroutine orbital_labels

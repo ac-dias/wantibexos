@@ -154,6 +154,7 @@ call MPI_BCAST(bsecentgrad,1,MPI_LOGICAL,root,MPI_COMM_WORLD,ierr)
 call MPI_BCAST(bsermatkey,1,MPI_LOGICAL,root,MPI_COMM_WORLD,ierr)
 call MPI_BCAST(bseff,1,MPI_LOGICAL,root,MPI_COMM_WORLD,ierr)
 call MPI_BCAST(bseffexch,1,MPI_LOGICAL,root,MPI_COMM_WORLD,ierr)
+call MPI_BCAST(bse_real,1,MPI_LOGICAL,root,MPI_COMM_WORLD,ierr)
 call MPI_BCAST(bsekpathcheckpoint,1,MPI_LOGICAL,root,MPI_COMM_WORLD,ierr)
 call MPI_BCAST(tmcoef,1,MPI_LOGICAL,root,MPI_COMM_WORLD,ierr)
 

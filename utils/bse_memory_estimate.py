@@ -233,8 +233,29 @@ def eigsys_thread_scratch_bytes(basis: int, nvec: int) -> int:
     return matrices + lapack + eigen_io + kphase
 
 
-def serial_workspace_bytes(algorithm: str, dimension: int) -> int:
+def serial_workspace_bytes(algorithm: str, dimension: int, real_basis: bool = False) -> int:
     algorithm = algorithm.lower()
+    if real_basis:
+        # BSE_REAL= T: real symmetric solvers of the time-reversal basis (SSYEV, SSYEVR, SSYEVX, SSYEVD)
+        if algorithm == "cheev":
+            return max(1, 3 * dimension - 1) * REAL_BYTES
+        if algorithm == "cheevr":
+            return (
+                dimension * dimension * REAL_BYTES
+                + 26 * dimension * REAL_BYTES
+                + 10 * dimension * INTEGER_BYTES
+                + 2 * dimension * INTEGER_BYTES
+            )
+        if algorithm == "cheevx":
+            return (
+                dimension * dimension * REAL_BYTES
+                + 8 * dimension * REAL_BYTES
+                + 5 * dimension * INTEGER_BYTES
+                + dimension * INTEGER_BYTES
+            )
+        if algorithm == "cheevd":
+            return (1 + 6 * dimension + 2 * dimension * dimension) * REAL_BYTES + (3 + 5 * dimension) * INTEGER_BYTES
+        raise ValueError(f"Unsupported serial BSE_ALGO={algorithm!r}; use cheev, cheevr, cheevx, or cheevd")
     if algorithm == "cheev":
         return max(0, 3 * dimension - 2) * REAL_BYTES + max(0, 2 * dimension - 1) * COMPLEX_BYTES
     if algorithm == "cheevr":
@@ -280,7 +301,7 @@ def process_grid(ranks: int) -> tuple[int, int]:
     return rows, ranks // rows
 
 
-def local_matrix_bytes(dimension: int, ranks: int) -> list[int]:
+def local_matrix_bytes(dimension: int, ranks: int, element_bytes: int = COMPLEX_BYTES) -> list[int]:
     rows, columns = process_grid(ranks)
     sizes: list[int] = []
     for rank in range(ranks):
@@ -288,7 +309,7 @@ def local_matrix_bytes(dimension: int, ranks: int) -> list[int]:
         column = rank % columns
         local_rows = max(1, numroc(dimension, 64, row, rows))
         local_columns = max(1, numroc(dimension, 64, column, columns))
-        sizes.append(local_rows * local_columns * COMPLEX_BYTES)
+        sizes.append(local_rows * local_columns * element_bytes)
     return sizes
 
 
@@ -337,20 +358,23 @@ def print_optical_estimate(
     thread_reserve: int,
     safety_factor: float,
     formfactors: tuple[int, int] = (0, 0),
+    real_basis: bool = False,
 ) -> None:
-    dense = dimension * dimension * COMPLEX_BYTES
+    element_bytes = REAL_BYTES if real_basis else COMPLEX_BYTES
+    dense = dimension * dimension * element_bytes
     base = base_optical_bytes(nk, dimension, basis, nvec, nc, nv, dft)
     # BSE_FF: every rank holds the form factors (and the exchange vectors) while it builds
     # its part of H; they are freed before the diagonalization
     building = sum(formfactors)
     thread_scratch = threads * (eigsys_thread_scratch_bytes(basis, nvec) + thread_reserve)
     print("\nOptical BSE (BSE=T)")
-    print(f"  Dense Hamiltonian H({dimension},{dimension}): {human_bytes(dense)}")
+    kind = "real symmetric, BSE_REAL=T" if real_basis else "complex"
+    print(f"  Dense Hamiltonian H({dimension},{dimension}), {kind}: {human_bytes(dense)}")
     if building:
         print(f"  BSE_FF form factors {human_bytes(formfactors[0])}, exchange vectors "
               f"{human_bytes(formfactors[1])} per rank while H is built")
     if ranks == 1:
-        workspace = serial_workspace_bytes(algorithm, dimension)
+        workspace = serial_workspace_bytes(algorithm, dimension, real_basis)
         source_peak = base + dense + max(workspace, building)
         planning_peak = math.ceil((source_peak + thread_scratch) * safety_factor)
         print(f"  BSE_ALGO={algorithm} source workspace: {human_bytes(workspace)}")
@@ -358,7 +382,7 @@ def print_optical_estimate(
         print(f"  Conservative plan with {threads} OpenMP threads: {human_bytes(planning_peak)}")
         return
 
-    locals_ = local_matrix_bytes(dimension, ranks)
+    locals_ = local_matrix_bytes(dimension, ranks, element_bytes)
     source_peak = base + max(locals_) + max(max(locals_), building)
     planning_peak = math.ceil((source_peak + thread_scratch) * safety_factor)
     rows, columns = process_grid(ranks)
@@ -465,7 +489,7 @@ def main() -> int:
                                                dimension, data.logical("BSE_FF_EXCHANGE"))
             print_optical_estimate(nk, dimension, hamiltonian.basis, hamiltonian.nvec, nc, nv, dft,
                                    algorithm, args.ranks, threads, thread_reserve, args.safety_factor,
-                                   formfactors)
+                                   formfactors, data.logical("BSE_REAL"))
         if qpath_selected:
             qfile = resolve_from_input(args.input, data.text("KPATH_BSE"))
             nq = qpoint_count(qfile)
