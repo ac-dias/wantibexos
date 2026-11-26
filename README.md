@@ -484,7 +484,10 @@ compare sums over a degenerate level or the spectra.
 **Requirements** (the run stops with a message otherwise): real $H(\mathbf R)$ (largest imaginary part below $10^{-4}$ eV, and
 the eigensolver energies $E(\mathbf k)=E(-\mathbf k)$ to $10^{-3}$ eV), `SPIN_EXC= 0`, a k mesh symmetric under
 $\mathbf k\to-\mathbf k$ (an unshifted mesh, or a shift of half a mesh step: `SHIFT_1= 0.5/NGX` of the reciprocal vector;
-a shift such as 1/36 on a 12-point mesh is not symmetric; `wtb_symmetry.x` says whether the mesh is). A Wannier90 model in an arbitrary gauge has a complex $H(\mathbf R)$ (the `three-way-V2DTAVG` MoSi2N4 benchmark has imaginary
+a shift such as 1/36 on a 12-point mesh is not symmetric). The mesh, with `TEMP`, `BSE_HAM_SAVE/READ`, `BSE_EPH_FILE` and
+`SPIN_EXC`, is tested first thing from the input alone, on every rank, before the tight-binding file is read or anything is
+computed: the mesh $\mathbf k=\mathbf b_i(j/N_i+s_i)$ contains $-\mathbf k$ exactly when $2s_iN_i$ is an integer for each
+direction, and the message names the offending `SHIFT_i`/`NG` and the shifts that work. `wtb_symmetry.x` reports it too. A Wannier90 model in an arbitrary gauge has a complex $H(\mathbf R)$ (the `three-way-V2DTAVG` MoSi2N4 benchmark has imaginary
 parts up to 1.65 eV) and is refused: time reversal is then a symmetry represented by a unitary matrix on the orbitals, which is
 not used. SIESTA (`DFT=S`) and PAOFLOW models are real. Not (yet) supported:
 `BSE_HAM_SAVE`/`BSE_HAM_READ`, `BSE_EPH_FILE`, `TEMP > 0`, the q-path BSE.

@@ -149,6 +149,16 @@ def main():
     assert 'does not support BSE_HAM_SAVE' in message, message
     message = run('refused-shift', (12, 12), 'cheev', 1, True, expect_ok=False, shift=0.3)
     assert 'symmetric under k -> -k' in message, message
+    # the mesh is tested first, before the tight-binding file is read: a missing file does not matter
+    message = run('refused-shift-early', (12, 12), 'cheev', 1, True, expect_ok=False, shift=1/36,
+                  extra={'PARAMS_FILE': '"missing-file.dat"'})
+    assert 'symmetric under k -> -k' in message and 'SHIFT_1= 0.027778 with NGX= 12' in message, message
+    assert 'multiple of 1/(2 NGX) = 0.041667' in message and 'missing-file' not in message, message
+    # a half-step shift keeps the mesh symmetric (no self-conjugate k point)
+    reference, _ = run('ref-halfstep', (12, 12), 'cheev', 1, False, shift=1/24)
+    table, log = run('real-halfstep', (12, 12), 'cheev', 1, True, shift=1/24)
+    compare(table, reference, 'BSE_REAL half-step shifted mesh')
+    assert ' 72 pairs of k points (k, -k) and 0 self-conjugate k points' in log, log[:2000]
 
     def complex_hopping(path):
         text = (path/'tb.dat').read_text().splitlines()

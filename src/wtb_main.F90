@@ -71,10 +71,13 @@ program main
 #endif
 	use input_variables
 	use hamiltonian_input_variables
+	use bse_realbasis, only: rb_input_check
 	implicit none
 	
 	integer :: erro
 	real:: t0,tf
+	logical :: rb_ok
+	character(len=400) :: rb_message
 	integer,dimension(8) :: values,values2
 
 	real,dimension(3,3) :: rlatv
@@ -109,6 +112,19 @@ program main
 	call MPI_Finalize(MPIError)
 #endif
 	stop 'Rename BSE_RMAT_FILE to BSE_CENTER_FILE in the input'
+    end if
+
+! BSE_REAL= T: the k mesh must be symmetric under k -> -k (and the other options it cannot take are not used); tested
+! first, before anything is read or computed, by every rank
+    if (bse .and. bse_real) then
+	call rb_input_check(ngrid,mshift,temp,exc,bsehamwrite .or. bsehamread,len_trim(bse_eph_file) > 0,rb_ok,rb_message)
+	if (.not. rb_ok) then
+	if (Node == 0) write(*,*) trim(rb_message)
+#ifdef MPI
+	call MPI_Finalize(MPIError)
+#endif
+	stop 1
+	end if
     end if
 
     if (Node == 0 ) then

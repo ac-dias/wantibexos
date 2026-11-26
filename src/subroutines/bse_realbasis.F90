@@ -109,6 +109,58 @@ contains
 	end subroutine rb_partners
 
 
+	subroutine rb_input_check(ngrid,mshift,temp,exc,ham_io,eph,ok,message)
+
+		! What BSE_REAL= T needs and can take, from the input alone, so that the program can stop before it reads the
+		! tight-binding file or computes anything.  The first of them that is not met is returned in message.
+		! The mesh k = b_i (i/n_i + s_i), i = 0..n_i-1, contains -k for every k exactly when 2 s_i n_i is an integer for
+		! each direction: s_i = 0 (Gamma-centred) or a half step, s_i = 1/(2 n_i), and their multiples by 1/(2 n_i).
+
+		implicit none
+
+		integer,dimension(3),intent(in) :: ngrid
+		real,dimension(3),intent(in) :: mshift
+		real,intent(in) :: temp,exc
+		logical,intent(in) :: ham_io,eph
+		logical,intent(out) :: ok
+		character(len=*),intent(out) :: message
+
+		integer :: i
+		real(kind=8) :: x
+		character(len=1),parameter :: axis(3) = (/ 'X','Y','Z' /)
+		character(len=12) :: s1,s2
+
+		ok = .true.
+		message = ''
+		do i=1,3
+			x = 2.0d0*dble(mshift(i))*dble(ngrid(i))
+			if (abs(x-anint(x)) > 1.0d-3) then
+				ok = .false.
+				write(s1,'(F12.6)') mshift(i)
+				write(s2,'(F12.6)') 0.5d0/dble(ngrid(i))
+				write(message,'(A,I0,A,I0,A)') 'BSE_REAL= T needs a k mesh that is symmetric under k -> -k, and SHIFT_'//achar(48+i)// &
+					'= '//trim(adjustl(s1))//' with NG'//axis(i)//'= ',ngrid(i),' is not: the shift must be a multiple of 1/(2 NG'// &
+					axis(i)//') = '//trim(adjustl(s2))//' (SHIFT_',i,'= 0 or the half step '//trim(adjustl(s2))//' keep the mesh symmetric); set BSE_REAL= F to keep this mesh'
+				return
+			end if
+		end do
+		if (temp /= 0.0) then
+			ok = .false.
+			message = 'BSE_REAL= T is not implemented for TEMP > 0 (the finite-temperature BSE solver); set BSE_REAL= F'
+		else if (ham_io) then
+			ok = .false.
+			message = 'BSE_REAL= T does not support BSE_HAM_SAVE / BSE_HAM_READ yet'
+		else if (eph) then
+			ok = .false.
+			message = 'BSE_REAL= T does not support BSE_EPH_FILE'
+		else if (abs(exc) > 0.0) then
+			ok = .false.
+			message = 'BSE_REAL= T needs a time-reversal invariant Hamiltonian: SPIN_EXC= must be 0'
+		end if
+
+	end subroutine rb_input_check
+
+
 	subroutine rb_setup(nk,nt,kbar)
 
 		! tables of the real basis for nk k points of nt transitions each (row of transition it of k: (k-1) nt + it)
