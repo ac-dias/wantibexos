@@ -31,13 +31,27 @@ module bse_realbasis
 	! k < kbar (the pairs first, an even number of functions, so that a block of an even block size of the distributed
 	! matrix never splits an s,t couple), then rb_kind(r) = 0 (e) for the transitions of the self-conjugate k points.
 	! rb_row(r) is the row of the representative state a in the complex basis and rb_rowbar(r) that of abar.
+	!
+	! Spin-orbit models (mode 2, T^2 = -1).  Time reversal is T = U K with the spin flip U = i sigma_y x 1 (a signed
+	! permutation of the spinor components, rb_tr_rep), U U* = -1, and H(R) = U H(R)* U^+ is complex.  The pair operator of the
+	! excitons, Theta = T_e x T_h, has Theta^2 = (-1)(-1) = +1, so a real basis exists all the same.  The gauge is
+	! psi_{n kbar} = U psi*_{n k} (rb_tr_gauge) for the pairs k < kbar.  At a self-conjugate k point the partner of a band
+	! is its Kramers partner, T psi_{2j-1} = psi_{2j}, T psi_{2j} = -psi_{2j-1} (rb_kramers_gauge), so
+	!
+	!    Theta |a> = sigma_a |abar> ,     abar = (vbar, cbar, k) ,     sigma_a = sigma_c sigma_v ,    sigma_n = +1 (odd), -1 (even)
+	!
+	! and Theta^2 |a> = |a>.  The state paired with |a> is |atilde> = Theta |a> = sigma_a |abar> (sigma = +1 for the pairs
+	! k < kbar), and everything above holds with abar -> atilde:  H(atilde, btilde) = conjg(H(a,b)), h2 = H(a, btilde) =
+	! sigma_b H(a, bbar), h'_s = ( h_a + sigma_a h_abar )/sqrt2, h'_t = i ( h_a - sigma_a h_abar )/sqrt2.  A self-conjugate k
+	! point then has no unpaired function e (the transition partner tbar is never the transition itself).
+	! rb_sgn(r) = sigma_a of the function r (1 for the functions of the pairs k < kbar and for e).
 
 	implicit none
 
 	logical,save :: rb_active = .false.
 	integer,save :: rb_nk = 0, rb_nt = 0, rb_n = 0, rb_nunit = 0
 	integer,allocatable,save,dimension(:) :: rb_kbar
-	integer,allocatable,save,dimension(:) :: rb_kind, rb_row, rb_rowbar
+	integer,allocatable,save,dimension(:) :: rb_kind, rb_row, rb_rowbar, rb_sgn
 	! units of the real basis: one s,t couple or one single function; first function and length of each
 	integer,allocatable,save,dimension(:) :: rb_ustart, rb_ulen
 	real,parameter :: rb_r2 = 0.70710678118654752440
@@ -161,14 +175,19 @@ contains
 	end subroutine rb_input_check
 
 
-	subroutine rb_setup(nk,nt,kbar)
+	subroutine rb_setup(nk,nt,kbar,tbar,sig)
 
-		! tables of the real basis for nk k points of nt transitions each (row of transition it of k: (k-1) nt + it)
+		! tables of the real basis for nk k points of nt transitions each (row of transition it of k: (k-1) nt + it).
+		! At a self-conjugate k point the partner of transition it is transition tbar(it) of the same k point, with the
+		! sign sig(it) = sigma_a (tbar = identity and sig = 1 without spin-orbit coupling: the single functions e;
+		! tbar without fixed points with spin-orbit coupling: only pairs).  The pairs k < kbar have the same transition
+		! and sigma = 1.
 
 		implicit none
 
 		integer,intent(in) :: nk,nt
 		integer,dimension(nk),intent(in) :: kbar
+		integer,dimension(nt),intent(in) :: tbar,sig
 
 		integer :: ik,it,r,u,a,ab
 
@@ -176,8 +195,9 @@ contains
 		rb_nk = nk
 		rb_nt = nt
 		rb_n = nk*nt
-		allocate(rb_kbar(nk),rb_kind(rb_n),rb_row(rb_n),rb_rowbar(rb_n))
+		allocate(rb_kbar(nk),rb_kind(rb_n),rb_row(rb_n),rb_rowbar(rb_n),rb_sgn(rb_n))
 		rb_kbar = kbar
+		rb_sgn = 1
 
 		r = 0
 		do ik=1,nk
@@ -196,14 +216,37 @@ contains
 				end do
 			end if
 		end do
+		! pairs of transitions inside a self-conjugate k point (Kramers partners)
 		do ik=1,nk
 			if (kbar(ik) == ik) then
 				do it=1,nt
-					a = (ik-1)*nt+it
-					r = r+1
-					rb_kind(r) = 0
-					rb_row(r) = a
-					rb_rowbar(r) = a
+					if (tbar(it) > it) then
+						a = (ik-1)*nt+it
+						ab = (ik-1)*nt+tbar(it)
+						r = r+1
+						rb_kind(r) = 1
+						rb_row(r) = a
+						rb_rowbar(r) = ab
+						rb_sgn(r) = sig(it)
+						r = r+1
+						rb_kind(r) = 2
+						rb_row(r) = a
+						rb_rowbar(r) = ab
+						rb_sgn(r) = sig(it)
+					end if
+				end do
+			end if
+		end do
+		do ik=1,nk
+			if (kbar(ik) == ik) then
+				do it=1,nt
+					if (tbar(it) == it) then
+						a = (ik-1)*nt+it
+						r = r+1
+						rb_kind(r) = 0
+						rb_row(r) = a
+						rb_rowbar(r) = a
+					end if
 				end do
 			end if
 		end do
@@ -247,6 +290,7 @@ contains
 		if (allocated(rb_kind)) deallocate(rb_kind)
 		if (allocated(rb_row)) deallocate(rb_row)
 		if (allocated(rb_rowbar)) deallocate(rb_rowbar)
+		if (allocated(rb_sgn)) deallocate(rb_sgn)
 		if (allocated(rb_ustart)) deallocate(rb_ustart)
 		if (allocated(rb_ulen)) deallocate(rb_ulen)
 		rb_active = .false.
@@ -256,11 +300,13 @@ contains
 	end subroutine rb_free
 
 
-	subroutine rb_tr_gauge(nk,nb,norb,kbar,vector,eigt,nocpk,devmax,nmis)
+	subroutine rb_tr_gauge(nk,nb,norb,kbar,pmap,psgn,vector,eigt,nocpk,devmax,nmis)
 
 		! time-reversal gauge: the band energies, the band index of the Fermi level and the eigenvectors of the k point
-		! kbar > k are those of k, conjugated.  The vectors of the self-conjugate k points were made real by
-		! rb_selfconj_vectors.  Done after the k points are shared, the same way on every rank.
+		! kbar > k are those of k, time reversed: psi_kbar(i) = psgn(i) conjg(psi_k(pmap(i))), i.e. U psi*_k with the
+		! signed permutation U of rb_tr_rep (the identity without spin-orbit coupling: the complex conjugate).  The
+		! vectors of the self-conjugate k points were made real by rb_selfconj_vectors, or Kramers-paired by
+		! rb_kramers_gauge.  Done after the k points are shared, the same way on every rank.
 		! devmax: the largest difference between the band energies of k and of kbar, as the eigensolver gave them (they
 		! are equal for a time-reversal invariant Hamiltonian); nmis: the pairs with different Fermi level band index.
 
@@ -268,13 +314,15 @@ contains
 
 		integer,intent(in) :: nk,nb,norb
 		integer,dimension(nk),intent(in) :: kbar
+		integer,dimension(norb),intent(in) :: pmap
+		real,dimension(norb),intent(in) :: psgn
 		complex,dimension(norb,nb,nk),intent(inout) :: vector
 		real,dimension(nb,nk),intent(inout) :: eigt
 		integer,dimension(nk),intent(inout) :: nocpk
 		real,intent(out) :: devmax
 		integer,intent(out) :: nmis
 
-		integer :: ik,jk
+		integer :: ik,jk,i
 
 		devmax = 0.0
 		nmis = 0
@@ -283,13 +331,98 @@ contains
 			if (jk > ik) then
 				devmax = max(devmax,maxval(abs(eigt(:,jk)-eigt(:,ik))))
 				if (nocpk(jk) /= nocpk(ik)) nmis = nmis+1
-				vector(:,:,jk) = conjg(vector(:,:,ik))
+				do i=1,norb
+					vector(i,:,jk) = psgn(i)*conjg(vector(pmap(i),:,ik))
+				end do
 				eigt(:,jk) = eigt(:,ik)
 				nocpk(jk) = nocpk(ik)
 			end if
 		end do
 
 	end subroutine rb_tr_gauge
+
+
+	subroutine rb_tr_rep(dft,systype,nbasis,nvec,hop,ihop,ovp,mode,pmap,psgn,dev1,dev2)
+
+		! The representation of time reversal on the orbitals, T = U K with U a signed permutation: mode 1, U = 1
+		! (T^2 = +1, real H(R)), or mode 2, the spin flip of a spinor basis, U = i sigma_y x 1 (T^2 = -1): orbital i goes
+		! to pmap(i) with the sign psgn(i) (+1 for a spin up orbital, -1 for spin down), U psi*  has components
+		! psgn(i) conjg(psi(pmap(i))).  The layout is that of spin_z_matrix: DFT=S, systype SOC or NC: the first half of the
+		! orbitals is spin up and the second half spin down; DFT=W, systype SOC or NC: orbitals 2m-1 (up) and 2m (down).
+		! Time-reversal invariance of H and S is H(R) = U H(R)* U^+ for every R,
+		!
+		!    H_ij(R) = psgn(i) psgn(j) conjg( H_{pmap(i) pmap(j)}(R) ) ,
+		!
+		! tested here for the elements of the file: dev1 is the largest imaginary part of H(R) (mode 1) and dev2 the
+		! largest deviation of H and S from the spin-flip form (mode 2, -1 when it was not tried); mode = 0 when neither
+		! holds within 1e-4.  Mode 1 is tried first: for a spinor model without spin-orbit coupling, or any other real
+		! H(R), it is the one in use.
+
+		implicit none
+
+		character(len=1),intent(in) :: dft
+		character(len=4),intent(in) :: systype
+		integer,intent(in) :: nbasis,nvec
+		real,dimension(nvec,nbasis,nbasis),intent(in) :: hop,ihop,ovp
+		integer,intent(out) :: mode
+		integer,dimension(nbasis),intent(out) :: pmap
+		real,dimension(nbasis),intent(out) :: psgn
+		real,intent(out) :: dev1,dev2
+
+		integer :: i,j,w2
+		real,parameter :: tol = 1.0e-4
+		real :: d,devh,devs
+
+		! mode 1
+		do i=1,nbasis
+			pmap(i) = i
+			psgn(i) = 1.0
+		end do
+		dev1 = maxval(abs(ihop))
+		dev2 = -1.0
+		mode = 1
+		if (dev1 <= tol) return
+
+		! mode 2
+		mode = 0
+		if (mod(nbasis,2) /= 0) return
+		if (trim(systype) /= 'SOC' .and. trim(systype) /= 'NC') return
+		w2 = nbasis/2
+		do i=1,nbasis
+			if (dft == 'W') then
+				if (mod(i,2) == 1) then
+					pmap(i) = i+1
+					psgn(i) = 1.0
+				else
+					pmap(i) = i-1
+					psgn(i) = -1.0
+				end if
+			else
+				if (i <= w2) then
+					pmap(i) = i+w2
+					psgn(i) = 1.0
+				else
+					pmap(i) = i-w2
+					psgn(i) = -1.0
+				end if
+			end if
+		end do
+		devh = 0.0
+		devs = 0.0
+		!$omp parallel do default(shared) private(i,j,d) reduction(max:devh,devs)
+		do j=1,nbasis
+			do i=1,nbasis
+				d = psgn(i)*psgn(j)
+				devh = max(devh,maxval(abs(hop(:,i,j)-d*hop(:,pmap(i),pmap(j)))), &
+					maxval(abs(ihop(:,i,j)+d*ihop(:,pmap(i),pmap(j)))))
+				if (dft == 'S') devs = max(devs,maxval(abs(ovp(:,i,j)-d*ovp(:,pmap(i),pmap(j)))))
+			end do
+		end do
+		!$omp end parallel do
+		dev2 = max(devh,devs)
+		if (dev2 <= tol) mode = 2
+
+	end subroutine rb_tr_rep
 
 
 	function rb_element(kind1,kind2,h1,h2)
@@ -345,9 +478,9 @@ contains
 		do r=1,rb_n
 			select case (rb_kind(r))
 			case (1)
-				c = rb_r2*(h(rb_row(r))+h(rb_rowbar(r)))
+				c = rb_r2*(h(rb_row(r))+real(rb_sgn(r))*h(rb_rowbar(r)))
 			case (2)
-				c = cmplx(0.0,rb_r2)*(h(rb_row(r))-h(rb_rowbar(r)))
+				c = cmplx(0.0,rb_r2)*(h(rb_row(r))-real(rb_sgn(r))*h(rb_rowbar(r)))
 			case default
 				c = h(rb_row(r))
 			end select
@@ -374,10 +507,10 @@ contains
 			select case (rb_kind(r))
 			case (1)
 				ac(rb_row(r)) = ac(rb_row(r))+rb_r2*a(r)
-				ac(rb_rowbar(r)) = ac(rb_rowbar(r))+rb_r2*a(r)
+				ac(rb_rowbar(r)) = ac(rb_rowbar(r))+real(rb_sgn(r))*rb_r2*a(r)
 			case (2)
 				ac(rb_row(r)) = ac(rb_row(r))+cmplx(0.0,-rb_r2)*a(r)
-				ac(rb_rowbar(r)) = ac(rb_rowbar(r))+cmplx(0.0,rb_r2)*a(r)
+				ac(rb_rowbar(r)) = ac(rb_rowbar(r))+cmplx(0.0,real(rb_sgn(r))*rb_r2)*a(r)
 			case default
 				ac(rb_row(r)) = ac(rb_row(r))+a(r)
 			end select
@@ -447,3 +580,63 @@ subroutine rb_selfconj_vectors(dft,nbasis,nvec,rvec,hopmatrices,ihopmatrices,ffa
 	deallocate(htb,stb,hr,sr,wall,work)
 
 end subroutine rb_selfconj_vectors
+
+
+subroutine rb_kramers_gauge(dft,nbasis,nvec,rvec,ovp,kx,ky,kz,pmap,psgn,nb,w,vec,deve,devo)
+
+	! Kramers gauge of the bands of a self-conjugate k point (k = -k + G) of a spin-orbit model (T^2 = -1): the bands of
+	! the window come in doublets (2j-1, 2j), j = 1, ..., nb/2 (the window starts at an odd band index and has an even
+	! number of bands: the caller checks it), equal in energy.  The first vector of each doublet is kept (any
+	! eigenvector of the doublet is one), and the second is its time-reversed partner, vec(:,2j) = U conjg(vec(:,2j-1)),
+	! so that T psi_{2j-1} = psi_{2j} and T psi_{2j} = -psi_{2j-1}.
+	! deve: the largest energy difference inside a doublet (eV); devo: the largest deviation of the overlap matrix of the
+	! window vectors, vec^+ S(k) vec, from the unit matrix (it fails for an accidental degeneracy of two doublets, where the
+	! partner of a vector is not orthogonal to the other doublet).
+
+	implicit none
+
+	character(len=1),intent(in) :: dft
+	integer,intent(in) :: nbasis,nvec,nb
+	real,dimension(nvec,3),intent(in) :: rvec
+	real,dimension(nvec,nbasis,nbasis),intent(in) :: ovp
+	real,intent(in) :: kx,ky,kz
+	integer,dimension(nbasis),intent(in) :: pmap
+	real,dimension(nbasis),intent(in) :: psgn
+	real,dimension(nb),intent(in) :: w
+	complex,dimension(nbasis,nb),intent(inout) :: vec
+	real,intent(out) :: deve,devo
+
+	complex,allocatable,dimension(:,:) :: stb,sv,g
+	integer :: i,j
+
+	deve = 0.0
+	do j=1,nb-1,2
+		deve = max(deve,abs(w(j)-w(j+1)))
+		do i=1,nbasis
+			vec(i,j+1) = psgn(i)*conjg(vec(pmap(i),j))
+		end do
+	end do
+
+	allocate(sv(nbasis,nb),g(nb,nb))
+	if (dft .eq. "S") then
+		allocate(stb(nbasis,nbasis))
+		call overlap(nbasis,nvec,rvec,ovp,kx,ky,kz,stb)
+		sv = matmul(stb,vec)
+		deallocate(stb)
+	else
+		sv = vec
+	end if
+	g = matmul(conjg(transpose(vec)),sv)
+	devo = 0.0
+	do j=1,nb
+		do i=1,nb
+			if (i == j) then
+				devo = max(devo,abs(g(i,j)-cmplx(1.0,0.0)))
+			else
+				devo = max(devo,abs(g(i,j)))
+			end if
+		end do
+	end do
+	deallocate(sv,g)
+
+end subroutine rb_kramers_gauge

@@ -12,6 +12,9 @@ four (even mesh) self-conjugate k points, and on a non-square mesh:
     eigenvectors, so the strength of a single state, are free);
   * the exciton wavefunction of the ground state (BSE_WF= T) must have the same moduli and k-space density;
   * the inputs that BSE_REAL= T cannot take (BSE_HAM_SAVE, TEMP > 0, a shifted mesh, a complex H(R)) must be refused.
+The same comparisons are made for a generated spinor model with spin-orbit coupling (T^2 = -1, the Kramers real basis), in
+the spin up / spin down layout of DFT=S and in the interleaved layout of DFT=W, on meshes with 4, 1 and 0 self-conjugate k
+points; a time-reversal-breaking term, and an odd number of bands where a Kramers doublet would be cut, must be refused.
 No material data are needed.
 """
 import argparse
@@ -24,6 +27,68 @@ import tempfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from test_nonorth_optics_app import fixture, rows
+
+
+def fixture_soc(path, fermi, scissor, zeeman=0., dft='S'):
+    """Spinor version of the two-orbital fixture: 2 orbitals x 2 spins, systype SOC.
+
+    DFT=S: tb.dat, the overlap S0 x 1, spin up orbitals first, then spin down (as siesta2wtb.py writes them).
+    DFT=W: hr.dat, orthogonal basis, orbitals interleaved (2m-1 up, 2m down, as Wannier90 writes spinors).
+    H(R) = A(R) x 1 + i sum_a b_a(R) x sigma_a with real A, b_a and b_a(-R) = -b_a(R)^T, which is exactly the form that
+    commutes with T = i sigma_y K (T^2 = -1).  A complex H(R) in the usual sense: the time-reversal representation is the
+    spin flip, not the identity.  zeeman adds a real sigma_z term that breaks time reversal."""
+    a_r = [[[-1., .35], [.35, 1.6]], [[0., .4], [.1, 0.]], [[0., .1], [.4, 0.]]]
+    s_r = [[[1., .08], [.08, 1.]], [[.02, .07], [.01, .015]], [[.02, .01], [.07, .015]]]
+    # b_a(R = 0) antisymmetric; b_a(+1) = B_a, b_a(-1) = -B_a^T
+    b0 = {'x': [[0., .12], [-.12, 0.]], 'y': [[0., .08], [-.08, 0.]], 'z': [[0., .15], [-.15, 0.]]}
+    b1 = {'x': [[.05, .03], [-.02, .04]], 'y': [[-.04, .02], [.06, .01]], 'z': [[.03, -.05], [.02, -.06]]}
+    bm1 = {c: [[-b1[c][j][i] for j in range(2)] for i in range(2)] for c in b1}
+    b = [b0, b1, bm1]
+    tau = [[0., 0., 0.], [.32, -.12, .08]]
+    norb = 4
+
+    def split(index):
+        """spin (0 up, 1 down) and spatial orbital of the file index"""
+        return divmod(index, 2) if dft == 'S' else divmod(index, 2)[::-1]
+
+    if dft == 'S':
+        lines = ['SOC', str(scissor), str(fermi), '1 0 0', '0 4 0', '0 0 4', str(norb), '3', '# x y z a b h ih s # #']
+    else:
+        lines = ['SOC', str(scissor), str(fermi), '1 0 0', '0 4 0', '0 0 4', '# hr', str(norb), '3', '1 1 1']
+    for ir, r in enumerate([0, 1, -1]):
+        for col in range(norb):
+            for row in range(norb):
+                (sr_, o), (sc_, p) = split(row), split(col)
+                re = a_r[ir][o][p] if sr_ == sc_ else 0.
+                im = 0.
+                bx, by, bz = b[ir]['x'][o][p], b[ir]['y'][o][p], b[ir]['z'][o][p]
+                # i (bx sigma_x + by sigma_y + bz sigma_z) in the up/down blocks
+                if (sr_, sc_) == (0, 0):
+                    im += bz
+                    re += zeeman*(1. if o == p and ir == 0 else 0.)
+                elif (sr_, sc_) == (1, 1):
+                    im -= bz
+                    re -= zeeman*(1. if o == p and ir == 0 else 0.)
+                elif (sr_, sc_) == (0, 1):
+                    im += bx
+                    re += by
+                else:
+                    im += bx
+                    re -= by
+                if dft == 'S':
+                    ov = s_r[ir][o][p] if sr_ == sc_ else 0.
+                    lines.append(f'{r} 0 0 {row+1} {col+1} {re} {im} {ov}')
+                else:
+                    lines.append(f'{r} 0 0 {row+1} {col+1} {re} {im}')
+    if dft == 'S':
+        (path/'tb.dat').write_text('\n'.join(lines)+'\n')
+        basis = ['# index species x y z']
+        for row in range(norb):
+            t = tau[split(row)[1]]
+            basis.append(f'{row+1} X {t[0]} {t[1]} {t[2]}')
+        (path/'basis_set-soc').write_text('\n'.join(basis)+'\n')
+    else:
+        (path/'hr.dat').write_text('\n'.join(lines)+'\n')
 
 
 def clusters(table, groups=None, tol=2.e-5):
@@ -59,16 +124,21 @@ def main():
     env = dict(os.environ, OPENBLAS_NUM_THREADS='1', OMP_NUM_THREADS='2')
     runs = 0
 
-    def run(name, mesh, algo, ranks, real, temp=0, expect_ok=True, wavefunction=False, extra=None, shift=None, fix=None):
+    def run(name, mesh, algo, ranks, real, temp=0, expect_ok=True, wavefunction=False, extra=None, shift=None, fix=None,
+            soc=None, zeeman=0., nbands=None):
         nonlocal runs
         path = root/name
         path.mkdir(); (path/'out').mkdir()
-        fixture(path, 0., .6)
+        if soc:
+            fixture_soc(path, 0., .6, zeeman=zeeman, dft=soc)
+        else:
+            fixture(path, 0., .6)
         if fix:
             fix(path)
-        config = {'DFT': '"S"', 'PARAMS_FILE': '"tb.dat"', 'PARAMS_FORMAT': '"text"',
+        nv, nc = nbands or ((2, 2) if soc else (1, 1))
+        config = {'DFT': f'"{soc or "S"}"', 'PARAMS_FILE': '"hr.dat"' if soc == 'W' else '"tb.dat"', 'PARAMS_FORMAT': '"text"',
                   'OUTPUT': '"./out/"', 'CALC_DATA': '"./out/"', 'NTHREADS': 2,
-                  'NGX': mesh[0], 'NGY': mesh[1], 'NGZ': 1, 'NOCPF': 1, 'NBANDSC': 1, 'NBANDSV': 1,
+                  'NGX': mesh[0], 'NGY': mesh[1], 'NGZ': 1, 'NOCPF': 2 if soc else 1, 'NBANDSC': nc, 'NBANDSV': nv,
                   'SIGMA': 0., 'CSHIFT': .03, 'FERMI_SHIFT': 0., 'IPA': 'F', 'OPT_BZ': 'F',
                   'BSE': 'T', 'BSE_ALGO': f'"{algo}"', 'BSE_REAL': 'T' if real else 'F',
                   'DTDIAG': 'T', 'CPOL': 'T', 'RNMD': 'F', 'SPEC': 'T',
@@ -95,11 +165,11 @@ def main():
     def wavefunction(name):
         return rows(root/name/'out'/'exc_wf_1.dat'), rows(root/name/'out'/'exc_den_1.dat')
 
-    def compare(table, reference, label, energy_tol=2.e-4, strength_tol=2.e-3):
+    def compare(table, reference, label, energy_tol=2.e-4, strength_tol=2.e-3, cluster_tol=2.e-5):
         assert len(table) == len(reference), (label, 'row count')
         for i, (a, b) in enumerate(zip(table, reference)):
             assert abs(a[0]-b[0]) <= energy_tol, (label, 'state', i+1, 'energy', a[0], b[0])
-        ca = clusters(reference)
+        ca = clusters(reference, tol=cluster_tol)
         cb = clusters(table, [c[1] for c in ca])
         scale = max(abs(v) for c in ca for v in c[2])
         for i, (a, b) in enumerate(zip(ca, cb)):
@@ -141,6 +211,61 @@ def main():
             assert abs(math.hypot(a[6], a[7])-math.hypot(b[6], b[7])) <= 3.e-4, (name, 'row', i+1, 'modulus')
         for i, (a, b) in enumerate(zip(den, den_ref)):
             assert abs(a[3]-b[3]) <= 3.e-4, (name, 'k point', i+1, 'density')
+
+    # spin-orbit coupling: time reversal T = i sigma_y K, T^2 = -1 (Kramers real basis).  The levels come in pairs a few
+    # 1e-4 eV apart, so the strengths are summed over the levels closer than 1e-3 eV
+    soc_tol = 1.e-3
+    soc_note = 'spin-orbit coupling, time reversal T = i sigma_y K (T^2 = -1)'
+    for layout in ('S', 'W'):
+        for mesh in ((12, 12), (9, 9), (12, 10)) if layout == 'S' else ((12, 12), (9, 9)):
+            tag = f'{layout}-{mesh[0]}x{mesh[1]}'
+            reference, _ = run(f'soc-ref-{tag}', mesh, 'cheev', 1, False, soc=layout)
+            assert len(reference) == 4*mesh[0]*mesh[1]
+            for algo in ('cheev', 'cheevd', 'cheevr', 'cheevx') if layout == 'S' else ('cheevd',):
+                table, log = run(f'soc-real-{algo}-{tag}', mesh, algo, 1, True, soc=layout)
+                compare(table, reference, f'BSE_REAL SOC {algo} {tag}', cluster_tol=soc_tol)
+                worst = max(worst, max(abs(a[0]-b[0]) for a, b in zip(table, reference)))
+                assert soc_note in log, (algo, tag, 'log_bse_optics.dat')
+            if mpiexec and (layout == 'S' or mesh == (12, 12)):
+                for ranks in sorted({2, args.ranks}) if layout == 'S' and mesh != (12, 10) else [args.ranks]:
+                    table, log = run(f'soc-real-scalapack-r{ranks}-{tag}', mesh, 'cheev', ranks, True, soc=layout)
+                    compare(table, reference, f'BSE_REAL SOC ScaLAPACK {ranks} ranks {tag}', cluster_tol=soc_tol)
+                    worst = max(worst, max(abs(a[0]-b[0]) for a, b in zip(table, reference)))
+                    if args.elpa and layout == 'S':
+                        table, log = run(f'soc-real-elpa-r{ranks}-{tag}', mesh, 'elpa1', ranks, True, soc=layout)
+                        compare(table, reference, f'BSE_REAL SOC ELPA {ranks} ranks {tag}', cluster_tol=soc_tol)
+                        worst = max(worst, max(abs(a[0]-b[0]) for a, b in zip(table, reference)))
+    # half-step mesh: no self-conjugate k point, so no Kramers pairs at all, and an odd number of bands is allowed
+    for nbands in ((2, 2), (1, 1)):
+        reference, _ = run(f'soc-ref-half-{nbands[0]}', (12, 12), 'cheev', 1, False, shift=1/24, soc='S', nbands=nbands)
+        table, log = run(f'soc-real-half-{nbands[0]}', (12, 12), 'cheev', 1, True, shift=1/24, soc='S', nbands=nbands)
+        compare(table, reference, f'BSE_REAL SOC half-step mesh, {nbands[0]} bands', cluster_tol=soc_tol)
+        assert ' 72 pairs of k points (k, -k) and 0 self-conjugate k points' in log, log[:2000]
+    # exciton wavefunction: the ground state is a pair, so the densities are summed over the two states
+    def pair_density(name):
+        wf, den = {}, {}
+        for n in (1, 2):
+            for r in rows(root/name/'out'/f'exc_wf_{n}.dat'):
+                key = (r[0], r[4], r[5])
+                wf[key] = wf.get(key, 0.)+r[6]**2+r[7]**2
+            for i, r in enumerate(rows(root/name/'out'/f'exc_den_{n}.dat')):
+                den[i] = den.get(i, 0.)+r[3]
+        return wf, den
+    run('soc-wf-ref', (12, 12), 'cheev', 1, False, wavefunction=True, extra={'EXC_WF_F': 2}, soc='S')
+    wf_ref, den_ref = pair_density('soc-wf-ref')
+    for name, algo, ranks in [('soc-wf-real-cheevd', 'cheevd', 1)] + ([('soc-wf-real-scalapack', 'cheev', args.ranks)] if mpiexec else []):
+        run(name, (12, 12), algo, ranks, True, wavefunction=True, extra={'EXC_WF_F': 2}, soc='S')
+        wf, den = pair_density(name)
+        assert wf.keys() == wf_ref.keys() and den.keys() == den_ref.keys(), (name, 'rows')
+        for key in wf:
+            assert abs(wf[key]-wf_ref[key]) <= 3.e-4, (name, key, 'summed |psi|^2', wf[key], wf_ref[key])
+        for key in den:
+            assert abs(den[key]-den_ref[key]) <= 3.e-4, (name, 'k point', key+1, 'density')
+    # refusals: a term that breaks time reversal (a real sigma_z coupling), and Kramers doublets cut by the window
+    message = run('soc-refused-zeeman', (12, 12), 'cheev', 1, True, expect_ok=False, soc='S', zeeman=.3)
+    assert 'needs a time-reversal invariant tight-binding model' in message, message
+    message = run('soc-refused-odd-bands', (12, 12), 'cheev', 1, True, expect_ok=False, soc='S', nbands=(1, 1))
+    assert 'needs NBANDSV and NBANDSC even' in message, message
 
     # refused inputs
     message = run('refused-temp', (12, 12), 'cheev', 1, True, temp=80, expect_ok=False)

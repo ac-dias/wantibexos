@@ -481,16 +481,68 @@ The time-reversal gauge fixes only the arbitrary phases of the eigenvectors; the
 depend on it. Inside a degenerate level the single-state strengths in `bse_oscf.dat` are free (as for any eigensolver):
 compare sums over a degenerate level or the spectra.
 
-**Requirements** (the run stops with a message otherwise): real $H(\mathbf R)$ (largest imaginary part below $10^{-4}$ eV, and
-the eigensolver energies $E(\mathbf k)=E(-\mathbf k)$ to $10^{-3}$ eV), `SPIN_EXC= 0`, a k mesh symmetric under
+**Requirements** (the run stops with a message otherwise): a time-reversal invariant model: a real $H(\mathbf R)$ (largest imaginary part
+below $10^{-4}$ eV), or the spin-orbit form of the next section, and the eigensolver energies $E(\mathbf k)=E(-\mathbf k)$
+to $10^{-3}$ eV; `SPIN_EXC= 0`; a k mesh symmetric under
 $\mathbf k\to-\mathbf k$ (an unshifted mesh, or a shift of half a mesh step: `SHIFT_1= 0.5/NGX` of the reciprocal vector;
 a shift such as 1/36 on a 12-point mesh is not symmetric). The mesh, with `TEMP`, `BSE_HAM_SAVE/READ`, `BSE_EPH_FILE` and
 `SPIN_EXC`, is tested first thing from the input alone, on every rank, before the tight-binding file is read or anything is
 computed: the mesh $\mathbf k=\mathbf b_i(j/N_i+s_i)$ contains $-\mathbf k$ exactly when $2s_iN_i$ is an integer for each
 direction, and the message names the offending `SHIFT_i`/`NG` and the shifts that work. `wtb_symmetry.x` reports it too. A Wannier90 model in an arbitrary gauge has a complex $H(\mathbf R)$ (the `three-way-V2DTAVG` MoSi2N4 benchmark has imaginary
 parts up to 1.65 eV) and is refused: time reversal is then a symmetry represented by a unitary matrix on the orbitals, which is
-not used. SIESTA (`DFT=S`) and PAOFLOW models are real. Not (yet) supported:
-`BSE_HAM_SAVE`/`BSE_HAM_READ`, `BSE_EPH_FILE`, `TEMP > 0`, the q-path BSE.
+not used (only the identity and the spin flip of the next section are). SIESTA (`DFT=S`, no SOC) and PAOFLOW models are real.
+Not (yet) supported: `BSE_HAM_SAVE`/`BSE_HAM_READ`, `BSE_EPH_FILE`, `TEMP > 0`, the q-path BSE.
+
+Before the build the run also tests the symmetry that the whole construction rests on, on a spread of states:
+$H_{\tilde a\tilde b}=H_{ab}^{*}$ for the kernel (deviation, relative to $1+|H|$, in `log_bse_optics.dat`; above $10^{-4}$ the run
+stops). A Coulomb potential or a form-factor model that is not even in $\mathbf q$ would fail it instead of giving wrong
+spectra. All the potentials of `COULOMB_POT` pass it, and agree with the complex solver (energies to $10^{-4}$ eV), on the
+generated test models with and without SOC (`V1D`, `V1DL` only with one OpenMP thread, see the note on thread safety below;
+`V1DT` gives non-finite values with `BSE_REAL= F` too on that model).
+
+### Spin-orbit coupling (time reversal with $T^2=-1$)
+
+A spinor model with spin-orbit coupling has $T=i\sigma_y K$, $T^2=-1$, and no basis makes $H(\mathbf R)$ real: the
+single-particle space has no real structure. The **exciton** space has one: the pair operator $\Theta=T_e\otimes T_h$ has
+$\Theta^2=(-1)(-1)=+1$. `BSE_REAL= T` therefore runs for these models too, with three changes (the real combinations, the
+matrix elements, the solvers and the post-processing are those above):
+
+1. *Time reversal on the orbitals.* $T=UK$ with $U=i\sigma_y\otimes1$, a signed permutation of the spinor components
+   ($\psi_{\uparrow i}\to\psi^*_{\downarrow i}$, $\psi_{\downarrow i}\to-\psi^*_{\uparrow i}$), in the layout of the file: spin up
+   orbitals first and spin down second (`DFT=S`, systype `SOC` or `NC`, as `siesta2wtb.py` writes them), or interleaved
+   (`DFT=W`: $2m-1$ up, $2m$ down). The model must have it as a symmetry,
+   $$H_{ij}(\mathbf R)=s_is_j\,H^{*}_{p(i)p(j)}(\mathbf R)\quad(s=+1\ \text{up},\ -1\ \text{down}),$$
+   for $H$ and $S$ at every $\mathbf R$ (tested on the elements of the file, to $10^{-4}$ eV, and the two spin orbitals of an
+   orbital must have the same centre); otherwise the run stops. A model with a real $H(\mathbf R)$ keeps $U=1$ (spinors without SOC
+   included). The gauge of the pairs is $\psi_{n\bar{\mathbf k}}=U\psi^*_{n\mathbf k}$.
+2. *Kramers partners at the self-conjugate k points.* At $\bar{\mathbf k}=\mathbf k$ the partner of a band is another band of the
+   Kramers doublet, $T\psi_{2j-1}=\psi_{2j}$ and $T\psi_{2j}=-\psi_{2j-1}$ (the code keeps the first eigenvector of each doublet
+   and builds the second as $U\psi^*_{2j-1}$). The partner of $a=(v,c,\mathbf k)$ is then $\bar a=(\bar v,\bar c,\mathbf k)$, another
+   transition of the same k point, and no unpaired $|e\rangle$ functions remain: every function belongs to an $s,t$ couple.
+   The bands of the window must therefore be whole doublets there: **`NBANDSV` and `NBANDSC` even** (the Fermi level must
+   not cut a doublet, `NOCPF` even) on a mesh that has self-conjugate points, otherwise the run stops. A mesh shifted by half a
+   step has none and takes any number of bands. Doublets that touch each other at a self-conjugate point (an accidental
+   fourfold degeneracy) are refused.
+3. *Signs.* With $\sigma_n=+1$ for the first and $-1$ for the second member of a doublet and $\sigma_a=\sigma_c\sigma_v$, the
+   time-reversed state is $\tilde a=\Theta a=\sigma_a\bar a$, and $\Theta\tilde a=a$ because $\sigma_{\bar n}=-\sigma_n$. Everything above
+   holds with $\bar a\to\tilde a$: $H_{\tilde a\tilde b}=H_{ab}^*$, $h_2=H_{a\tilde b}=\sigma_bH_{a\bar b}$,
+   $h'_s=(h_a+\sigma_ah_{\bar a})/\sqrt2$, $h'_t=i(h_a-\sigma_ah_{\bar a})/\sqrt2$, and the amplitude of $\bar a$ carries $\sigma_a$ in the
+   complex amplitudes $A=U\mathbf x$. For the pairs $\mathbf k<\bar{\mathbf k}$, $\sigma=+1$. (Without these signs the pairs of a
+   self-conjugate point built from the first member of one doublet and the second of another are mixed wrongly: the exciton
+   energies of the generated test model change by 0.5 eV, and the kernel test above stops the run.)
+
+The test model is a spinor version of the two-orbital insulator, $H=A\otimes1+i\sum_ab_a\otimes\sigma_a$ with real $A$, $b_a$.
+Real and complex solvers agree to $10^{-4}$ eV in the exciton energies and to $10^{-3}$ in the strengths summed over
+the levels closer than 1 meV (the exciton levels come in doublets a few $10^{-4}$ eV apart), for meshes with 4, 1 and 0
+self-conjugate points, in both file layouts, with every serial solver, ScaLAPACK on 2 and 4 ranks and ELPA.
+Not covered: a spinor model in an arbitrary Wannier gauge (its $U$ would have to be found numerically,
+$H(\mathbf R)U=UH(\mathbf R)^{*}$; it would also give the complex-gauge Wannier models without SOC), `SPIN_EXC /= 0`, and the other
+limits above. The real basis does not need the bands to be non-degenerate: it needs the window not to cut a Kramers doublet
+at a self-conjugate point.
+
+**Thread safety of the 1D potentials.** `COULOMB_POT= V1D` and `V1DL` call an exponential-integral routine that is not
+thread-safe: with `NTHREADS > 1` two identical runs give exciton energies that differ by about 1 eV, with `BSE_REAL= F` as well.
+Use `NTHREADS= 1` (and `OMP_NUM_THREADS=1`) with these two potentials.
 
 Measured with a `-O1 -fcheck=all` build, serial `cheevd`, 4 threads (the real build and diagonalization are `SSYEVD`; the
 spectra of both paths agree to $10^{-4}$ relative, the energies of all states to $1.5\times10^{-4}$ eV, single precision):

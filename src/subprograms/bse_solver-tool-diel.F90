@@ -236,7 +236,13 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	complex,allocatable,dimension(:,:) :: rb_vsc
 	integer,allocatable,dimension(:) :: rb_kb
 	integer :: rb_nself,rb_nmis,rbu,rbv,rbk,rbnr,rbnc
-	real :: rb_imh,rb_devmax,rb_tgdev,rb_eref
+	real :: rb_devmax,rb_tgdev,rb_eref
+	! time-reversal representation (rb_tr_rep): mode 1 U = 1, mode 2 spin flip; Kramers partners of the transitions
+	integer :: rb_mode
+	integer,allocatable,dimension(:) :: rb_pmap,rb_tbar,rb_sig
+	real,allocatable,dimension(:) :: rb_psgn
+	real :: rb_dev1,rb_dev2,rb_devo,rb_deve_k,rb_devo_k,rb_kdev
+	integer :: rbj,rbic,rbiv
 	real :: blk(2,2),blkt(2,2)
 #ifdef ELPA
 	real,allocatable,dimension(:,:) :: elpa_eigenvectors_r
@@ -453,9 +459,16 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		if (bsehamwrite .or. bsehamread) call rb_refuse('BSE_REAL= T does not support BSE_HAM_SAVE / BSE_HAM_READ yet')
 		if (len_trim(bse_eph_file) > 0) call rb_refuse('BSE_REAL= T does not support BSE_EPH_FILE')
 		if (abs(exc) > 0.0) call rb_refuse('BSE_REAL= T needs a time-reversal invariant Hamiltonian: SPIN_EXC= must be 0')
-		rb_imh = maxval(abs(ihopmatrices))
-		if (rb_imh > 1.0e-4) then
-			if (Node == 0) write(*,*) 'BSE_REAL= T: the imaginary part of H(R) is up to',rb_imh,'eV'
+		! time reversal on the orbitals: T = K (real H(R)) or T = i sigma_y K (spin-orbit coupling)
+		allocate(rb_pmap(w90basis),rb_psgn(w90basis))
+		call rb_tr_rep(dft,systype,w90basis,nvec,hopmatrices,ihopmatrices,ovp,rb_mode,rb_pmap,rb_psgn,rb_dev1,rb_dev2)
+		if (rb_mode == 0) then
+			if (Node == 0) then
+				write(*,*) 'BSE_REAL= T: the imaginary part of H(R) is up to',rb_dev1,'eV'
+				if (rb_dev2 >= 0.0) write(*,*) 'BSE_REAL= T: H(R) and S(R) differ from the spin-flip form of time reversal by',rb_dev2,'eV'
+			end if
+			if (rb_dev2 >= 0.0) call rb_refuse('BSE_REAL= T needs a time-reversal invariant tight-binding model: a real H(R), or the &
+				&spin-orbit form H(R) = U H(R)* U^+ with the spin flip U of the spinor layout of the file')
 			call rb_refuse('BSE_REAL= T needs a real H(R) (time-reversal invariant tight-binding model)')
 		end if
 		rb_full = use_elpa
@@ -534,10 +547,33 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	if (use_real) then
 		call rb_partners(ngkpt,kpt,rlat,1.0e-4,rb_kb,rb_nself,rb_ok)
 		if (.not. rb_ok) call rb_refuse('BSE_REAL= T needs a k mesh that is symmetric under k -> -k (an unshifted mesh or a shift of 1/2)')
-		call rb_setup(ngkpt,nc*nv,rb_kb)
+		! partner of the transitions at a self-conjugate k point: itself (T^2 = +1), or its Kramers partner (T^2 = -1): the
+		! band j goes to j+1 (j odd) or j-1 (j even), sigma = +1 (odd), -1 (even), sigma_a = sigma_c sigma_v
+		allocate(rb_tbar(nc*nv),rb_sig(nc*nv))
+		do rbic=1,nc
+			do rbiv=1,nv
+				rbj = (rbic-1)*nv+rbiv
+				rb_tbar(rbj) = rbj
+				rb_sig(rbj) = 1
+			end do
+		end do
+		if (rb_mode == 2 .and. rb_nself > 0) then
+			if (mod(nv,2) /= 0 .or. mod(nc,2) /= 0) call rb_refuse('BSE_REAL= T with spin-orbit coupling needs NBANDSV and NBANDSC &
+				&even (whole Kramers doublets) on a k mesh with self-conjugate k points (an unshifted mesh); a mesh shifted by half &
+				&a step has none')
+			do rbic=1,nc
+				do rbiv=1,nv
+					rbj = (rbic-1)*nv+rbiv
+					rb_tbar(rbj) = (rbic-1+2*mod(rbic,2)-1)*nv+(rbiv-1+2*mod(rbiv,2))
+					rb_sig(rbj) = (2*mod(rbic,2)-1)*(2*mod(rbiv,2)-1)
+				end do
+			end do
+		end if
+		call rb_setup(ngkpt,nc*nv,rb_kb,rb_tbar,rb_sig)
 		if (Node == 0) then
 			write(300,"(A,I0,A,I0,A)") ' BSE_REAL: time-reversal real basis, ',(ngkpt-rb_nself)/2,' pairs of k points (k, -k) and ', &
 				rb_nself,' self-conjugate k points'
+			if (rb_mode == 2) write(300,"(A,ES9.2,A)") ' BSE_REAL: spin-orbit coupling, time reversal T = i sigma_y K (T^2 = -1), deviation of H(R), S(R) from this form ',rb_dev2,' eV'
 			write(300,*) 'BSE_REAL: the Hamiltonian is a real symmetric matrix of dimension',dimbse
 			call flush(300)
 		end if
@@ -764,11 +800,22 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	deallocate(eaux,vaux)
 	ipa_t(1) = omp_get_wtime()-ipa_tw
 
-	! BSE_REAL: the vectors of the self-conjugate k points (k = -k + G) must be real (bse_realbasis)
+	! BSE_REAL: the vectors of the self-conjugate k points (k = -k + G): real vectors (T^2 = +1, bse_realbasis), or Kramers
+	! pairs T psi_{2j-1} = psi_{2j}, T psi_{2j} = -psi_{2j-1} (T^2 = -1, spin-orbit coupling)
 	rb_devmax = 0.0
+	rb_devo = 0.0
 	if (use_real) then
 		do i=kfirst,klast
 			if (rb_kb(i) /= i) cycle
+			if (rb_mode == 2) then
+				if (mod(nocpk(i),2) /= 0) call rb_refuse('BSE_REAL= T with spin-orbit coupling: an odd number of occupied bands at a &
+					&self-conjugate k point (the Fermi level cuts a Kramers doublet)')
+				call rb_kramers_gauge(dft,w90basis,nvec,rvec,ovp,kpt(i,1),kpt(i,2),kpt(i,3),rb_pmap,rb_psgn,nc+nv,eigt(:,i), &
+					vector(:,:,i),rb_deve_k,rb_devo_k)
+				rb_devmax = max(rb_devmax,rb_deve_k)
+				rb_devo = max(rb_devo,rb_devo_k)
+				cycle
+			end if
 			allocate(rb_vsc(w90basis,nc+nv),rb_w(nc+nv))
 			call rb_selfconj_vectors(dft,w90basis,nvec,rvec,hopmatrices,ihopmatrices,ffactor,ovp,kpt(i,1),kpt(i,2),kpt(i,3), &
 				nc+nv,nocpk(i)-nv+1,rb_w,rb_vsc,erro)
@@ -802,16 +849,23 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	if (use_real) then
 #ifdef MPI
 		call MPI_ALLREDUCE(MPI_IN_PLACE,rb_devmax,1,MPI_REAL,MPI_MAX,MPI_COMM_WORLD,MPIError)
+		call MPI_ALLREDUCE(MPI_IN_PLACE,rb_devo,1,MPI_REAL,MPI_MAX,MPI_COMM_WORLD,MPIError)
 #endif
-		call rb_tr_gauge(ngkpt,nc+nv,w90basis,rb_kb,vector,eigt,nocpk,rb_tgdev,rb_nmis)
+		call rb_tr_gauge(ngkpt,nc+nv,w90basis,rb_kb,rb_pmap,rb_psgn,vector,eigt,nocpk,rb_tgdev,rb_nmis)
 		if (Node == 0) then
 			write(300,"(A,ES9.2,A,ES9.2,A)") ' BSE_REAL: max |E(k)-E(-k)| of the eigensolver ',rb_tgdev, &
 				' eV, real-solver check at the self-conjugate k points ',rb_devmax,' eV'
 			call flush(300)
 		end if
+		if (rb_mode == 2 .and. rb_devo > 1.0e-3) then
+			if (Node == 0) write(*,*) 'BSE_REAL: overlap of the Kramers-paired vectors at a self-conjugate k point deviates by',rb_devo
+			call rb_refuse('BSE_REAL= T with spin-orbit coupling: the Kramers partners are not orthogonal to the other bands of the &
+				&window at a self-conjugate k point (an accidental degeneracy of two doublets)')
+		end if
 		if (rb_tgdev > 1.0e-3 .or. rb_devmax > 1.0e-3 .or. rb_nmis > 0) then
 			if (Node == 0) write(*,*) 'BSE_REAL: bands of k and -k differ by',rb_tgdev,'eV (real solver:',rb_devmax,'eV, Fermi-level band mismatches:',rb_nmis,')'
-			call rb_refuse('BSE_REAL= T: the band structure is not time-reversal symmetric, E(k) /= E(-k)')
+			call rb_refuse('BSE_REAL= T: the band structure is not time-reversal symmetric, E(k) /= E(-k) (with spin-orbit coupling: &
+				&a Kramers doublet at a self-conjugate k point is not degenerate)')
 		end if
 	end if
 	do i=1,ngkpt
@@ -1194,6 +1248,29 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		lld = max(1,locr)
 	end if
 #endif
+
+	! BSE_REAL: time-reversal symmetry of the kernel and of the orbital centres, tested on a spread of states before the
+	! build (the fast kernel is not active yet): H(atilde,btilde) = conjg(H(a,b)), atilde = sigma_a abar
+	if (use_real) then
+		if (rb_mode == 2 .and. dft .eq. "S") then
+			rb_kdev = 0.0
+			do rbj=1,w90basis
+				rb_kdev = max(rb_kdev,maxval(abs(tau(rbj,:)-tau(rb_pmap(rbj),:))))
+			end do
+			if (rb_kdev > 1.0e-3) call rb_refuse('BSE_REAL= T with spin-orbit coupling: the two spin orbitals of an orbital have different &
+				&centres in the basis_set-* file')
+		end if
+		call rb_kernel_check(rb_kdev)
+		if (Node == 0) then
+			write(300,"(A,ES9.2)") ' BSE_REAL: time-reversal check of the kernel, max |H(a~,b~) - H(a,b)*| / (1 + |H|) ',rb_kdev
+			call flush(300)
+		end if
+		if (rb_kdev > 1.0e-4) then
+			if (Node == 0) write(*,*) 'BSE_REAL: the kernel is not time-reversal symmetric, deviation',rb_kdev
+			call rb_refuse('BSE_REAL= T: the kernel H(a~,b~) differs from H(a,b)*: the Coulomb potential or the form factors are not &
+				&time-reversal symmetric (not even in q), use BSE_REAL= F')
+		end if
+	end if
 
 	! a Hamiltonian read from the file needs no kernel, except for the check
 	if (fastk .and. (kcheck .or. .not. bsehamread)) then
@@ -2270,6 +2347,8 @@ allocate(elpa_eigenvectors_r(lld,max(1,locc)),stat=erro)
 		if (use_real) then
 			deallocate(hv_re,hv_im)
 			call rb_free()
+			if (allocated(rb_pmap)) deallocate(rb_pmap,rb_psgn)
+			if (allocated(rb_tbar)) deallocate(rb_tbar,rb_sig)
 			if (Nodes == 1) then
 				deallocate(hbse_r)
 			else
@@ -2352,14 +2431,23 @@ contains
 		integer :: isk,jsk
 		isk = min(stt_bse(4,i),nsk)
 		jsk = min(stt_bse(4,j),nsk)
+		h = rb_melem_sk(i,j,sk(:,:,isk),sk(:,:,jsk))
+	end function rb_melem
+
+	function rb_melem_sk(i,j,sk1,sk2) result(h)
+		! the same, with the overlap matrices S(k) of the two states given (the table sk holds one scratch matrix in the
+		! fast kernel mode)
+		integer,intent(in) :: i,j
+		complex,dimension(w90basis,w90basis),intent(in) :: sk1,sk2
+		complex :: h
 		h = matrizelbse(coultype,ktol,w90basis,ediel,lc,ez,w1,r0,ngrid,rlat,stt_bse(:,i),&
 		    eigv(stt_bse(4,i),stt_bse(3,i)),eigv(stt_bse(4,i),stt_bse(2,i)),vector(:,stt_bse(3,i),stt_bse(4,i)),&
 		    vector(:,stt_bse(2,i),stt_bse(4,i)),kpt_bse(:,stt_bse(4,i)),stt_bse(:,j),eigv(stt_bse(4,j),stt_bse(3,j)),&
 		    eigv(stt_bse(4,j),stt_bse(2,j)),vector(:,stt_bse(3,j),stt_bse(4,j)),vector(:,stt_bse(2,j),stt_bse(4,j)),&
-		    kpt_bse(:,stt_bse(4,j)),dft,nvec,rvec,sk(:,:,isk),sk(:,:,jsk),use_center_phase, &
+		    kpt_bse(:,stt_bse(4,j)),dft,nvec,rvec,sk1,sk2,use_center_phase, &
 		    center_phase(:,stt_bse(4,i)),center_phase(:,stt_bse(4,j)), &
 		    use_center_grad,rmn,wannier_centers,ffdat)
-	end function rb_melem
+	end function rb_melem_sk
 
 	subroutine rb_block(ru,rc,b)
 		! the real matrix elements between the real basis functions of the unit that starts at ru (rows) and the one
@@ -2376,7 +2464,7 @@ contains
 		if (kc == 1) ncol = 2
 		h1 = rb_melem(rb_row(ru),rb_row(rc))
 		h2 = cmplx(0.0,0.0)
-		if (ku /= 0 .and. kc /= 0) h2 = rb_melem(rb_row(ru),rb_rowbar(rc))
+		if (ku /= 0 .and. kc /= 0) h2 = real(rb_sgn(rc))*rb_melem(rb_row(ru),rb_rowbar(rc))
 		b = 0.0
 		do jj=1,ncol
 			kkj = 0
@@ -2388,6 +2476,46 @@ contains
 			end do
 		end do
 	end subroutine rb_block
+
+	subroutine rb_kernel_check(dev)
+		! time-reversal symmetry of the kernel, H(atilde,btilde) = conjg(H(a,b)) with atilde = sigma_a abar, for the
+		! states of three functions of the real basis table (the first, a middle one, the last: a function of a
+		! self-conjugate k point when there is one) in all combinations; dev is the largest
+		! |H(atilde,btilde) - conjg(H(a,b))| / (1 + |H(a,b)|).  The overlap matrices S(k) of the six states are built here
+		! (the fast kernel keeps one scratch matrix), so the check does not depend on the kernel mode.
+		real,intent(out) :: dev
+		integer :: fu(3),rows(6),fi,fj,i1,i2,m
+		complex,allocatable :: skc(:,:,:)
+		complex :: h1,h2
+		fu = (/1,max(1,rb_n/2),rb_n/)
+		do fi=1,3
+			rows(2*fi-1) = rb_row(fu(fi))
+			rows(2*fi) = rb_rowbar(fu(fi))
+		end do
+		allocate(skc(w90basis,w90basis,6))
+		do m=1,6
+			if (dft .eq. "S") then
+				call overlap(w90basis,nvec,rvec,ovp,kpt(stt_bse(4,rows(m)),1),kpt(stt_bse(4,rows(m)),2),kpt(stt_bse(4,rows(m)),3),skc(:,:,m))
+			else
+				skc(:,:,m) = cmplx(0.0,0.0)
+				do i1=1,w90basis
+					skc(i1,i1,m) = cmplx(1.0,0.0)
+				end do
+			end if
+		end do
+		dev = 0.0
+		do fi=1,3
+			do fj=1,3
+				i1 = 2*fi-1
+				i2 = 2*fj-1
+				h1 = rb_melem_sk(rows(i1),rows(i2),skc(:,:,i1),skc(:,:,i2))
+				h2 = real(rb_sgn(fu(fi))*rb_sgn(fu(fj)))*rb_melem_sk(rows(i1+1),rows(i2+1),skc(:,:,i1+1),skc(:,:,i2+1))
+				dev = max(dev,abs(h2-conjg(h1))/(1.0+abs(h1)))
+			end do
+		end do
+		deallocate(skc)
+	end subroutine rb_kernel_check
+
 
 end subroutine bsesolver
 
