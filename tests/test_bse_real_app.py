@@ -15,8 +15,9 @@ four (even mesh) self-conjugate k points, and on a non-square mesh:
     single precision workspace query rounds an odd size down (MKL, N >= 2895);
   * the log names the routine that was called (SSYEV, SSYEVD, SSYEVR, SSYEVX for BSE_REAL= T);
   * non-square process grids (3 and 6 ranks: 1x3 and 2x3) without and with spin-orbit coupling: ScaLAPACK, and with --elpa
-    ELPA 1-stage, ELPA 2-stage and BSE_NSTATES= 50 (ELPA stops with status -13 when a process column of the grid holds
-    no columns of the matrix, N <= 64 (columns of the grid - 1), with BSE_REAL= F as well, so the grids are chosen for N = 576);
+    ELPA 1-stage, ELPA 2-stage and BSE_NSTATES= 50 (ELPA fails when a process column of the grid holds no columns of
+    the matrix, N <= 64 (columns of the grid - 1): the run is refused with a message, BSE_REAL= F as well, so the grids are
+    chosen for N = 576);
   * the inputs that BSE_REAL= T cannot take (BSE_HAM_SAVE, TEMP > 0, a shifted mesh, a complex H(R)) must be refused.
 The same comparisons are made for a generated spinor model with spin-orbit coupling (T^2 = -1, the Kramers real basis), in
 the spin up / spin down layout of DFT=S and in the interleaved layout of DFT=W, on meshes with 4, 1 and 0 self-conjugate k
@@ -317,6 +318,15 @@ def main():
                     table, log = run(f'grid-{algo}-n50-{tag}', mesh, algo, 3, True, soc=soc, extra={'BSE_NSTATES': 50})
                     compare(table, reference, f'BSE_REAL {algo} 3 ranks {tag} BSE_NSTATES=50', cluster_tol=tol, lowest=True)
                     assert len(table) == 50 and re.search(r'the\s+50 lowest of the', log), (algo, tag, 'BSE_NSTATES')
+
+    # ELPA needs every rank to hold part of the matrix: 81 states on 3 ranks (1x3 grid, 2 blocks of 64 columns) is refused with a
+    # message, for the real and the complex solver, where ELPA itself stopped with status -13; ScaLAPACK takes it
+    if mpiexec and args.elpa:
+        for real in (True, False):
+            for algo in ('elpa1', 'elpa2'):
+                message = run(f'refused-elpa-small-{algo}-{"real" if real else "complex"}', (9, 9), algo, 3, real, expect_ok=False)
+                assert 'too small for ELPA' in message and 'BSE_ALGO= cheev' in message, message
+                assert 'status' not in message, message
 
     # refused inputs
     message = run('refused-temp', (12, 12), 'cheev', 1, True, temp=80, expect_ok=False)

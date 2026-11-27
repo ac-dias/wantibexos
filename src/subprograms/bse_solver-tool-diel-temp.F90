@@ -1315,6 +1315,9 @@ subroutine bsesolvertemp(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 			call elpa_uninit(elpa_status)
 			call elpa_check(elpa_status, 'elpa_uninit', MPI_COMM_WORLD)
 			call bse_elpa_verify(dimbse,nstates,W,elpa_emin,elpa_emax,elpa_trace,Node,elpa_good)
+			! every rank decides alike, and none aborts before rank 0 has written (and flushed) the reason: an abort of
+			! another rank kills it with the message still in its buffer
+			call MPI_ALLREDUCE(MPI_IN_PLACE, elpa_good, 1, MPI_LOGICAL, MPI_LAND, MPI_COMM_WORLD, MPIError)
 			if (.not. elpa_good) call MPI_ABORT(MPI_COMM_WORLD, 1, MPIError)
 
 			! only the nstates lowest eigenpairs are defined: clear the other columns so that the

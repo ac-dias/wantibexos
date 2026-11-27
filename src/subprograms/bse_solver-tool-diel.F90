@@ -195,7 +195,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	integer :: numroc, indxl2g
 	! ELPA solver (BSE_ALGO= elpa, elpa1, elpa2) and the number of lowest eigenpairs it computes (BSE_NSTATES=)
 	logical :: use_elpa
-	integer :: elpa_stage, nstates
+	integer :: elpa_stage, nstates, elpa_hold
 	integer,dimension(3) :: bseham_metadata
 	character(len=160) :: bseham_path
 #ifdef MPI
@@ -1271,6 +1271,23 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 		locr = numroc(dimbse, mb, myrow, 0, nprow)
 		locc = numroc(dimbse, nb, mycol, 0, npcol)
 		lld = max(1,locr)
+#ifdef ELPA
+		! ELPA stops with status -13 when a rank holds no row or no column of the matrix, which happens when the matrix has
+		! fewer blocks than the grid has process rows or columns (N <= mb*(npcol-1)), for BSE_REAL= F as well
+		if (use_elpa) then
+			elpa_hold = min(locr,locc)
+			call MPI_ALLREDUCE(MPI_IN_PLACE, elpa_hold, 1, MPI_INTEGER, MPI_MIN, MPI_COMM_WORLD, MPIError)
+			if (elpa_hold == 0) then
+				if (Node == 0) then
+					write(*,*) 'BSE_ALGO= ',trim(bsealgo),': the BSE matrix is too small for ELPA on ',Nodes,' MPI ranks: ',dimbse,' x ',dimbse, &
+						' elements on a ',nprow,' x ',npcol,' process grid with blocks of ',mb,' leave at least one rank without any part of it.'
+					write(*,*) 'ELPA needs every rank to hold rows and columns of the matrix: use fewer MPI ranks, or BSE_ALGO= cheev (ScaLAPACK).'
+					call flush(6)
+				end if
+				call MPI_ABORT(MPI_COMM_WORLD, 1, MPIError)
+			end if
+		end if
+#endif
 	end if
 #endif
 
@@ -1796,6 +1813,9 @@ allocate(elpa_eigenvectors_r(lld,max(1,locc)),stat=erro)
 			call elpa_uninit(elpa_status)
 			call elpa_check(elpa_status, 'elpa_uninit', MPI_COMM_WORLD)
 			call bse_elpa_verify(dimbse,nstates,W,elpa_emin,elpa_emax,elpa_trace,Node,elpa_good)
+			! every rank decides alike, and none aborts before rank 0 has written (and flushed) the reason: an abort of
+			! another rank kills it with the message still in its buffer
+			call MPI_ALLREDUCE(MPI_IN_PLACE, elpa_good, 1, MPI_LOGICAL, MPI_LAND, MPI_COMM_WORLD, MPIError)
 			if (.not. elpa_good) call MPI_ABORT(MPI_COMM_WORLD, 1, MPIError)
 
 			! only the nstates lowest eigenpairs are defined: clear the other columns so that the
@@ -1994,6 +2014,9 @@ allocate(elpa_eigenvectors_r(lld,max(1,locc)),stat=erro)
 			call elpa_uninit(elpa_status)
 			call elpa_check(elpa_status, 'elpa_uninit', MPI_COMM_WORLD)
 			call bse_elpa_verify(dimbse,nstates,W,elpa_emin,elpa_emax,elpa_trace,Node,elpa_good)
+			! every rank decides alike, and none aborts before rank 0 has written (and flushed) the reason: an abort of
+			! another rank kills it with the message still in its buffer
+			call MPI_ALLREDUCE(MPI_IN_PLACE, elpa_good, 1, MPI_LOGICAL, MPI_LAND, MPI_COMM_WORLD, MPIError)
 			if (.not. elpa_good) call MPI_ABORT(MPI_COMM_WORLD, 1, MPIError)
 
 			! only the nstates lowest eigenpairs are defined: clear the other columns so that the

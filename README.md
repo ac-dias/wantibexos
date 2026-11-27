@@ -469,8 +469,10 @@ serial complex solver on 2, 3, 4, 5, 6 and 8 ranks (grids 1x2, 1x3, 2x2, 1x5, 2x
 it (`DFT=S` and `DFT=W` layouts), for ScaLAPACK, ELPA 1-stage, ELPA 2-stage and `BSE_NSTATES= 1` and `50`: the energies
 agree to $3.3\times10^{-5}$ eV. The real 2-stage ELPA solver is right with the ELPA build whose *complex* 2-stage solver
 returns wrong eigenvalues (see the ELPA notes above), so `elpa2` can be used for `BSE_REAL= T` where it cannot for
-`BSE_REAL= F`. ELPA stops with `status = -13` when a process column of the grid holds no columns of the matrix, that is for
-$N\le64\,(n_{\rm columns}-1)$ (81 states on 3 or 8 ranks), with `BSE_REAL= F` as well; ScaLAPACK has no such limit.
+`BSE_REAL= F`. ELPA fails (`status = -13`) when a rank holds no rows or columns of the matrix, that is for
+$N\le64\,(n_{\rm columns}-1)$ (81 states on 3 or 8 ranks), with `BSE_REAL= F` as well: the run now stops before the build
+with a message that names the matrix, the process grid and the alternatives (fewer ranks, or `BSE_ALGO= cheev`, which has no
+such limit).
 
 **The transformation.** Let $|a\rangle=|v\,c\,\mathbf k\rangle$ be the exciton basis of the k mesh.
 

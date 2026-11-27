@@ -1069,6 +1069,8 @@ subroutine bse_elpa_verify(dimse,nstates,w,emin,emax,etrace,iam,ok)
 	if (.not. ok .and. iam == 0) then
 		write(*,*) 'The ELPA solver gave wrong eigenvalues.  The 2-stage solver (BSE_ALGO= elpa2) did so with an ELPA 2025.06'
 		write(*,*) 'built by gfortran 15 at -O2 (its vectorizer): rebuild ELPA with -fno-tree-vectorize, or use BSE_ALGO= elpa1.'
+		! the caller aborts every rank next: output still in the buffer of this rank would be lost
+		call flush(6)
 	end if
 
 end subroutine bse_elpa_verify
