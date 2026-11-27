@@ -14,6 +14,9 @@ four (even mesh) self-conjugate k points, and on a non-square mesh:
   * cheevd (SSYEVD) on a 54x54 mesh, N = 2916, must agree with cheev: its workspace 1+6N+2N^2 is above 2^24 numbers, where a
     single precision workspace query rounds an odd size down (MKL, N >= 2895);
   * the log names the routine that was called (SSYEV, SSYEVD, SSYEVR, SSYEVX for BSE_REAL= T);
+  * non-square process grids (3 and 6 ranks: 1x3 and 2x3) without and with spin-orbit coupling: ScaLAPACK, and with --elpa
+    ELPA 1-stage, ELPA 2-stage and BSE_NSTATES= 50 (ELPA stops with status -13 when a process column of the grid holds
+    no columns of the matrix, N <= 64 (columns of the grid - 1), with BSE_REAL= F as well, so the grids are chosen for N = 576);
   * the inputs that BSE_REAL= T cannot take (BSE_HAM_SAVE, TEMP > 0, a shifted mesh, a complex H(R)) must be refused.
 The same comparisons are made for a generated spinor model with spin-orbit coupling (T^2 = -1, the Kramers real basis), in
 the spin up / spin down layout of DFT=S and in the interleaved layout of DFT=W, on meshes with 4, 1 and 0 self-conjugate k
@@ -169,11 +172,24 @@ def main():
     def wavefunction(name):
         return rows(root/name/'out'/'exc_wf_1.dat'), rows(root/name/'out'/'exc_den_1.dat')
 
-    def compare(table, reference, label, energy_tol=2.e-4, strength_tol=2.e-3, cluster_tol=2.e-5):
-        assert len(table) == len(reference), (label, 'row count')
+    def compare(table, reference, label, energy_tol=2.e-4, strength_tol=2.e-3, cluster_tol=2.e-5, lowest=False):
+        # lowest: the table holds only the lowest states (BSE_NSTATES=), compared on the clusters that lie inside it
+        if lowest:
+            assert 0 < len(table) < len(reference), (label, 'row count')
+        else:
+            assert len(table) == len(reference), (label, 'row count')
         for i, (a, b) in enumerate(zip(table, reference)):
             assert abs(a[0]-b[0]) <= energy_tol, (label, 'state', i+1, 'energy', a[0], b[0])
         ca = clusters(reference, tol=cluster_tol)
+        if lowest:
+            inside, n = [], 0
+            for c in ca:
+                if n+c[1] > len(table):
+                    break
+                inside.append(c)
+                n += c[1]
+            assert inside, (label, 'no complete level among the states computed')
+            ca, table = inside, table[:n]
         cb = clusters(table, [c[1] for c in ca])
         scale = max(abs(v) for c in ca for v in c[2])
         for i, (a, b) in enumerate(zip(ca, cb)):
@@ -282,6 +298,25 @@ def main():
     assert 'needs a time-reversal invariant tight-binding model' in message, message
     message = run('soc-refused-odd-bands', (12, 12), 'cheev', 1, True, expect_ok=False, soc='S', nbands=(1, 1))
     assert 'needs NBANDSV and NBANDSC even' in message, message
+
+    # process grids that are not square (3 ranks: 1x3, 6 ranks: 2x3) on a matrix of 9 blocks of 64 rows, without and with
+    # spin-orbit coupling: ScaLAPACK, and with --elpa ELPA 1-stage and 2-stage (the real 2-stage solver is right with an
+    # ELPA build whose complex 2-stage solver is wrong), the latter also for the 50 lowest states (BSE_NSTATES=)
+    if mpiexec:
+        for soc, mesh in ((None, (24, 24)), ('S', (12, 12))):
+            tag = f'{soc or "N"}-{mesh[0]}x{mesh[1]}'
+            tol = soc_tol if soc else 2.e-5
+            reference, _ = run(f'grid-ref-{tag}', mesh, 'cheev', 1, False, soc=soc)
+            for ranks in (3, 6):
+                for algo in ('cheev',) + (('elpa1', 'elpa2') if args.elpa else ()):
+                    table, log = run(f'grid-{algo}-r{ranks}-{tag}', mesh, algo, ranks, True, soc=soc)
+                    compare(table, reference, f'BSE_REAL {algo} {ranks} ranks {tag}', cluster_tol=tol)
+                    worst = max(worst, max(abs(a[0]-b[0]) for a, b in zip(table, reference)))
+            if args.elpa:
+                for algo in ('elpa1', 'elpa2'):
+                    table, log = run(f'grid-{algo}-n50-{tag}', mesh, algo, 3, True, soc=soc, extra={'BSE_NSTATES': 50})
+                    compare(table, reference, f'BSE_REAL {algo} 3 ranks {tag} BSE_NSTATES=50', cluster_tol=tol, lowest=True)
+                    assert len(table) == 50 and re.search(r'the\s+50 lowest of the', log), (algo, tag, 'BSE_NSTATES')
 
     # refused inputs
     message = run('refused-temp', (12, 12), 'cheev', 1, True, temp=80, expect_ok=False)

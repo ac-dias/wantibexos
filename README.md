@@ -460,6 +460,18 @@ the next single precision number above the query and never below the documented 
 real solvers is checked for both signs. A matrix of $N>32766$ does not fit a 32-bit `LWORK` at all (the message says so):
 use ScaLAPACK or ELPA.
 
+**Parallel runs, with and without spin-orbit coupling.** The real matrix is distributed on the same BLACS grid as the
+complex one (block size 64, an even number, so an $s,t$ couple of the real basis never splits across blocks) and solved by
+`PSSYEV`, or by ELPA real (`BSE_ALGO= elpa1`, `elpa2`, `BSE_NSTATES=`). The vectors of the self-conjugate k points (real
+vectors, or Kramers pairs with spin-orbit coupling) are made by the rank that owns the k block, and the partner of a k point
+that lives on another rank is generated after the vectors are shared, so no rank count is special. Tested against the
+serial complex solver on 2, 3, 4, 5, 6 and 8 ranks (grids 1x2, 1x3, 2x2, 1x5, 2x3, 2x4), without spin-orbit coupling and with
+it (`DFT=S` and `DFT=W` layouts), for ScaLAPACK, ELPA 1-stage, ELPA 2-stage and `BSE_NSTATES= 1` and `50`: the energies
+agree to $3.3\times10^{-5}$ eV. The real 2-stage ELPA solver is right with the ELPA build whose *complex* 2-stage solver
+returns wrong eigenvalues (see the ELPA notes above), so `elpa2` can be used for `BSE_REAL= T` where it cannot for
+`BSE_REAL= F`. ELPA stops with `status = -13` when a process column of the grid holds no columns of the matrix, that is for
+$N\le64\,(n_{\rm columns}-1)$ (81 states on 3 or 8 ranks), with `BSE_REAL= F` as well; ScaLAPACK has no such limit.
+
 **The transformation.** Let $|a\rangle=|v\,c\,\mathbf k\rangle$ be the exciton basis of the k mesh.
 
 1. *Time-reversal gauge.* For real $H(\mathbf R)$ and $S(\mathbf R)$ (time-reversal invariant model, no `SPIN_EXC`),
