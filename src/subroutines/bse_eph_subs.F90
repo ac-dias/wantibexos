@@ -222,7 +222,8 @@ end function lorentzian
 ! stt_bse(3,j) = nv+ic  (conduction band in vector, so ic_local = stt_bse(3,j)-nv, 1..nc)
 ! stt_bse(4,j) = ik
 subroutine build_pair_idx(stt_bse, dimbse, nv, nc, ngkpt, pair_idx)
-    integer, intent(in)  :: stt_bse(4,dimbse), dimbse, nv, nc, ngkpt
+    integer, intent(in)  :: dimbse, nv, nc, ngkpt
+    integer, intent(in)  :: stt_bse(4,dimbse)
     integer, intent(out) :: pair_idx(nv,nc,ngkpt)
 
     integer :: j, iv, ic, ik
