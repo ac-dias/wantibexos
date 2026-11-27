@@ -59,6 +59,32 @@ module bse_realbasis
 
 contains
 
+	integer function rb_lwork(query,lwmin)
+
+		! Workspace size LWORK from the result of a LAPACK workspace query, which comes back in a REAL.  Single precision holds
+		! every integer only up to 2**24 = 16777216: above it the spacing is 2, and a size such as 1+6N+2N**2 of SSYEVD, which
+		! is always odd, is rounded DOWN by one for every N >= 2895.  LAPACK 3.10 and OpenBLAS round the value up before they
+		! return it; MKL does not, and the routine then refuses LWORK as one too small (INFO < 0).  nearest() is the next
+		! single precision number above the query, so the result is never below the size the routine asked for.
+		! lwmin: the minimum documented for the routine (1 when the query is all there is).  The result is -1 when the size
+		! does not fit an INTEGER(4), which LAPACK takes as LWORK (SSYEVD above N = 32766: use ScaLAPACK or ELPA).
+
+		implicit none
+
+		real,intent(in) :: query
+		integer(8),intent(in) :: lwmin
+
+		integer(8) :: l
+
+		l = max(int(nearest(query,1.0),8),lwmin,1_8)
+		if (l > int(huge(rb_lwork),8)) then
+			rb_lwork = -1
+		else
+			rb_lwork = int(l)
+		end if
+
+	end function rb_lwork
+
 	subroutine rb_partners(nk,kpt,rlat,tol,kbar,nself,ok)
 
 		! kbar(i): the k point of the mesh equal to -kpt(i) plus a reciprocal lattice vector, within tol in the

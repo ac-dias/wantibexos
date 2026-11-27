@@ -11,6 +11,9 @@ four (even mesh) self-conjugate k points, and on a non-square mesh:
     energies, and the same optical strengths summed over the degenerate levels (inside a degenerate level the
     eigenvectors, so the strength of a single state, are free);
   * the exciton wavefunction of the ground state (BSE_WF= T) must have the same moduli and k-space density;
+  * cheevd (SSYEVD) on a 54x54 mesh, N = 2916, must agree with cheev: its workspace 1+6N+2N^2 is above 2^24 numbers, where a
+    single precision workspace query rounds an odd size down (MKL, N >= 2895);
+  * the log names the routine that was called (SSYEV, SSYEVD, SSYEVR, SSYEVX for BSE_REAL= T);
   * the inputs that BSE_REAL= T cannot take (BSE_HAM_SAVE, TEMP > 0, a shifted mesh, a complex H(R)) must be refused.
 The same comparisons are made for a generated spinor model with spin-orbit coupling (T^2 = -1, the Kramers real basis), in
 the spin up / spin down layout of DFT=S and in the interleaved layout of DFT=W, on meshes with 4, 1 and 0 self-conjugate k
@@ -21,6 +24,7 @@ import argparse
 import math
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -187,6 +191,9 @@ def main():
             compare(table, reference, f'BSE_REAL {algo} {tag}')
             worst = max(worst, max(abs(a[0]-b[0]) for a, b in zip(table, reference)))
             assert 'BSE_REAL: time-reversal real basis' in log, (algo, tag, 'log_bse_optics.dat')
+            # the keyword is the name of the complex driver: the real path calls the real symmetric one
+            routine = {'cheev': 'SSYEV', 'cheevd': 'SSYEVD', 'cheevr': 'SSYEVR', 'cheevx': 'SSYEVX'}[algo]
+            assert re.search(rf'Eigensolver: {routine} \(real symmetric', log), (algo, tag, 'solver named in the log')
             assert 'SYMMETRY OF THE SYSTEM' in log and 'Point group:' in log, (algo, tag, 'symmetry section of the log')
         if mpiexec:
             for ranks in sorted({2, args.ranks}):
@@ -211,6 +218,15 @@ def main():
             assert abs(math.hypot(a[6], a[7])-math.hypot(b[6], b[7])) <= 3.e-4, (name, 'row', i+1, 'modulus')
         for i, (a, b) in enumerate(zip(den, den_ref)):
             assert abs(a[3]-b[3]) <= 3.e-4, (name, 'k point', i+1, 'density')
+
+    # a matrix above N = 2895: SSYEVD needs 1+6N+2N^2 > 2^24 numbers, an odd count that a single precision workspace query
+    # rounds down by one (MKL), and the routine then refuses LWORK.  54x54 mesh, N = 2916, against SSYEV
+    mesh = (54, 54)
+    assert 1+6*mesh[0]*mesh[1]+2*(mesh[0]*mesh[1])**2 > 2**24
+    reference, _ = run('real-cheev-54x54', mesh, 'cheev', 1, True)
+    table, log = run('real-cheevd-54x54', mesh, 'cheevd', 1, True)
+    compare(table, reference, 'BSE_REAL cheevd 54x54 (workspace above 2^24 numbers)')
+    worst = max(worst, max(abs(a[0]-b[0]) for a, b in zip(table, reference)))
 
     # spin-orbit coupling: time reversal T = i sigma_y K, T^2 = -1 (Kramers real basis).  The levels come in pairs a few
     # 1e-4 eV apart, so the strengths are summed over the levels closer than 1e-3 eV

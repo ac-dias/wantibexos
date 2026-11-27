@@ -230,6 +230,7 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 	integer :: symerr
 	real,allocatable,dimension(:,:) :: hbse_r,hbse_dist_r,hbse_eigenvectors_r,Zr
 	real,allocatable,dimension(:) :: WORKr
+	character(len=8) :: bse_eigname
 	real,allocatable,dimension(:,:) :: hv_re,hv_im
 	real,allocatable,dimension(:) :: rb_rvec,rb_w
 	complex,allocatable,dimension(:) :: rb_cvec
@@ -511,6 +512,30 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 			write(300,*) 'BSE_NSTATES: the',nstates,'lowest of the',dimbse,'exciton states are computed'
 		else
 			write(300,*) 'BSE_NSTATES: all',dimbse,'exciton states are computed'
+		end if
+	else
+		! BSE_ALGO= cheev, cheevd, cheevr, cheevx name the serial LAPACK driver of the complex Hermitian problem.  With
+		! BSE_REAL= T the real symmetric driver of the same family is called (the matrix is real), and with MPI ranks
+		! ScaLAPACK is used whatever the keyword.
+		select case (trim(bsealgo))
+		case ("cheev")
+			bse_eigname = merge('SSYEV ','CHEEV ',use_real)
+		case ("cheevd")
+			bse_eigname = merge('SSYEVD','CHEEVD',use_real)
+		case ("cheevr")
+			bse_eigname = merge('SSYEVR','CHEEVR',use_real)
+		case ("cheevx")
+			bse_eigname = merge('SSYEVX','CHEEVX',use_real)
+		case default
+			bse_eigname = '?'
+		end select
+		if (Nodes > 1) then
+			bse_eigname = merge('PSSYEV','PCHEEV',use_real)
+		end if
+		if (use_real) then
+			write(300,*) 'Eigensolver: ',trim(bse_eigname),' (real symmetric, BSE_REAL= T)'
+		else
+			write(300,*) 'Eigensolver: ',trim(bse_eigname),' (complex Hermitian)'
 		end if
 	end if
 
@@ -1633,12 +1658,16 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 				LWORK = -1
 				allocate(WORKr(1))
 				CALL SSYEV('Vectors','U',dimbse,hbse_r,dimbse,W,WORKr,LWORK,INFO)
-				LWORK = max(1,int(WORKr(1)))
+				LWORK = rb_lwork(WORKr(1),max(1_8,3_8*dimbse-1_8))
+				if (LWORK < 0) then
+					write(*,*) 'SSYEV needs a workspace that does not fit an INTEGER(4): use BSE_ALGO= elpa1 or run with MPI ranks'
+					stop
+				end if
 				deallocate(WORKr)
 				allocate(WORKr(LWORK))
 				CALL SSYEV('Vectors','U',dimbse,hbse_r,dimbse,W,WORKr,LWORK,INFO)
-				if (INFO .gt. 0) then
-					write(*,*) 'The algorithm failed to compute eigenvalues.'
+				if (INFO .ne. 0) then
+					write(*,*) 'The algorithm failed to compute eigenvalues (SSYEV, INFO =',INFO,')'
 					stop
 				end if
 				deallocate(WORKr)
@@ -1647,13 +1676,18 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 				LIWORK = -1
 				allocate(WORKr(1),IWORK(1))
 				CALL SSYEVD('Vectors','U',dimbse,hbse_r,dimbse,W,WORKr,LWORK,IWORK,LIWORK,INFO)
-				LWORK = max(1,int(WORKr(1)))
-				LIWORK = max(1,IWORK(1))
+				! documented minimum for 'Vectors': 1+6N+2N**2 and 3+5N; the query returns the first in a REAL (see rb_lwork)
+				LWORK = rb_lwork(WORKr(1),1_8+6_8*dimbse+2_8*dimbse*dimbse)
+				LIWORK = max(1,IWORK(1),3+5*dimbse)
+				if (LWORK < 0) then
+					write(*,*) 'SSYEVD needs a workspace that does not fit an INTEGER(4) (N > 32766): use BSE_ALGO= elpa1 or run with MPI ranks'
+					stop
+				end if
 				deallocate(WORKr,IWORK)
 				allocate(WORKr(LWORK),IWORK(LIWORK))
 				CALL SSYEVD('Vectors','U',dimbse,hbse_r,dimbse,W,WORKr,LWORK,IWORK,LIWORK,INFO)
-				if (INFO .gt. 0) then
-					write(*,*) 'The algorithm failed to compute eigenvalues.'
+				if (INFO .ne. 0) then
+					write(*,*) 'The algorithm failed to compute eigenvalues (SSYEVD, INFO =',INFO,')'
 					stop
 				end if
 				if (W(dimbse) .eq. 0) then
@@ -1666,13 +1700,17 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 				LIWORK = -1
 				allocate(WORKr(1),IWORK(1),ISUPPZ(2*dimbse),Zr(dimbse,dimbse))
 				CALL SSYEVR('Vectors','A','U',dimbse,hbse_r,dimbse,VL,VU,IL,IU,ABSTOL,M,W,Zr,dimbse,ISUPPZ,WORKr,LWORK,IWORK,LIWORK,INFO)
-				LWORK = max(1,int(WORKr(1)))
-				LIWORK = max(1,IWORK(1))
+				LWORK = rb_lwork(WORKr(1),26_8*dimbse)
+				LIWORK = max(1,IWORK(1),10*dimbse)
+				if (LWORK < 0) then
+					write(*,*) 'SSYEVR needs a workspace that does not fit an INTEGER(4): use BSE_ALGO= elpa1 or run with MPI ranks'
+					stop
+				end if
 				deallocate(WORKr,IWORK)
 				allocate(WORKr(LWORK),IWORK(LIWORK))
 				CALL SSYEVR('Vectors','A','U',dimbse,hbse_r,dimbse,VL,VU,IL,IU,ABSTOL,M,W,Zr,dimbse,ISUPPZ,WORKr,LWORK,IWORK,LIWORK,INFO)
-				if (INFO .gt. 0) then
-					write(*,*) 'The algorithm failed to compute eigenvalues.'
+				if (INFO .ne. 0) then
+					write(*,*) 'The algorithm failed to compute eigenvalues (SSYEVR, INFO =',INFO,')'
 					stop
 				end if
 				if (W(dimbse) .eq. 0) then
@@ -1685,12 +1723,16 @@ subroutine bsesolver(nthreads,outputfolder,calcparms,ngrid,nc,nv,numdos, &
 				LWORK = -1
 				allocate(WORKr(1),IWORK(5*dimbse),ifailx(dimbse),Zr(dimbse,dimbse))
 				CALL SSYEVX('Vectors','A','U',dimbse,hbse_r,dimbse,VL,VU,IL,IU,ABSTOL,M,W,Zr,dimbse,WORKr,LWORK,IWORK,ifailx,INFO)
-				LWORK = max(1,int(WORKr(1)))
+				LWORK = rb_lwork(WORKr(1),8_8*dimbse)
+				if (LWORK < 0) then
+					write(*,*) 'SSYEVX needs a workspace that does not fit an INTEGER(4): use BSE_ALGO= elpa1 or run with MPI ranks'
+					stop
+				end if
 				deallocate(WORKr)
 				allocate(WORKr(LWORK))
 				CALL SSYEVX('Vectors','A','U',dimbse,hbse_r,dimbse,VL,VU,IL,IU,ABSTOL,M,W,Zr,dimbse,WORKr,LWORK,IWORK,ifailx,INFO)
-				if (INFO .gt. 0) then
-					write(*,*) 'The algorithm failed to compute eigenvalues.'
+				if (INFO .ne. 0) then
+					write(*,*) 'The algorithm failed to compute eigenvalues (SSYEVX, INFO =',INFO,')'
 					stop
 				end if
 				if (W(dimbse) .eq. 0) then
@@ -1784,7 +1826,11 @@ allocate(elpa_eigenvectors_r(lld,max(1,locc)),stat=erro)
 			LWORK = -1
 			allocate(WORKr(1))
 			call PSSYEV('V','U',dimbse,hbse_dist_r,1,1,desca,W,hbse_eigenvectors_r,1,1,descz,WORKr,LWORK,INFO)
-			LWORK = max(1,int(WORKr(1)))
+			LWORK = rb_lwork(WORKr(1),1_8)
+			if (LWORK < 0) then
+				write(*,*) 'ScaLAPACK PSSYEV needs a workspace that does not fit an INTEGER(4)'
+				call MPI_ABORT(MPI_COMM_WORLD, 1, MPIError)
+			end if
 			deallocate(WORKr)
 			allocate(WORKr(LWORK))
 			call PSSYEV('V','U',dimbse,hbse_dist_r,1,1,desca,W,hbse_eigenvectors_r,1,1,descz,WORKr,LWORK,INFO)

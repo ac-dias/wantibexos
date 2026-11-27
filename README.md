@@ -447,6 +447,19 @@ complex Hermitian one. The Hamiltonian keeps its dimension $N=N_kN_vN_c$ but is 
 half of the memory, the real solvers (`SSYEV`, `SSYEVD`, `SSYEVR`, `SSYEVX`, ScaLAPACK `PSSYEV`, ELPA real) in place of
 the complex ones, and the kernel is evaluated for half of the matrix elements. The spectra are the same.
 
+**Which routine runs.** `BSE_ALGO= cheev`, `cheevd`, `cheevr` and `cheevx` are the names of the complex Hermitian drivers
+of LAPACK; with `BSE_REAL= T` the keyword selects the real symmetric driver of the same family (`SSYEV`, `SSYEVD`, `SSYEVR`,
+`SSYEVX`), never the complex one. With two or more MPI ranks every keyword but `elpa1`/`elpa2` is ScaLAPACK (`PSSYEV`, or
+`PCHEEV` for `BSE_REAL= F`). The log (`Eigensolver:` line) names the routine that was called.
+
+**Workspace of `SSYEVD`.** The workspace query returns the size in a single precision number, which holds every integer only
+up to $2^{24}$. `SSYEVD` needs $1+6N+2N^2$ numbers, an odd number for every $N$, and for $N\ge2895$ it exceeds $2^{24}$ and
+rounds down by one. LAPACK 3.10 and OpenBLAS round it up before they return it; MKL does not, so `LWORK` was one too small and
+`SSYEVD` refused it (`INFO=-8`, reported as a failed diagonalization) for every $N\ge2895$ with MKL. The size is now taken from
+the next single precision number above the query and never below the documented minimum (`rb_lwork`), and `INFO` of the
+real solvers is checked for both signs. A matrix of $N>32766$ does not fit a 32-bit `LWORK` at all (the message says so):
+use ScaLAPACK or ELPA.
+
 **The transformation.** Let $|a\rangle=|v\,c\,\mathbf k\rangle$ be the exciton basis of the k mesh.
 
 1. *Time-reversal gauge.* For real $H(\mathbf R)$ and $S(\mathbf R)$ (time-reversal invariant model, no `SPIN_EXC`),
@@ -556,7 +569,8 @@ The matrix itself takes half of the memory and the diagonalization workspace ($1
 `SSYEVD` against $2N+N^2$ complex and $1+5N+2N^2$ real for `CHEEVD`) about half of it as well, so the peak of a `cheevd` run is
 close to $12N^2$ bytes instead of $24N^2$ (`utils/bse_memory_estimate.py` reads `BSE_REAL` and estimates the real matrix and workspace).
 `python3 tests/test_bse_real_app.py /path/to/wtb.x --mpiexec /path/to/mpiexec [--elpa]` compares the real path (all serial
-solvers, ScaLAPACK, ELPA 1-stage) with the complex one on odd, even and non-square meshes and checks the refusals.
+solvers, ScaLAPACK, ELPA 1-stage) with the complex one on odd, even and non-square meshes, runs `cheevd` on a matrix
+whose workspace is above $2^{24}$ numbers ($N=2916$), and checks the refusals.
 The point-group symmetry of the structure is a further reduction that this does not use: see below.
 
 Symmetry of the system
